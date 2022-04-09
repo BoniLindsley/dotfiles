@@ -25,12 +25,10 @@ bind C-b set status
 # Do not let programs change the window name.
 set -g allow-rename off
 # Set the $TERM environment variable for new windows.
-%if #{||:#{m:[01].*,#{version}},#{m:2.[0],#{version}}}
-  set -g default-terminal "screen-256color"
-%else
-  # The screen support seems to break around version 2.9~3.0
-  set -g default-terminal "tmux-256color"
-%endif
+# The screen support seems to break around version 2.9~3.0
+if-shell 'test -z "#{version}"' \
+  'set -g default-terminal "screen-256color"' \
+  'set -g default-terminal "tmux-256color"'
 # Use Vi style keys in copy mode.
 set -g mode-keys vi
 # Use notification bar for bell and alerts.
