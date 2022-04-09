@@ -1,0 +1,2 @@
+! Using extra monitors changes cursor sizes in some applications.
+Xcursor.size: 16

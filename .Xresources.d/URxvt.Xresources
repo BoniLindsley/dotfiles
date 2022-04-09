@@ -1,0 +1,101 @@
+URxvt.inputMethod: ibus
+URxvt.preeditType: OverTheSpot
+
+!! URxvt.font: 6x13
+! See /usr/share/fonts/X11/misc/fonts.alias
+! Search for xft names with `fc-list | grep "Noto Sans Mono CJK JP"`
+! Test with `printf '\e]710;%s\007' "xft:Terminus:pixelsize=12"`
+
+! The first font is the TTY default `6x13` font.
+! The second one is the same but with Unicode (iso10646) support
+!   instead of the basic iso8859 set.
+URxvt.font: \
+  -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso8859-1, \
+  -misc-fixed-medium-r-semicondensed--13-120-75-75-c-60-iso10646-1, \
+  xft:Noto Sans Mono CJK TC:pixelsize=13:antialias=true:hinting=true, \
+  xft:Noto Sans Mono:pixelsize=13:antialias=true:hinting=true, \
+  xft:DejaVu Sans Mono:pixelsize=13:antialias=false:hinting=true
+!! ! Does not seem compatible with URxvt.
+!!   xft:Noto Color Emoji:pixelsize=13:antialias=true:hinting=true, \
+
+!! URxvt.font: xft: DejaVu Sans Mono  : \
+!!                  pixelsize= 12     : \
+!!                  antialias= false  : \
+!!                  hinting= true
+!! URxvt.boldFont: xft: DejaVu Sans Mono  : \
+!!                      bold= true        : \
+!!                      pixelsize= 12     : \
+!!                      antialias= false  : \
+!!                      hinting= true
+URxvt.lineSpace: 0
+URxvt.letterSpace: 1
+URxvt.scrollBar: false
+URxvt.urgentOnBell: true
+URxvt.visualBell: true
+
+!! URxvt.skipBuiltinGlyphs: true
+
+! Turns off Ctrl+Shift keycap.
+URxvt.iso14755: false
+
+!! ! url-launcher: string
+!! !   Specifies the program to be started with a URL argument.
+!! !   Used by the "selection-popup" and "matcher" perl extensions.
+!! URxvt.url-launcher: /usr/bin/xdg-open
+
+! Extension settings
+
+!! ! To disable extensions, use
+!! URxvt.perl-ext:
+!! URxvt.perl-ext-common:
+!! URxvt.keysym.C-M-u:
+!! URxvt.keysym.C-M-Up:
+!! URxvt.keysym.C-M-Down:
+!! URxvt.keysym.C-S-Up:
+!! URxvt.keysym.C-S-Down:
+!! URxvt.keysym.C-M-equal:
+!! URxvt.keysym.C-M-slash:
+
+! The `default` extension includes the following: option-popup, readline,
+! searchable-scrollback, selection, selection-popup.
+! Check `/usr/lib/[x86_64-linux-gnu/]urxvt/perl` for other extensions.
+! Useful extensions: digital-clock, matcher, tabbed
+!URxvt.perl-ext-common: default
+URxvt.perl-ext-common: font-size,readline
+
+! ## Options for font-size
+! Going up and then down again does not always revert,
+!   due to font changes to give the font size change.
+! But reset does, which seems to mean "use global setting".
+! In particular,
+!   using `incglobal` and `decglobal` need not revert global font.
+! And this makes it impossible to reset font to config setting
+!   until a xresources reload.
+
+! This changes font size for the current client.
+URxvt.keysym.C-M-Up:     font-size:increase
+URxvt.keysym.C-M-Down:   font-size:decrease
+!! ! This changes font size of global default and the current client.
+!! URxvt.keysym.C-S-Up:   font-size:incglobal
+!! URxvt.keysym.C-S-Down: font-size:decglobal
+! Changes current client font size to match the global default.
+URxvt.keysym.C-M-equal:  font-size:reset
+!! ! Display the current fonts used.
+!! URxvt.keysym.C-M-slash:  font-size:show
+
+! ## Options for matcher
+
+! The extension matcher can cause slow down.
+! It applies regex to all saved lines.
+URxvt.matcher.pattern.1:  \\bwww\\.[\\w-]+\\.[\\w./?&@#-]*[\\w/-]
+
+! Defines hotkey to start selecting with keyboard.
+! Use arrow keys/Home/End to search.
+! Use Enter to open.
+! Use <y> to copy to clipboard.
+! Use Esc to cancel
+URxvt.keysym.C-M-u: matcher:select
+
+! Allow matched strings to be clickable.
+! It sends the string to URxvt.url-launcher.
+URxvt.matcher.button: 1

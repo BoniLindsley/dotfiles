@@ -1,0 +1,7 @@
+! Reload with `xrdb ~/.Xresources`.
+! See current config with `xrdb -query`.
+
+#include ".Xresources.d/colours.Xresources"
+#include ".Xresources.d/URxvt.Xresources"
+#include ".Xresources.d/Xft.Xresources"
+#include ".Xresources.d/Xcursor.Xresources"
