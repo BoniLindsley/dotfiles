@@ -5,3 +5,4 @@
 #include ".Xresources.d/URxvt.Xresources"
 #include ".Xresources.d/Xft.Xresources"
 #include ".Xresources.d/Xcursor.Xresources"
+#include ".Xresources.d/XTerm.Xresources"
