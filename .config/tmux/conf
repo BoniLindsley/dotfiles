@@ -161,9 +161,8 @@ bind-key -Tboni-music C-n     run-shell -b "mpc --port 6601 next"
 bind-key -Tboni-music C-p     run-shell -b "mpc --port 6601 prev"
 bind-key -Tboni-music C-space run-shell -b "mpc --port 6601 toggle"
 
-if-shell 'test -f ~/.config/tmux/tpm.conf' \
-     'source-file ~/.config/tmux/tpm.conf'
-if-shell 'test -f ~/.config/tmux/conf.d/navigation.tmux.conf' \
-     'source-file ~/.config/tmux/conf.d/navigation.tmux.conf'
-if-shell 'test -f ~/.config/tmux/conf.d/style.tmux.conf' \
-     'source-file ~/.config/tmux/conf.d/style.tmux.conf'
+source-file -q ~/.config/tmux/tpm.conf
+source-file -q ~/.config/tmux/conf.d/navigation.tmux.conf
+if-shell 'test -z "#{version}"' \
+  'source-file -q ~/.config/tmux/conf.d/style-2.8.tmux.conf' \
+  'source-file -q ~/.config/tmux/conf.d/style.tmux.conf'
