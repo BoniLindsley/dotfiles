@@ -1,36 +1,36 @@
 let $VIM_PWD = getcwd()
 
-if !has_key(environ(), 'HOME')
-  if index(keys(environ()), 'UserProfile', 0, 1) != -1
+if empty($HOME)
+  if !empty($UserProfile)
     let $HOME = escape($UserProfile, ' ')
   endif
 endif
 
-if !has_key(environ(), 'XDG_CONFIG_HOME')
+if empty($XDG_CONFIG_HOME)
   let $XDG_CONFIG_HOME = $HOME . '/.config'
 endif
 
-if !has_key(environ(), 'XDG_LOCAL_HOME')
+if empty($XDG_LOCAL_HOME)
   if has('win32')
     let $XDG_LOCAL_HOME = escape($LocalAppData, ' ') . '/xdg.local'
   else
     let $XDG_LOCAL_HOME = $HOME
   endif
 endif
-if !has_key(environ(), 'XDG_CACHE_HOME')
+if empty($XDG_CACHE_HOME)
   if has('win32')
     let $XDG_CACHE_HOME = $XDG_LOCAL_HOME . '/cache'
   else
     let $XDG_CACHE_HOME = $HOME . '/.cache'
   endif
 endif
-if !has_key(environ(), 'XDG_DATA_HOME')
+if empty($XDG_DATA_HOME)
   let $XDG_DATA_HOME = $XDG_LOCAL_HOME . '/share'
 endif
-if !has_key(environ(), 'XDG_LIB_HOME')
+if empty($XDG_LIB_HOME)
   let $XDG_LIB_HOME = $XDG_LOCAL_HOME . '/lib'
 endif
-if !has_key(environ(), 'XDG_STATE_HOME')
+if empty($XDG_STATE_HOME)
   let $XDG_STATE_HOME = $XDG_LOCAL_HOME . '/state'
 endif
 

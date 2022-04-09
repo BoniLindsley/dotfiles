@@ -25,7 +25,9 @@
 " | <c-\> <c-n>              | Enter Terminal-Normal mode        |
 
 map <C-w><Leader> <Leader>
-tmap <C-w><Leader> <C-\><C-n><Leader>
+if !has('terminal')
+  tmap <C-w><Leader> <C-\><C-n><Leader>
+endif
 
 nnoremap <Plug>(Boni.Terminal)<F1>
   \ :echo 'terminal: (space) start '<CR>
