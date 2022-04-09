@@ -1,4 +1,5 @@
-; Emacs does early config load starting Emacs 27.1 in 2020-08.
+; Emacs searches for configuration from `${XDG_CONFIG_HOME}`
+; starting Emacs 27.1 in 2020-08.
 ; This is wrapper for that behaviour.
 (let*
   (
@@ -17,5 +18,8 @@
   (setq user-init-file
     (expand-file-name "init.el" user-emacs-directory)
   )
-  (load user-init-file "NOERROR")
+  (setq early-init-file
+    (expand-file-name "early-init.el" user-emacs-directory)
+  )
+  (load early-init-file "NOERROR")
 )
