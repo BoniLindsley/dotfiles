@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+
+VCPKG_DISABLE_METRICS=1
+export VCPKG_DISABLE_METRICS
