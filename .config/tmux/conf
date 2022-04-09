@@ -1,14 +1,10 @@
 # Reload config
 # This is given first, so that reloading via hotkey is always possible.
-bind c-r source-file ~/.config/tmux/tmux.conf
+bind c-r source-file ~/.config/tmux/conf
 
 # For version incompatibility checks,
 #   see `https://github.com/tmux/tmux/issues/1747`.
 #
-# Incompatibilities:
-#
-#   * v2.9 replaced individual `fg`/`bg` by `style` options.
-#   * v3.2 overrides `status-fg`/`bg` by `status-style` options.
 #
 
 # Use Powerline
@@ -26,64 +22,6 @@ bind-key a send-prefix
 # Show status bar, but toggle with hotkey prefix + C-b.
 set -g status on
 bind C-b set status
-# Changes colour of the status bar.
-# This is set to be less distracting than black on green.
-# Colours available:
-#   default, black, magenta, blue, red, cyan, yellow, green, white,
-#   colour0 to colour255.
-# The colour of the status bar when there are no messages.
-%if #{||:#{m:[012].*,#{version}},#{m:3.[01],#{version}}}
-  set-option -g status-bg default
-  set-option -g status-fg magenta
-%else
-  set-option -g status-style bg=default
-  set-option -g status-style fg=magenta
-%endif
-# The colour of the active window name in the status bar.
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g window-status-current-bg default
-  set -g window-status-current-fg blue
-%else
-  set -g window-status-current-style bg=default,fg=blue
-%endif
-# The colour of the name of the window
-#   with a bell active or activity detected.
-# The colours of bg and fg is inverted for these by default.
-set -g window-status-bell-style noreverse
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g window-status-bell-bg default
-  set -g window-status-bell-fg red
-%else
-  set -g window-status-bell-style bg=default,fg=red
-%endif
-set -g window-status-activity-style noreverse
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g window-status-activity-bg default
-  set -g window-status-activity-fg red
-%else
-  set -g window-status-activity-style bg=default,fg=red
-%endif
-# The colour of the status bar for messages and prompt.
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g message-bg default
-  set -g message-fg blue
-%else
-  set -g message-style bg=default,fg=blue
-%endif
-# The colour of borders between between panes.
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g pane-border-bg default
-  set -g pane-border-fg magenta
-%else
-  set -g pane-border-style bg=default,fg=magenta
-%endif
-# The colour of the border when highlighting the active pane.
-%if #{||:#{m:[01].*,#{version}},#{m:2.[012345678],#{version}}}
-  set -g pane-active-border-bg default
-  set -g pane-active-border-fg blue
-%else
-  set -g pane-active-border-style bg=default,fg=blue
-%endif
 # Do not let programs change the window name.
 set -g allow-rename off
 # Set the $TERM environment variable for new windows.
@@ -152,61 +90,25 @@ set-option -g status-right-length 64
 bind B run-shell -b "$HOME/base/bin/boni-tmux-tray-start"
 bind b run-shell -b "$HOME/base/bin/boni-tmux-tray-toggle"
 
-# ###  Custom notification
-
-## # This is used when the notification script talks to tmux directly.
-## bind '`' show-buffer -b notifications \; set-option -gu status-right \; set-option -gu status-right-style
-# Use this for the status line daemon.
-bind '`' choose-buffer -f '#{m:notification-*,#{buffer_name}}'
-#bind '`' show-buffer -b notifications
-bind '¬' run-shell "$HOME/base/bin/boni-tmux-notification-clear" \; \
-         run-shell "$HOME/base/bin/boni-newsboat-notify 0"
+## ###  Custom notification
 #
-# ### Navigation
-
-# From: https://github.com/tmux-plugins/tmux-pain-control
-
-# #### pane_navigation_bindings
-bind-key h   select-pane -L
-bind-key C-h select-pane -L
-bind-key j   select-pane -D
-bind-key C-j select-pane -D
-bind-key k   select-pane -U
-bind-key C-k select-pane -U
-bind-key l   select-pane -R
-bind-key C-l select-pane -R
-
-# #### window_move_bindings
-bind-key -r "<" swap-window -t -1
-bind-key -r ">" swap-window -t +1
-
-# #### pane_resizing_bindings
-bind-key -r H resize-pane -L 5
-bind-key -r J resize-pane -D 5
-bind-key -r K resize-pane -U 5
-bind-key -r L resize-pane -R 5
-
-# #### pane_split_bindings
-bind-key "|" split-window -h -c "#{pane_current_path}"
-bind-key "\\" split-window -fh -c "#{pane_current_path}"
-bind-key "-" split-window -v -c "#{pane_current_path}"
-bind-key "_" split-window -fv -c "#{pane_current_path}"
-bind-key "%" split-window -h -c "#{pane_current_path}"
-bind-key '"' split-window -v -c "#{pane_current_path}"
-
-# #### improve_new_window_binding
-bind-key "c" new-window -c "#{pane_current_path}"
+### # This is used when the notification script talks to tmux directly.
+### bind '`' show-buffer -b notifications \; set-option -gu status-right \; set-option -gu status-right-style
+## Use this for the status line daemon.
+#bind '`' choose-buffer -f '#{m:notification-*,#{buffer_name}}'
+##bind '`' show-buffer -b notifications
+#bind '¬' run-shell "$HOME/base/bin/boni-tmux-notification-clear" \; \
+#         run-shell "$HOME/base/bin/boni-newsboat-notify 0"
 
 # ### urlview
 
 # https://github.com/tmux-plugins/tmux-urlview/blob/master/urlview.tmux
 
-bind-key C-u {
-  capture-pane -J -b "boni-urlview";
-  save-buffer /tmp/boni-urlview;
-  delete-buffer -b "boni-urlview";
+bind-key C-u \
+  capture-pane -J -b "boni-urlview" \; \
+  save-buffer /tmp/boni-urlview \; \
+  delete-buffer -b "boni-urlview" \; \
   new-window "bash -i -c 'urlview /tmp/boni-urlview'"
-}
 
 # ## Custom hotkey tables
 
@@ -260,4 +162,8 @@ bind-key -Tboni-music C-p     run-shell -b "mpc --port 6601 prev"
 bind-key -Tboni-music C-space run-shell -b "mpc --port 6601 toggle"
 
 if-shell 'test -f ~/.config/tmux/tpm.conf' \
-  'source-file ~/.config/tmux/tpm.conf'
+     'source-file ~/.config/tmux/tpm.conf'
+if-shell 'test -f ~/.config/tmux/conf.d/navigation.tmux.conf' \
+     'source-file ~/.config/tmux/conf.d/navigation.tmux.conf'
+if-shell 'test -f ~/.config/tmux/conf.d/style.tmux.conf' \
+     'source-file ~/.config/tmux/conf.d/style.tmux.conf'
