@@ -1,0 +1,16 @@
+! Use a truetype font and size.
+XTerm.faceName: Monospace
+XTerm.faceSize: 16
+
+! Allow 256 colours.
+XTerm.termName: xterm-256color
+
+! Alt sends escape instead of being a modifier.
+XTerm.vt100.metaSendsEscape: true
+
+!! Flash a single line in terminal rater than making an audible sound.
+!XTerm.visualBell: true
+!XTerm.visualBellLine: true
+
+! Use the backspace.
+XTerm.backarrowKeyIsErase: false
