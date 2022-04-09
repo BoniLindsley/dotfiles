@@ -5,7 +5,9 @@ set autoindent
 " Move `.swp` files.
 let s:backup_directory = $VIM_DATA_HOME . '/backup'
 let &backupdir = s:backup_directory . '//'
-call mkdir(s:backup_directory, 'p')
+if !isdirectory(s:backup_directory)
+  call mkdir(s:backup_directory, 'p')
+endif
 
 " Highlight wrapped column.
 set colorcolumn=+1
@@ -14,7 +16,9 @@ highlight ColorColumn ctermbg=darkgray
 " Move `.swp` files.
 let s:swap_directory = $VIM_DATA_HOME . '/swp'
 let &directory = s:swap_directory . '//'
-call mkdir(s:swap_directory, 'p')
+if !isdirectory(s:backup_directory)
+  call mkdir(s:backup_directory, 'p')
+endif
 
 " Default encoding for display.
 "set encoding=utf-8 or $LANG or latin1
@@ -124,4 +128,7 @@ nnoremap <leader>PTi :put =strftime('%Y%m%dT%H%M%SZ')<CR>
 " It can litter copies if there is a race condition to save data.
 let s:viminfo_path = $VIM_DATA_HOME . '/viminfo.d/viminfo'
 execute "set viminfo +=" . 'n' . escape(s:viminfo_path, '\ ')
-call mkdir(fnamemodify(s:viminfo_path, ':p:h'), 'p')
+let s:viminfo_directory = fnamemodify(s:viminfo_path, ':p:h')
+if !isdirectory(s:viminfo_directory)
+  call mkdir(s:viminfo_directory, 'p')
+endif
