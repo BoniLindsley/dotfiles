@@ -12,5 +12,5 @@ XTerm.vt100.metaSendsEscape: true
 !XTerm.visualBell: true
 !XTerm.visualBellLine: true
 
-! Use the backspace.
-XTerm.backarrowKeyIsErase: false
+!! Use the backspace.
+!XTerm.backarrowKeyIsErase: false
