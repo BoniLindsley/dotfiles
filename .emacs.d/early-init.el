@@ -11,15 +11,12 @@
       ((getenv "XDG_CONFIG_HOME"))
       (expand-file-name ".config" home)
     ))
-  )
-  (setq user-emacs-directory
-    (expand-file-name "emacs" xdg-config-home)
-  )
-  (setq user-init-file
-    (expand-file-name "init.el" user-emacs-directory)
+    (user-init-directory
+      (expand-file-name "emacs" xdg-config-home)
+    )
   )
   (setq early-init-file
-    (expand-file-name "early-init.el" user-emacs-directory)
+    (expand-file-name "early-init.el" user-init-directory)
   )
   (load early-init-file "NOERROR")
 )
