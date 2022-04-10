@@ -1,6 +1,6 @@
 ! Use a truetype font and size.
-XTerm.faceName: Monospace
-XTerm.faceSize: 16
+XTerm*faceName: Monospace
+XTerm*faceSize: 16
 
 ! Allow 256 colours.
 XTerm.termName: xterm-256color
