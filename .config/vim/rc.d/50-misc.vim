@@ -34,7 +34,7 @@ set fileencoding=utf-8
 
 " Do not force insert EOL before EOF.
 "set fixendofline
-set nofixendofline
+silent! set nofixendofline
 
 " Disable folding by default.
 " It increases loading time and not necessarily used.
@@ -107,9 +107,9 @@ endif
 " Use `:X` to enter a key, which then enables encryption.
 " Use `:set key=` to reset the key, which disables encryption.
 " Changing the `key` does not change
-"   whether a stored file is encrypted or decrypted.
+" whether a stored file is encrypted or decrypted.
 " Save (for example with `:w`) to apply the new setting
-set cryptmethod=blowfish2
+silent! set cryptmethod=blowfish2
 
 
 " Text insertion
