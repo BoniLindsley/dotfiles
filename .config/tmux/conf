@@ -36,12 +36,6 @@ bind-key C-b set status
 # Do not let programs change the window name. Can get annoying.
 set-option -g allow-rename off
 
-# Set the $TERM environment variable for new windows.
-# The screen support seems to break around version 2.9~3.0
-if-shell 'test -z "#{version}"' \
-  'set-option -g default-terminal "screen-256color"' \
-  'set-option -g default-terminal "tmux-256color"'
-
 ## For some reason, `tmux` starts a login shell by default.
 ## Simply start the shell to use an interactive non-login shell.
 #set-option -g default-command $SHELL
@@ -61,7 +55,5 @@ set-option -g visual-bell on
 # Disables function and escape key sequence detection.
 set-option -g escape-time 0
 
-source-file -q ~/.config/tmux/conf.d/navigation.tmux.conf
-if-shell 'test -z "#{version}"' \
-  'source-file -q ~/.config/tmux/conf.d/style-2.8.tmux.conf' \
-  'source-file -q ~/.config/tmux/conf.d/style.tmux.conf'
+run-shell "tmux source-file ~/.config/tmux/conf.d/version/\
+`tmux -V | cut --delimiter=' ' --fields=2`.tmux.conf"
