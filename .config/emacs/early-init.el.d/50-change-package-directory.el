@@ -1,4 +1,4 @@
-(require 'package)
+(require 'package nil 'noerror)
 
 ; Change Base installation directory for packages before activation.
 ;(setq package-user-dir (expand-file-name "elpa" user-emacs-directory))
