@@ -9,7 +9,7 @@
     ))
     (xdg-config-home (cond
       ((getenv "XDG_CONFIG_HOME"))
-      (expand-file-name ".config" home)
+      ((expand-file-name ".config" home))
     ))
     (user-init-directory
       (expand-file-name "emacs" xdg-config-home)
