@@ -49,18 +49,19 @@ let $VIM_STATE_HOME = $XDG_STATE_HOME . '/vim'
 
 let $VIM_TMPDIR_HOME = $XDG_LOCAL_HOME . '/tmp/vim'
 
+" Every path in option `&runtimepath` is used
+" when searching for `autoload`, ftdetect`, `plugin`, etc.
+" Add config files to be searched by Vim.
+" In particular, note that `*.vim` files recursively searched
+" in the `plugin` subdirectory of each directory listed in `&runtimepath`
+" will be sourced by Vim after `vimrc` is searched.
+execute 'set runtimepath ^=' . fnameescape($VIM_CONFIG_HOME)
+execute 'set runtimepath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+
 " The first path given in option `&runtimepath` is used as default
 " for creating directories.
 " Prepends path for priority, and escapes in case there is spaces.
 execute 'set runtimepath ^=' . fnameescape($VIM_STATE_HOME)
-
-" Every path in option `&runtimepath` is used
-" when searching for `autoload`, ftdetect`, `plugin`, etc.
-" Append config files to be searched by Vim.
-" In particular, note that `*.vim` files recursively searched
-" in the `plugin` subdirectory of each directory listed in `&runtimepath`
-" will be sourced by Vim after `vimrc` is searched.
-execute 'set runtimepath +=' . fnameescape($VIM_CONFIG_HOME)
 
 " Source every file in a `vimrc.d` directory.
 " External plugins, such as those managed by `vim-plug`
