@@ -4,7 +4,7 @@ set autoindent
 
 " Move `.swp` files.
 let s:backup_directory = $VIM_DATA_HOME . '/backup'
-let &backupdir = s:backup_directory . '//'
+let &backupdir = fnameescape(s:backup_directory) . '//'
 if !isdirectory(s:backup_directory)
   call mkdir(s:backup_directory, 'p')
 endif
@@ -16,8 +16,8 @@ highlight ColorColumn ctermbg=darkgray
 " Move `.swp` files.
 let s:swap_directory = $VIM_DATA_HOME . '/swp'
 let &directory = s:swap_directory . '//'
-if !isdirectory(s:backup_directory)
-  call mkdir(s:backup_directory, 'p')
+if !isdirectory(s:swap_directory)
+  call mkdir(s:swap_directory, 'p')
 endif
 
 " Default encoding for display.

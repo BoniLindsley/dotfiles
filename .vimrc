@@ -2,7 +2,7 @@ let $VIM_PWD = getcwd()
 
 if empty($HOME)
   if !empty($UserProfile)
-    let $HOME = escape($UserProfile, ' ')
+    let $HOME = fnameescape($UserProfile)
   endif
 endif
 
@@ -12,7 +12,7 @@ endif
 
 if empty($XDG_LOCAL_HOME)
   if has('win32')
-    let $XDG_LOCAL_HOME = escape($LocalAppData, ' ') . '/xdg.local'
+    let $XDG_LOCAL_HOME = fnameescape($LocalAppData) . '/xdg.local'
   else
     let $XDG_LOCAL_HOME = $HOME
   endif
