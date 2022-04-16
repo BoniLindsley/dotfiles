@@ -11,16 +11,12 @@
   )
   (cond
     (
+      ; Emacs tries to do the right thing
+      ; and sends them to C-d in this term mode?
+      ; Turn that off first.
       (string-equal term "screen-256color")
       (normal-erase-is-backspace-mode 0)
     )
-    (
-      (string-equal term "xterm")
-      (normal-erase-is-backspace-mode 1)
-    )
-    (
-      (string-equal term "xterm-256color")
-      (normal-erase-is-backspace-mode 1)
-    )
   )
 )
+(keyboard-translate ?\C-h ?\C-?)
