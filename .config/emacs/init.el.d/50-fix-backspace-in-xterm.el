@@ -18,5 +18,9 @@
       (string-equal term "xterm")
       (normal-erase-is-backspace-mode 1)
     )
+    (
+      (string-equal term "xterm-256color")
+      (normal-erase-is-backspace-mode 1)
+    )
   )
 )
