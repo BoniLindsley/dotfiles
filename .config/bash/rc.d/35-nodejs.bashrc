@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 
-# NPM packages in homedir
-path="$HOME/.local/lib/npm/packages"
-NPM_PACKAGES="$path${NPM_PACKAGES:+:$NPM_PACKAGES}"
-export NPM_PACKAGES
+main() {
+  local path="$HOME/.local/lib/npm/packages"
 
-# Tell our environment about user-installed node tools
-prepend_to_path_if_exists "$NPM_PACKAGES/bin"
-prepend_to_manpath_if_exists "$NPM_PACKAGES/share/man"
+  if [[ -d "${path}" ]]; then
+    # NPM packages in homedir
+    export NPM_PACKAGES="${path}${NPM_PACKAGES:+:$NPM_PACKAGES}"
+    # Tell Node about these packages
+    export NODE_PATH="${path}/lib/node_modules${NODE_PATH:+:$NODE_PATH}"
 
-# Tell Node about these packages
-path="$NPM_PACKAGES/lib/node_modules"
-NODE_PATH="$path${NODE_PATH:+:$NODE_PATH}"
-export NODE_PATH
+    # Tell our environment about user-installed node tools
+    prepend_to_path_if_exists "${path}/bin"
+    prepend_to_manpath_if_exists "${path}/share/man"
+  fi
+}
+
+main "$@"
