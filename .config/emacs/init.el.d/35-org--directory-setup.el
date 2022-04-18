@@ -14,17 +14,6 @@
         (expand-file-name "notes.org" org-directory)
       )
     )
+    (make-directory org-directory t)
   )
 )
-;(eval-after-load 'org
-;    '(let
-;      (
-;       (boni/org/agenda/directory
-;         (expand-file-name "agenda" org-directory)
-;       )
-;      )
-;      (make-directory boni/org/agenda/directory t)
-;      (add-to-list 'org-agenda-files boni/org/agenda/directory)
-;    )
-;    ;(add-to-list 'org-agenda-files org-directory)
-;)
