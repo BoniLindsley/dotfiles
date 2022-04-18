@@ -47,7 +47,10 @@ let $VIM_LIB_HOME = $XDG_LIB_HOME . '/vim'
 " Stores runtime customisation and information.
 let $VIM_STATE_HOME = $XDG_STATE_HOME . '/vim'
 
-let $VIM_TMPDIR_HOME = $XDG_LOCAL_HOME . '/tmp/vim'
+let $VIM_TMPDIR_HOME = fnameescape($XDG_LOCAL_HOME . '/tmp/vim')
+if !isdirectory($VIM_TMPDIR_HOME)
+  call mkdir($VIM_TMPDIR_HOME, 'p')
+endif
 
 " Every path in option `&runtimepath` is used
 " when searching for `autoload`, ftdetect`, `plugin`, etc.
