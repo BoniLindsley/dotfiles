@@ -14,7 +14,7 @@ if empty($XDG_LOCAL_HOME)
   if has('win32')
     let $XDG_LOCAL_HOME = fnameescape($LocalAppData) . '/xdg.local'
   else
-    let $XDG_LOCAL_HOME = $HOME
+    let $XDG_LOCAL_HOME = $HOME . '/.local'
   endif
 endif
 if empty($XDG_CACHE_HOME)
