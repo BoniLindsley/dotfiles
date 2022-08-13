@@ -11,7 +11,8 @@ endif
 
 " Highlight wrapped column.
 set colorcolumn=+1
-highlight ColorColumn ctermbg=darkgray
+"highlight CursorColumn term=reverse ctermbg=242 guibg=Grey40
+highlight ColorColumn cterm=reverse gui=reverse
 
 " Move `.swp` files.
 let s:swap_directory = $VIM_DATA_HOME . '/swp'
