@@ -74,10 +74,6 @@ set list
 "set modeline
 set nomodeline
 
-" Show current line number.
-set nonumber
-set number
-
 " Show relative line number. Useful for motions.
 " set norelativenumber
 set relativenumber

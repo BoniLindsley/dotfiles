@@ -19,20 +19,24 @@ set laststatus=2
 "" set statusline+=%<%P                         " file position
 
 " Reset from a fresh status line.
-set statusline=%<
+set statusline=[
 
-" File path relative to current directory.
-set statusline+=%f
+" Line number.
+set statusline+=L%l/%L
+" Column number.
+set statusline+=,C%c%V
+set statusline+=]
 
+" Truncation starts here if window too narrow.
+set statusline+=%<
 
 set statusline+=\ [
 " Line ending.
 set statusline+=%{&ff}
-" Line number.
-set statusline+=,L%l/%L
-" Column number.
-set statusline+=,C%c%V
 set statusline+=]
+
+" File path relative to current directory.
+set statusline+=\ %f
 
 set statusline+=\ [
 " Buffer number.
@@ -45,3 +49,6 @@ set statusline+=]
 " [filetype, help, preview, modified, readonly]
 " Eg. [MARKDOWN,HLP,PRV,+,RO]
 set statusline+=%(\ [%Y%H%W%M%R]%)
+
+" Right-align starting here.
+set statusline+=%=
