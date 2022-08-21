@@ -8,18 +8,6 @@ Plug 'tpope/vim-sensible'
 "" "   of NERDTreeToggle command
 "" Plug 'scrooloose/nerdtree', { 'on': 'NERDTreeToggle' }
 
-"let g:boni_ycm_plug_path = 'https://github.com/ycm-core/YouCompleteMe.git'
-"let g:boni_ycm_dir = '/usr/share/vim-youcompleteme'
-"if filereadable(g:boni_ycm_dir .  '/autoload/youcompleteme.vim')
-"  let g:boni_ycm_plug_path = g:boni_ycm_dir
-"endif
-"
-"Plug g:boni_ycm_plug_path,
-"  \ {
-"  \   'do': './install.py --clangd-completer --rust-completer',
-"  \   'for': ['cpp', 'markdown', 'python', 'rust'],
-"  \ }
-
 "" " Reference: http://vim-latex.sourceforge.net/
 "" Plug 'vim-latex/vim-latex'
 
