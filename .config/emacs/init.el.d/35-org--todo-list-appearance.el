@@ -9,5 +9,16 @@
     ; Default shows all scheduled items in the todo list.
     ;'(org-agenda-todo-ignore-scheduled nil)
     '(org-agenda-todo-ignore-scheduled 'future)
+
+    ; Use only hours (25h) instead of days (1d 1h).
+    '(org-time-clocksum-format '(
+      :hours "%d"
+      :require-hours t
+      :minutes ":%02d"
+      :require-minutes t
+    ))
+
+    ; Use fractions (1.5h) instead of minutes (1:30).
+    '(org-time-clocksum-use-fractional t)
   )
 )

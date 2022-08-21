@@ -24,6 +24,7 @@
           "TODO(t!)"  ; Store creation time via `C-c C-x M`.
           "|" ; Terminal states after this.
           "DONE(d!)"  ; Store completion time.
+          "DROP(D@/!)"
           "WAIT(w@/!)"
         )
       )
