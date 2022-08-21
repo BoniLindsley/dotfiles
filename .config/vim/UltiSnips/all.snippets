@@ -1,0 +1,55 @@
+snippet !bash.main "Bash main template"
+#!/usr/bin/env bash
+
+main() {
+  $0
+}
+
+main "$@"
+endsnippet
+
+snippet !python.main "Python3 main.py template"
+#!/usr/bin/env python3
+"""
+A module that expects can be executed directly.
+"""
+
+# Standard libraries.
+import logging
+import sys
+import typing
+
+# External dependencies.
+
+# Internal modules.
+
+
+_logger = logging.getLogger(__name__)
+
+
+def main(argv: typing.Optional[list[str]] = None) -> int:
+    """Function called with module is executed."""
+    del argv
+    $0
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
+endsnippet
+
+snippet <> "Start bracket (angle)" Ai
+<$1>$0
+endsnippet
+
+snippet {} "Start bracket (curly)" Ai
+{$1}$0
+endsnippet
+
+snippet () "Start bracket (round)" Ai
+($1)$0
+endsnippet
+
+snippet [] "Start bracket (square)" Ai
+[$1]$0
+endsnippet

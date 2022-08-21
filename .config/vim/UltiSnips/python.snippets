@@ -1,0 +1,45 @@
+snippet !py.TestCase "Create subclass of TestCase"
+class Test$2(unittest.${1|TestCase,IsolatedAsyncioTestCase|}):
+
+    def setUp(self) -> None:
+        super().setUp()
+
+    `!p
+if t[1] == 'IsolatedAsyncioTestCase':
+    snip.rv = 'async '
+else:
+    snip.rv = ''
+`def test_$3(self) -> None:
+        ${0:pass}
+endsnippet
+
+snippet !py.del "Standard __del__ method"
+def __del__(self) -> None:
+    getattr(super(), "__del__", lambda _: None)(self)
+endsnippet
+
+snippet !py.enter "Standard __enter__ method"
+def __enter__(self: __Self) -> __Self:
+    return self
+
+def __exit__(
+    self,
+    exc_type: typing.Optional[typing.Type[BaseException]],
+    exc_value: typing.Optional[BaseException],
+    traceback: typing.Optional[types.TracebackType],
+) -> typing.Optional[bool]:
+    del exc_type
+    del exc_value
+    del traceback
+    return None
+endsnippet
+
+snippet !py.init "Standard __init__ method"
+def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+    # TODO[mypy issue 4001]: Remove type ignore.
+    super().__init__(*args, **kwargs)  # type: ignore[call-arg]
+endsnippet
+
+snippet !py.self "Use __Self class variable"
+__Self = typing.TypeVar('__Self', bound='$1')
+endsnippet
