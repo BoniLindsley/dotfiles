@@ -22,9 +22,9 @@ set laststatus=2
 set statusline=[
 
 " Line number.
-set statusline+=L%l/%L
+set statusline+=L%l
 " Column number.
-set statusline+=,C%c%V
+set statusline+=\ C%c%V
 set statusline+=]
 
 " Truncation starts here if window too narrow.
