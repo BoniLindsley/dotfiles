@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
-from __future__ import annotations
 import contextlib
 import functools
 import pathlib
@@ -66,7 +65,7 @@ def get_test_filename(source_filename: str) -> str:
 
 def get_test_path(
     source_path: pathlib.Path,
-    project_path: pathlib.Path | None = None,
+    project_path: typing.Union[pathlib.Path, None] = None,
 ) -> pathlib.Path:
     if project_path is None:
         project_path = get_project_path(source_path)
@@ -83,7 +82,7 @@ def get_test_path(
 
 def get_source_path(
     source_path: pathlib.Path,
-    project_path: pathlib.Path | None = None,
+    project_path: typing.Union[pathlib.Path, None] = None,
 ) -> pathlib.Path:
     if project_path is None:
         project_path = get_project_path(source_path)
