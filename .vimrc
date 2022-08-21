@@ -66,6 +66,10 @@ execute 'set runtimepath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
 " Prepends path for priority, and escapes in case there is spaces.
 execute 'set runtimepath ^=' . fnameescape($VIM_STATE_HOME)
 
+" Let packaging know about custom directories as well.
+execute 'set packpath ^=' . fnameescape($VIM_CONFIG_HOME)
+execute 'set packpath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+
 " Source every file in a `vimrc.d` directory.
 " External plugins, such as those managed by `vim-plug`
 " may rely on having their `plugin` directories sourced.
