@@ -21,8 +21,10 @@ autocmd FileType markdown let b:dispatch =
 autocmd FileType markdown let b:start =
   \ g:boni_browser . ' "file:///' . g:boni_markdown_html_output . '"'
 
-autocmd FileType fortran let b:dispatch = 'fpm build'
-autocmd FileType fortran let b:start = 'fpm run'
+if executable('fpm')
+  autocmd FileType fortran let b:dispatch = 'fpm build'
+  autocmd FileType fortran let b:start = 'fpm run'
+endif
 
 " autocmd FileType cpp let b:dispatch = 'boni-cmake'
 "                                       \ . ' --command cmake'
