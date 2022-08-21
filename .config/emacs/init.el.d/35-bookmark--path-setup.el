@@ -1,4 +1,4 @@
-(eval-after-load 'org
+(eval-after-load 'bookmark
   (custom-set-variables
     ;(SYMBOL EXP [NOW [REQUEST [COMMENT]]])
 
