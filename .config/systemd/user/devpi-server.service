@@ -1,0 +1,9 @@
+[Unit]
+Description=Devpi Server
+
+[Service]
+Restart=on-success
+ExecStart=/%h/.local/bin/devpi-server
+
+[Install]
+WantedBy=multi-user.target
