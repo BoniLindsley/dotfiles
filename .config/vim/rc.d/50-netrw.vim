@@ -156,7 +156,7 @@ autocmd FileType netrw setlocal buflisted
 "" augroup end
 
 nnoremap <Plug>(Boni.Bookmarks)<F1>
-  \ :echo 'bookmark: (l)ist (m)ark'<CR>
+  \ :echo 'bookmark: (d)elete (l)ist (m)ark'<CR>
 nnoremap <Plug>(Boni.Bookmarks)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Bookmarks)")<CR>
 
