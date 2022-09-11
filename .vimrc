@@ -79,6 +79,6 @@ execute 'set packpath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
 " would not be ran.
 " So some scripts must be loaded here,
 " instead of relying on the `plugin` directory.
-for filepath in split(glob($VIM_CONFIG_HOME . '/rc.d/*.vim'), '\n')
-  execute 'source ' . fnameescape(filepath)
+for s:filepath in split(glob($VIM_CONFIG_HOME . '/rc.d/*.vim'), '\n')
+  execute 'source ' . fnameescape(s:filepath)
 endfor
