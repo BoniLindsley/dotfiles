@@ -224,18 +224,24 @@ function s:BoniBookmarksInputIndex(prompt)
     if 'y' != input('Prepoulate? ', 'y')
       return -1
     endif
-    let g:netrw_bookmarklist = [
-    \ fnameescape($HOME . '/base/'),
-    \ fnameescape($HOME . '/base/downloads/'),
-    \ fnameescape($HOME . '/base/src/'),
-    \ fnameescape($HOME . '/case/'),
-    \ fnameescape($HOME . '/case/music/'),
-    \ fnameescape($XDG_CONFIG_HOME),
-    \ fnameescape($VIM_CONFIG_HOME . '/rc.d/'),
-    \ fnameescape($XDG_CONFIG_HOME . '/emacs/init.el.d/'),
-    \ fnameescape($XDG_CONFIG_HOME . '/password-store/'),
-    \ fnameescape($XDG_LOCAL_HOME)
+    let g:netrw_bookmarklist = []
+    for l:file_path in [
+    \ expand($HOME . '/base/'),
+    \ expand($HOME . '/base/downloads/'),
+    \ expand($HOME . '/base/src/'),
+    \ expand($HOME . '/case/'),
+    \ expand($HOME . '/case/music/'),
+    \ expand($XDG_CONFIG_HOME),
+    \ expand($VIM_CONFIG_HOME . '/rc.d/'),
+    \ expand($XDG_CONFIG_HOME . '/emacs/init.el.d/'),
+    \ expand($XDG_CONFIG_HOME . '/password-store/'),
+    \ expand($XDG_LOCAL_HOME . '/')
     \]
+      if !empty(glob(l:file_path))
+        call add(g:netrw_bookmarklist, l:file_path)
+      endif
+    endfor
+    call sort(g:netrw_bookmarklist)
     echo ' '
   endif
 
