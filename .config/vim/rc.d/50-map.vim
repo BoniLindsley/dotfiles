@@ -29,7 +29,8 @@ nmap <Plug>(Boni.Application)t <Plug>(Boni.Application)T<Space>
 
 nmap <Plug>(Boni)d <Plug>(Boni.Do)
 nnoremap <Plug>(Boni.Do)<F1> :echo
-  \ 'do: ( /d)ispatch (b) debug (f)ormat (g)it (h)int (s)yntax (t)est'
+  \ 'do: ( /d)ispatch de(b)ug (f)ormat (g)it (h)int bookma(r)k'
+  \ '(s)yntax (t)est'
   \<CR>
 nnoremap <Plug>(Boni.Do)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Do)")<CR>
@@ -47,6 +48,7 @@ nmap <Plug>(Boni.Do)f <Plug>(ale_fix)
 nmap <Plug>(Boni.Do)g <Plug>(Boni.Do)G<Space>
 nmap <Plug>(Boni.Do)h <Plug>(Boni.Do)H<Space>
 nmap <Plug>(Boni.Do)l <Plug>(Boni.Quickfix)
+nmap <Plug>(Boni.Do)r <Plug>(Boni.Bookmarks)
 nmap <Plug>(Boni.Do)s <Plug>(ale_lint)
 nmap <Plug>(Boni.Do)t <Plug>(Boni.Do)T<Space>
 nmap <Plug>(Boni.Do)v <Plug>(Boni.Perforce)

@@ -70,7 +70,8 @@
 " So there are no official options to disable it.
 " One way to to disable the plugin entirely is pretend it is loaded,
 " so that it will not be loaded after `vimrc` is read.
-"" let loaded_netrwPlugin = 1
+"" let g:loaded_netrw = 1
+"" let g:loaded_netrwPlugin = 1
 
 if &compatible
   throw 'Boni(Netrw):Netrw requires &nocompatible'
@@ -154,46 +155,119 @@ autocmd FileType netrw setlocal buflisted
 ""           \| endif
 "" augroup end
 
-" Open Netrw explorer.
-nnoremap <Plug>(Boni.Find)n :Explore<CR>
-nmap <Plug>(Boni.Find)' <Plug>(Boni.Find.Bookmark)
+nnoremap <Plug>(Boni.Bookmarks)<F1>
+  \ :echo 'bookmark: (l)ist (m)ark'<CR>
+nnoremap <Plug>(Boni.Bookmarks)<Tab>
+  \ :call BoniMapWait("\<Plug>(Boni.Bookmarks)")<CR>
 
-nnoremap <Plug>(Boni.Find.Bookmark)<F1>
-  \ :echo 'find.bookmark: ( ) PWD (b)ase (c)onfig (d)ownloads (s)rc'<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)<Tab>
-  \ :call BoniMapWait("\<Plug>(Boni.Find.Bookmark)")<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)<space>
-  \ :execute 'Explore' fnameescape($PWD)<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)C
-  \ :execute 'Explore' fnameescape($HOME . '/.config')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)E
-  \ :execute 'Explore' fnameescape($VIM_PWD)<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)b
-  \ :execute 'Explore' fnameescape($HOME . '/base')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)c
-  \ :execute 'Explore' fnameescape($HOME . '/case')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)d
-  \ :execute 'Explore' fnameescape($HOME . '/base/downloads')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)e
-  \ :execute 'Explore'
-  \ fnameescape($XDG_CONFIG_HOME . '/emacs/init.el.d')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)h
-  \ :execute 'Explore' fnameescape($HOME)<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)l
-  \ :execute 'Explore' fnameescape($HOME . '/.local')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)m
-  \ :execute 'Explore' fnameescape($HOME . '/case/music')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)p
-  \ :execute 'Explore'
-  \ fnameescape($XDG_CONFIG_HOME . '/password-store')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)r
-  \ :execute 'Explore' fnameescape($HOME . '/../..')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)s
-  \ :execute 'Explore' fnameescape($HOME . '/base/src')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)v
-  \ :execute 'Explore' fnameescape($VIM_CONFIG_HOME . '/plugin')<CR>
-nnoremap <Plug>(Boni.Find.Bookmark)x
-  \ :execute 'Explore' fnameescape(
-  \ $HOME
-  \ . '/base/src/bonilindsley.gitlab.io/content/article/'
-  \)<CR>
+nnoremap <Plug>(Boni.Bookmarks)d :call <SID>BoniBookmarksDelete()<CR>
+nnoremap <Plug>(Boni.Bookmarks)l :call <SID>BoniBookmarksOpen()<CR>
+nnoremap <Plug>(Boni.Bookmarks)m :call <SID>BoniBookmarksAppend()<CR>
+
+function s:BoniBookmarksAppend()
+  if -1 == s:BoniBookmarksInitialiseNetrw()
+    return -1
+  endif
+
+  if &filetype ==# 'netrw'
+    let l:file_path = b:netrw_curdir
+  else
+    let l:file_path = fnameescape(expand('%:p'))
+  endif
+
+  if l:file_path == ""
+    echo 'Error: Buffer has no path.'
+    return
+  endif
+
+  let l:index = index(g:netrw_bookmarklist, l:file_path)
+  if l:index == -1
+    let l:index = len(g:netrw_bookmarklist)
+    call add(g:netrw_bookmarklist, l:file_path)
+  endif
+
+  echo printf("%d: %s", l:index + 1, l:file_path)
+endfunction
+
+function s:BoniBookmarksDelete()
+  let l:index = s:BoniBookmarksInputIndex("Delete: " )
+  if l:index != -1
+    call remove(g:netrw_bookmarklist, l:index)
+  endif
+endfunction
+
+function s:BoniBookmarksInitialiseNetrw()
+  if !exists('g:loaded_netrw')
+    " Try to load bookmarks.
+    " Also initialise Netrw so that bookmarks are saved on exit.
+    echo 'Netrw not loaded.'
+    if 'y' != input('Load with :Vexplore :q? ', 'y')
+      return -1
+    endif
+    Vexplore
+    quit
+  endif
+endfunction
+
+function s:BoniBookmarksInputIndex(prompt)
+  if -1 == s:BoniBookmarksInitialiseNetrw()
+    return -1
+  endif
+
+  if !exists("g:netrw_bookmarklist") || len(g:netrw_bookmarklist) <= 0
+    echo 'Bookmark list is empty.'
+    if 'y' != input('Prepoulate? ', 'y')
+      return -1
+    endif
+    let g:netrw_bookmarklist = [
+    \ fnameescape($HOME . '/base/'),
+    \ fnameescape($HOME . '/base/downloads/'),
+    \ fnameescape($HOME . '/base/src/'),
+    \ fnameescape($HOME . '/case/'),
+    \ fnameescape($HOME . '/case/music/'),
+    \ fnameescape($XDG_CONFIG_HOME),
+    \ fnameescape($VIM_CONFIG_HOME . '/rc.d/'),
+    \ fnameescape($XDG_CONFIG_HOME . '/emacs/init.el.d/'),
+    \ fnameescape($XDG_CONFIG_HOME . '/password-store/'),
+    \ fnameescape($XDG_LOCAL_HOME)
+    \]
+    echo ' '
+  endif
+
+  let l:input = 1
+  for l:file_path in g:netrw_bookmarklist
+    echo printf("%d: %s", l:input, l:file_path)
+    let l:input += 1
+  endfor
+
+  let l:input = input(a:prompt, "",
+    \ "customlist,g:BoniBookmarksCustomComplete")
+  " Make sure to have a new line after input for other messages.
+  echo ' '
+
+  if l:input =~# '^\d\+$'
+    let l:index = l:input - 1
+    if l:index >= len(g:netrw_bookmarklist)
+      echomsg 'Bookmark number not found.'
+      let l:index = -1
+    endif
+  else
+    let l:index = index(g:netrw_bookmarklist, l:input)
+    if l:index == -1
+      echo 'Bookmark not found.'
+    endif
+  endif
+
+  return l:index
+endfunction
+
+function s:BoniBookmarksOpen()
+  let l:index = s:BoniBookmarksInputIndex("Open: ")
+  if l:index != -1
+    execute 'edit' fnameescape(g:netrw_bookmarklist[l:index])
+  endif
+endfunction
+
+function g:BoniBookmarksCustomComplete(ArgLead, CmdLine, CursorPos)
+  return matchfuzzy(g:netrw_bookmarklist, a:CmdLine)
+endfunction
