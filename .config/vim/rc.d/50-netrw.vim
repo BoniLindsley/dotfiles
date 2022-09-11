@@ -176,7 +176,7 @@ function s:BoniBookmarksAppend()
   endif
 
   if l:file_path == ""
-    echo 'Error: Buffer has no path.'
+    echo 'Buffer has no path.'
     return
   endif
 
@@ -193,6 +193,11 @@ function s:BoniBookmarksDelete()
   let l:index = s:BoniBookmarksInputIndex("Delete: " )
   if l:index != -1
     call remove(g:netrw_bookmarklist, l:index)
+  endif
+
+  let l:netrwbook_path = g:netrw_home . '/.netrwbook'
+  if filereadable(l:netrwbook_path)
+    call delete(l:netrwbook_path)
   endif
 endfunction
 
@@ -245,7 +250,9 @@ function s:BoniBookmarksInputIndex(prompt)
   " Make sure to have a new line after input for other messages.
   echo ' '
 
-  if l:input =~# '^\d\+$'
+  if l:input ==# ''
+    let l:index = -1
+  elseif l:input =~# '^\d\+$'
     let l:index = l:input - 1
     if l:index >= len(g:netrw_bookmarklist)
       echomsg 'Bookmark number not found.'
