@@ -65,7 +65,7 @@ endfunction
 
 " Edit prompt...
 nnoremap <Plug>(Boni.Find)<F1>
-      \ :echo 'find: ( /e) PWD (f)ile (h)ome (w) diff'<CR>
+      \ :echo 'find: ( /e) PWD (a)rticle (f)ile (h)ome (w) diff'<CR>
 nnoremap <Plug>(Boni.Find)<Tab>
       \ :call BoniMapWait("\<Plug>(Boni.Find)")<CR>
 
@@ -123,6 +123,17 @@ nnoremap <Plug>(Boni.Find)0
       \ :execute 'edit'
       \ fnameescape($HOME . '/.config/sway/config')
       \<CR>
+
+" Fill in command
+"
+" ```
+" :edit '2022-02-22_.md'
+"                   ^ Moves cursor here.
+" ```
+nnoremap <Plug>(Boni.Find)a
+      \ :edit <Char-0x27>
+      \<C-r>=strftime('%Y-%m-%d_.md')<CR>
+      \<Char-0x27><Left><Left><Left><Left>
 
 " Diff.
 nnoremap <Plug>(Boni.Find)w :call <SID>FindEditDiff()<CR>
