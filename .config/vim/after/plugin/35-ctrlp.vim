@@ -131,9 +131,7 @@ nnoremap <Plug>(Boni.Find)0
 "                   ^ Moves cursor here.
 " ```
 nnoremap <Plug>(Boni.Find)a
-      \ :edit <Char-0x27>
-      \<C-r>=strftime('%Y-%m-%d_.md')<CR>
-      \<Char-0x27><Left><Left><Left><Left>
+      \ :edit <C-r>=strftime('%Y-%m-%d_.md')<CR><Left><Left><Left><Left>
 
 " Diff.
 nnoremap <Plug>(Boni.Find)w :call <SID>FindEditDiff()<CR>
