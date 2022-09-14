@@ -196,9 +196,7 @@ function s:BoniBookmarksDelete()
   endif
 
   let l:netrwbook_path = g:netrw_home . '/.netrwbook'
-  if filereadable(l:netrwbook_path)
-    call delete(l:netrwbook_path)
-  endif
+  call delete(l:netrwbook_path)
 endfunction
 
 function s:BoniBookmarksInitialiseNetrw()
@@ -282,5 +280,9 @@ function s:BoniBookmarksOpen()
 endfunction
 
 function g:BoniBookmarksCustomComplete(ArgLead, CmdLine, CursorPos)
-  return matchfuzzy(g:netrw_bookmarklist, a:CmdLine)
+  try
+    return matchfuzzy(g:netrw_bookmarklist, a:CmdLine)
+  catch /^Vim\%((\a\+)\)\=:E117:/
+    return g:netrw_bookmarklist
+  endtry
 endfunction
