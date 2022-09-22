@@ -79,9 +79,9 @@ set nomodeline
 " set norelativenumber
 set relativenumber
 
-" Size of an indent
+" Width of indentation. Uses tabstop value if 0.
 "set shiftwidth=8
-set shiftwidth=2
+set shiftwidth=0
 
 " Number of spaces for a tab character. Affects view and expand.
 "set tabstop=8
