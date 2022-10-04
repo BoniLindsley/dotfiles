@@ -1,6 +1,9 @@
 (eval-after-load 'org
   (progn
     (custom-set-variables
+      ; Only show top-level items in todo view.
+      '(org-agenda-todo-list-sublevels nil)
+
       ; Show schedule using "future" to mean "after current second".
       ; Default is "after today".
       ;'(org-agenda-todo-ignore-time-comparison-use-seconds nil)
