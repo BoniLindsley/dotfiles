@@ -78,9 +78,6 @@ let g:ale_linters_explicit = 1
 let g:ale_fortran_fprettify_options = ''
 " `integer::count` -> `integer :: count`
 let g:ale_fortran_fprettify_options .= ' --enable-decl'
-" `program hello\nprint *` -> `program hello\n  print *`
-let g:ale_fortran_fprettify_options .= ' --indent=2'
-let g:ale_fortran_fprettify_options .= ' --line-length=73'
 " `print *   !` -> `print * !`
 let g:ale_fortran_fprettify_options .= ' --strip-comments'
 
