@@ -94,4 +94,4 @@ endif
 
 autocmd FileType tex
   \ nnoremap <buffer> <Plug>(Boni.Dispatch.Dispatch)
-  \ :w<CR>:call vimtex#compiler#compile()<CR>
+  \ :call vimtex#compiler#compile()<CR>

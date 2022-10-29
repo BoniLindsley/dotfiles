@@ -1,5 +1,10 @@
-" # vim-dispatch
+" vim-dispatch
+"
 " Upstream: https://github.com/tpope/vim-dispatch
+
+if !exists("g:loaded_dispatch")
+  finish
+endif
 
 " Disable default hotkey maps.
 "let g:dispatch_no_maps = 0
@@ -10,21 +15,6 @@ let g:dispatch_no_maps = 1
 "  \ 'tmux', 'job', 'screen', 'windows', 'iterm', 'x11', 'headless']
 let g:dispatch_handlers = [
   \ 'job', 'tmux', 'screen', 'windows', 'iterm', 'x11', 'headless']
-
-let g:boni_markdown_html_output = $VIM_TMPDIR_HOME . '/%:t:r.html'
-autocmd FileType markdown let b:dispatch =
-  \ g:boni_python . ' -m markdown'
-  \ . ' -x fenced_code'
-  \ . ' -x tables'
-  \ . ' --output_format=html'
-  \ . ' --file=' . g:boni_markdown_html_output . ' "%:p"'
-autocmd FileType markdown let b:start =
-  \ g:boni_browser . ' "file:///' . g:boni_markdown_html_output . '"'
-
-if executable('fpm')
-  autocmd FileType fortran let b:dispatch = 'fpm build'
-  autocmd FileType fortran let b:start = 'fpm run'
-endif
 
 " autocmd FileType cpp let b:dispatch = 'boni-cmake'
 "                                       \ . ' --command cmake'
@@ -40,17 +30,14 @@ let g:boni_vs_env_path = 'C:\Program Files (x86)\Microsoft Visual Studio'
   \ . '\2019\Community\Common7\Tools\VsDevCmd.bat'
 
 nnoremap <Plug>(Boni.Dispatch)<F1> :echo
-\ 'vim-dispatch: (space) Dispatch! (c) Copen (f) Dispatch (m) Make'
+\ 'vim-dispatch: (space) Dispatch! (f) Dispatch (m) Make'
 \<CR>
 nnoremap <Plug>(Boni.Dispatch)<Tab>
 \ :call BoniMapWait("\<Plug>(Boni.Dispatch)")<CR>
 nmap <Plug>(Boni.Dispatch)<Space> <Plug>(Boni.Dispatch.Dispatch)
-nnoremap <Plug>(Boni.Dispatch.Dispatch) :w<CR>:Dispatch<CR>
-nnoremap <Plug>(Boni.Dispatch)c :w<CR>:Dispatch!<CR>
-nmap <Plug>(Boni.Dispatch)F <Plug>(Boni.Dispatch.Config)
-nnoremap <Plug>(Boni.Dispatch)l :Copen<CR>
-nnoremap <Plug>(Boni.Dispatch)m :w<CR>:Make<CR>
-nnoremap <Plug>(Boni.Dispatch)S :w<CR>:Start!<CR>
+nnoremap <Plug>(Boni.Dispatch.Dispatch) :Dispatch!<CR>
+" The :Start command can only be started once.
+nnoremap <Plug>(Boni.Dispatch)s :Dispatch <C-R>=b:start<CR><CR>
 nnoremap <Plug>(Boni.Dispatch)? :let b:dispatch<CR>
 
 nnoremap <Plug>(Boni.Dispatch.Config)<F1>
@@ -63,8 +50,6 @@ nnoremap <Plug>(Boni.Dispatch.Config)c
 \ :let b:dispatch = g:boni_cmake_script_command<CR>
 \:echo 'Set b:dispatch: (c) CMake'<CR>
 nmap <Plug>(Boni.Dispatch.Config)C <Plug>(Boni.Dispatch.Config.CMake)
-nnoremap <Plug>(Boni.Dispatch.Config)m :let b:dispatch = 'make'<CR>
-nnoremap <Plug>(Boni.Dispatch.Config)r :let b:dispatch = '%:p'<CR>
 nnoremap <Plug>(Boni.Dispatch.Config.CMake)<F1> :echo
 \ 'Set b:dispatch CMake: Set target to (m) MinGW64 (v) MSVC'<CR>
 nnoremap <Plug>(Boni.Dispatch.Config.CMake)<Tab>
