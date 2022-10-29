@@ -42,10 +42,6 @@ Plug 'tpope/vim-fugitive'
 " Better JSON for VIM
 Plug 'elzr/vim-json'
 
-" UltiSnips - The ultimate solution for snippets in Vim.
-" Group dependencies, vim-snippets depends on ultisnips
-Plug 'SirVer/ultisnips' | Plug 'honza/vim-snippets'
-
 "" " Conque GDB
 "" Plug 'vim-scripts/Conque-GDB'
 
