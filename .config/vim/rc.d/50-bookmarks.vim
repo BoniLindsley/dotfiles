@@ -47,7 +47,7 @@ function s:BoniBookmarksOpen()
     call s:BoniBookmarksCreate()
   endif
   call s:BoniBookmarksMkdir()
-  execute 'edit' fnameescape(g:boni_bookmarks_default)
+  execute 'view' fnameescape(g:boni_bookmarks_default)
 endfunction
 
 function s:BoniBookmarksCreate()
