@@ -35,7 +35,7 @@ set statusline+=%{BoniLinterStatus()}
 call ale#fix#registry#Add(
 \ 'fprettify',
 \ 'ale#fixers#fprettify#Fix', ['fortran'],
-\ 'Apply fprettify to a file.' 
+\ 'Apply fprettify to a file.'
 \)
 
 let g:ale_fixers = {
@@ -45,6 +45,9 @@ let g:ale_fixers = {
 \ ],
 \ 'cpp': ['clangformat'],
 \ 'fortran': ['fprettify'],
+\ 'html': ['prettier'],
+\ 'javascript': ['prettier'],
+\ 'json': ['prettier'],
 \ 'markdown': ['remark-lint'],
 \ 'python': ['black'],
 \ 'rust': ['rustfmt'],
@@ -60,6 +63,8 @@ let g:ale_linters = {
 \   'gcc',
 \   'language_server',
 \ ],
+\ 'html': ['htmlhint'],
+\ 'javascript': ['eslint'],
 \ 'python': [
 \   'mypy',
 \   'pylint',
