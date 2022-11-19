@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-dotshare-help() {
+__dotshare_help() {
   cat << 'EOF'
 Usage:
   dotshare-export # or dotshare-export-public
@@ -10,8 +10,9 @@ Usage:
   dotshare-status # Reports on both.
 EOF
 }
+alias dotshare-help=__dotshare_help
 
-dotshare-clone() {
+__dotshare_clone() {
   local remote_url="${1?Provide repository to clone from.}"
   local branch="${2-origin/main}"
   : "${GIT_DIR?Use dotshare-export first.}"
@@ -26,6 +27,7 @@ dotshare-clone() {
   git branch --set-upstream-to="${branch}" || return
   git checkout -- "${GIT_WORK_TREE}" || return
 }
+alias dotshare-clone=__dotshare_clone
 
 __dotshare_setup() {
   home="${HOME-.}"
@@ -34,7 +36,7 @@ __dotshare_setup() {
   dotshare_data_home="${xdg_data_home}/dotshare"
 }
 
-dotshare-export() {
+__dotshare_export() {
   local home
   local xdg_local_home
   local xdg_data_home
@@ -44,8 +46,9 @@ dotshare-export() {
     "GIT_DIR=${dotshare_data_home}/repos/dotfiles.git" \
     "GIT_WORK_TREE=${home}"
 }
+alias dotshare-export=__dotshare_export
 
-dotshare-export-public() {
+__dotshare_export_public() {
   local home
   local xdg_local_home
   local xdg_data_home
@@ -55,12 +58,14 @@ dotshare-export-public() {
     "GIT_DIR=${dotshare_data_home}/repos/dotfiles-public.git" \
     "GIT_WORK_TREE=${home}"
 }
+alias dotshare-export-public=__dotshare_export_public
 
-dotshare-export-reset() {
+__dotshare_export_reset() {
   unset GIT_DIR GIT_WORK_TREE
 }
+alias dotshare-export-reset=__dotshare_export_reset
 
-dotshare-status() {
+__dotshare_status() {
   local GIT_DIR
   local GIT_WORK_TREE
   dotshare-export || return
@@ -68,3 +73,4 @@ dotshare-status() {
   dotshare-export-public || return
   git status || return
 }
+alias dotshare-status=__dotshare_status
