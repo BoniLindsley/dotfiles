@@ -1,0 +1,93 @@
+let $VIM_PWD = getcwd()
+
+if empty($HOME)
+  if !empty($UserProfile)
+    let $HOME = fnameescape($UserProfile)
+  endif
+endif
+
+if empty($XDG_CONFIG_HOME)
+  let $XDG_CONFIG_HOME = $HOME . '/.config'
+endif
+
+if empty($XDG_LOCAL_HOME)
+  if has('win32')
+    let $XDG_LOCAL_HOME = fnameescape($LocalAppData) . '/xdg.local'
+  else
+    let $XDG_LOCAL_HOME = $HOME . '/.local'
+  endif
+endif
+if empty($XDG_CACHE_HOME)
+  if has('win32')
+    let $XDG_CACHE_HOME = $XDG_LOCAL_HOME . '/cache'
+  else
+    let $XDG_CACHE_HOME = $HOME . '/.cache'
+  endif
+endif
+if empty($XDG_DATA_HOME)
+  let $XDG_DATA_HOME = $XDG_LOCAL_HOME . '/share'
+endif
+if empty($XDG_LIB_HOME)
+  let $XDG_LIB_HOME = $XDG_LOCAL_HOME . '/lib'
+endif
+if empty($XDG_STATE_HOME)
+  let $XDG_STATE_HOME = $XDG_LOCAL_HOME . '/state'
+endif
+
+" For files that may be deleted to 'factory reset' an application.
+let $VIM_CONFIG_HOME = fnamemodify(resolve(expand('<sfile>:p')), ':h')
+
+if has('nvim')
+  let s:app_name = 'nvim'
+else
+  let s:app_name = 'vim'
+endif
+
+" For files that may be deleted
+" to pretend the application was not used before...
+let $VIM_DATA_HOME = $XDG_DATA_HOME . '/' . s:app_name
+
+" Files that should be removed when uninstalling.
+let $VIM_LIB_HOME = $XDG_LIB_HOME . '/' . s:app_name
+
+" Stores runtime customisation and information.
+let $VIM_STATE_HOME = $XDG_STATE_HOME . '/' . s:app_name
+
+let $VIM_TMPDIR_HOME = fnameescape(
+\ $XDG_LOCAL_HOME . '/tmp/' . s:app_name
+\ )
+if !isdirectory($VIM_TMPDIR_HOME)
+  call mkdir($VIM_TMPDIR_HOME, 'p')
+endif
+
+" Every path in option `&runtimepath` is used
+" when searching for `autoload`, ftdetect`, `plugin`, etc.
+" Add config files to be searched by Vim.
+" In particular, note that `*.vim` files recursively searched
+" in the `plugin` subdirectory of each directory listed in `&runtimepath`
+" will be sourced by Vim after `vimrc` is searched.
+execute 'set runtimepath ^=' . fnameescape($VIM_CONFIG_HOME)
+execute 'set runtimepath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+
+" The first path given in option `&runtimepath` is used as default
+" for creating directories.
+" Prepends path for priority, and escapes in case there is spaces.
+execute 'set runtimepath ^=' . fnameescape($VIM_STATE_HOME)
+
+" Let packaging know about custom directories as well.
+execute 'set packpath ^=' . fnameescape($VIM_CONFIG_HOME)
+execute 'set packpath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+
+" Source every file in a `vimrc.d` directory.
+" External plugins, such as those managed by `vim-plug`
+" may rely on having their `plugin` directories sourced.
+" If the paths to those plugins are only added
+" inside other `plugin` " files,
+" then the files inside the `plugin` directory of those plugins
+" would not be ran.
+" So some scripts must be loaded here,
+" instead of relying on the `plugin` directory.
+for s:filepath in split(glob($VIM_CONFIG_HOME . '/rc.d/*.vim'), '\n')
+  execute 'source ' . fnameescape(s:filepath)
+endfor
+
