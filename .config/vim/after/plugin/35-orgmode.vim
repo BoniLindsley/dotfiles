@@ -2,6 +2,11 @@
 "
 " Upstream: https://github.com/nvim-orgmode/orgmode
 "
+
+if !has('nvim')
+  finish
+endif
+
 try
   lua require('orgmode')
 catch /^Vim\%((\a\+)\)\=:E5108:/
