@@ -101,7 +101,7 @@ set nowrap
 
 " Make sure the font supports unicode.
 if has('win32')
-  set guifont=Lucida_Console:h9
+  set guifont=Lucida\ Console:h9
 endif
 
 " Set encryption method used when saving.
