@@ -25,7 +25,7 @@
 " | <c-\> <c-n>              | Enter Terminal-Normal mode        |
 
 map <C-w><Leader> <Leader>
-if has('terminal')
+if has('nvim') || has('terminal')
   tmap <C-w><Leader> <C-\><C-n><Leader>
 endif
 
