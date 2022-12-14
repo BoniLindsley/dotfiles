@@ -30,12 +30,12 @@ let g:boni_vs_env_path = 'C:\Program Files (x86)\Microsoft Visual Studio'
   \ . '\2019\Community\Common7\Tools\VsDevCmd.bat'
 
 nnoremap <Plug>(Boni.Dispatch)<F1> :echo
-\ 'vim-dispatch: (space) Dispatch! (f) Dispatch (m) Make'
+\ 'vim-dispatch: (space) Dispatch (s)tart
 \<CR>
 nnoremap <Plug>(Boni.Dispatch)<Tab>
 \ :call BoniMapWait("\<Plug>(Boni.Dispatch)")<CR>
 nmap <Plug>(Boni.Dispatch)<Space> <Plug>(Boni.Dispatch.Dispatch)
-nnoremap <Plug>(Boni.Dispatch.Dispatch) :Dispatch!<CR>
+nnoremap <Plug>(Boni.Dispatch.Dispatch) :Dispatch<CR>
 " The :Start command can only be started once.
 nnoremap <Plug>(Boni.Dispatch)s :Dispatch <C-R>=b:start<CR><CR>
 nnoremap <Plug>(Boni.Dispatch)? :let b:dispatch<CR>
