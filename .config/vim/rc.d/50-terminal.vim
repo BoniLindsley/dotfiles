@@ -24,9 +24,9 @@
 " | <termwinkey> gT          | Go to previous tabpage            |
 " | <c-\> <c-n>              | Enter Terminal-Normal mode        |
 
-map <C-w><Leader> <Leader>
 if has('nvim') || has('terminal')
-  tmap <C-w><Leader> <C-\><C-n><Leader>
+  tmap <C-w> <C-\><C-n><C-w>
+  tnoremap <C-w><C-w> <C-w>
 endif
 
 nnoremap <Plug>(Boni.Terminal)<F1>
