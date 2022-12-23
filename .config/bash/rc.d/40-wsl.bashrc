@@ -30,17 +30,15 @@ use_wsl_xserver() {
   fi
 
   ip_address="$(awk '/nameserver / {print $2; exit}' /etc/resolv.conf 2>/dev/null)"
+  export PULSE_SERVER="${ip_address}"
 
+  # Reference for DISPLAY:
+  # https://wiki/ubuntu.com/WSL
   if [[ "$(systemd-detect-virt --container)" = 'wsl' ]]; then
     # Is WSL2.
     x_server="${ip_address}"
   fi
-
-  # Reference for DISPLAY:
-  # https://wiki/ubuntu.com/WSL
-  export PULSE_SERVER="${ip_address}"
   export DISPLAY="${x_server}:0.0"
-  export LIB_GL_ALWAYS_INDIRECT=1
 }
 
 use_wsl_xserver_xauthority() {
