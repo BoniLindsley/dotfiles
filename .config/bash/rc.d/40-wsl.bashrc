@@ -1,6 +1,23 @@
 #!/usr/bin/env bash
 
+# An alternative is to ssh into the machine
+# with X forwarding instead.
+
 use_wsl_xserver() {
+  # Requires some admin setup on Windows side.
+  #
+  # -   Run `startxwin -- -listen tcp -nowgl` in a non-X Cygwin shell.
+  #     Or modify / create the Cygwin/X shortcut:
+  #     `run.exe --quote /usr/bin/bash.exe -l -c "cd; exec /usr/bin/startxwin"
+  #     to contain the above flags.
+  # -   Allow XWin.exe in inbound Firewall rule.
+  #     Or manually add rule for `xwin.exe`.
+  #     -   Rule must be for public network profile, or
+  #     -   For private and domain network profiles,
+  #         if removing `vEthernet (WSL)` from public profile.
+  # -   For errors about invalid magic cookies,
+  #     `cp /mnt/c/Users/$USER/.Xauthority ~`.
+  #     Adjust username as necessary.
   local ip_address=''
   local x_server=''
 
@@ -24,4 +41,8 @@ use_wsl_xserver() {
   export PULSE_SERVER="${ip_address}"
   export DISPLAY="${x_server}:0.0"
   export LIB_GL_ALWAYS_INDIRECT=1
+}
+
+use_wsl_xserver_xauthority() {
+  cp /mnt/c/Users/"${USER}"/.Xauthority "${HOME}"
 }
