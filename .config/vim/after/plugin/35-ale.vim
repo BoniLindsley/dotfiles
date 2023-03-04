@@ -43,7 +43,7 @@ let g:ale_fixers = {
 \   'remove_trailing_lines',
 \   'trim_whitespace',
 \ ],
-\ 'cpp': ['clangformat'],
+\ 'cpp': ['clang-format'],
 \ 'fortran': ['fprettify'],
 \ 'html': ['prettier'],
 \ 'javascript': ['prettier'],
