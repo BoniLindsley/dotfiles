@@ -145,3 +145,6 @@ Plug 'https://github.com/jupyter-vim/jupyter-vim.git'
 
 " Word substitutions.
 Plug 'https://github.com/tpope/vim-abolish.git'
+
+" Base16 colour themes.
+Plug 'https://github.com/chriskempson/base16-vim.git'

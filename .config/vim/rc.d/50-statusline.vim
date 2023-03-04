@@ -1,9 +1,3 @@
-" Change status line colour.
-highlight StatusLine   cterm=none ctermfg=magenta
-highlight StatusLine     gui=none   guifg=magenta
-highlight StatusLineNC cterm=none ctermfg=blue
-highlight StatusLineNC   gui=none   guifg=blue
-
 " Always show statusbar instead of for multiple windows.
 "set laststatus=1
 set laststatus=2
