@@ -7,9 +7,9 @@ endif
 nnoremap <Plug>(Boni.Perforce)d
   \ :diffthis<CR>
   \:new<CR>
-  \:r !env P4DIFF= p4 diff -du #:p<CR>
-  \:%!patch --output=- --quiet --reverse #:p<CR>
+  \:r !env P4DIFF= p4 diff -du #:.<CR>
+  \:%!patch --output=- --quiet --reverse #:.<CR>
   \:diffthis<CR>
   \:set buftype=nofile<CR>
-nnoremap <Plug>(Boni.Perforce)e :!p4 edit %:p<CR>
-nnoremap <Plug>(Boni.Perforce)r :!p4 revert %:p<CR>
+nnoremap <Plug>(Boni.Perforce)e :!p4 edit %:.<CR>
+nnoremap <Plug>(Boni.Perforce)r :!p4 revert %:.<CR>
