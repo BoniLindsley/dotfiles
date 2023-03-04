@@ -39,14 +39,14 @@ export HISTFILESIZE=2000
 ## # shopt -u globstar
 
 ## The program `lesspipe`  will toss the contents/info on `STDOUT`
-##   and less will read them as they come across.
+## and less will read them as they come across.
 ## This means that you do not have to wait for the decoding to finish
-##   before less shows you the file.
+## before less shows you the file.
 ## This also means that you will get a `byte N`
-##   instead of an `N%` as your file position.
+## instead of an `N%` as your file position.
 ## You can seek to the end and back to get the `N%`
-##   but that means you have to wait for the pipe to finish.
-if [ -x /usr/bin/lesspipe ]; then eval "$(lesspipe)"; fi
+## but that means you have to wait for the pipe to finish.
+#if [ -x /usr/bin/lesspipe ]; then eval "$(lesspipe)"; fi
 
 # Detect name of chroot environment, if the shell is in one.
 if [[ -z "${debian_chroot:-}" ]] && [ -r /etc/debian_chroot ]; then
