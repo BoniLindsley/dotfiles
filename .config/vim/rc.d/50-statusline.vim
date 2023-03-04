@@ -19,7 +19,7 @@ set laststatus=2
 "" set statusline+=%<%P                         " file position
 
 " Reset from a fresh status line.
-set statusline=[
+set statusline=____\ [
 
 " Line number.
 set statusline+=L%l
