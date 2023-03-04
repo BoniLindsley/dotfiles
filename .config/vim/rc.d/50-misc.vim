@@ -43,13 +43,15 @@ silent! set nofixendofline
 set nofoldenable
 
 " Additional flags for grep.
-"set grepprg='grep -n '
-let &grepprg = 'grep '
-let &grepprg .= '--color=auto '
-let &grepprg .= '--ignore-case '
-let &grepprg .= '--line-number '
-let &grepprg .= '--recursive '
-let &grepprg .= '-I '
+if !has('win32')
+  "set grepprg='grep -n '
+  let &grepprg = 'grep '
+  let &grepprg .= '--color=auto '
+  let &grepprg .= '--ignore-case '
+  let &grepprg .= '--line-number '
+  let &grepprg .= '--recursive '
+  let &grepprg .= '-I '
+endif
 
 " Allow unsaved buffers to be hidden.
 "set nohidden
