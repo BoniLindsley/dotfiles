@@ -44,3 +44,26 @@ use_wsl_xserver() {
 use_wsl_xserver_xauthority() {
   cp /mnt/c/Users/"${USER}"/.Xauthority "${HOME}"
 }
+
+__main() {
+  local browser_paths=()
+  local path
+
+  # Use user soft-linked paths if any.
+  # Do not try to search /mnt for every shell start
+  # which would slow down start time.
+  browser_paths+=("${HOME}/base/bin/firefox")
+  browser_paths+=("${HOME}/base/bin/chrome")
+  if [[ -n "${WSL_DISTRO_NAME}" ]]; then
+    for path in "${browser_paths[@]}"; do
+      if [[ -x "${path}" ]]; then
+        BROWSER="${HOME}/base/bin/firefox"
+        export BROWSER
+        break
+      fi
+    done
+  fi
+}
+
+__main "$@"
+unset __main
