@@ -43,6 +43,8 @@ let g:ale_fixers = {
 \   'remove_trailing_lines',
 \   'trim_whitespace',
 \ ],
+"\ https://github.com/cheshirekow/cmake_format
+\ 'cmake': ['cmakeformat'],
 \ 'cpp': ['clang-format'],
 \ 'fortran': ['fprettify'],
 \ 'html': ['prettier'],
