@@ -37,6 +37,7 @@ nnoremap <Plug>(Boni.Do)<Tab>
 nmap <Plug>(Boni.Do)<Space> <Plug>(Boni.Dispatch)<Space>
 nmap <Plug>(Boni.Do)B <Plug>(Boni.Vimspector)
 nmap <Plug>(Boni.Do)D <Plug>(Boni.Dispatch)
+nmap <Plug>(Boni.Do)E <Plug>(Boni.Find)
 nmap <Plug>(Boni.Do)G <Plug>(Boni.GitGutter)
 nmap <Plug>(Boni.Do)H <Plug>(Boni.ALE)
 nmap <Plug>(Boni.Do)L <Plug>(Boni.Quickfix)
@@ -53,7 +54,6 @@ nmap <Plug>(Boni.Do)s <Plug>(ale_lint)
 nmap <Plug>(Boni.Do)t <Plug>(Boni.Do)T<Space>
 nmap <Plug>(Boni.Do)v <Plug>(Boni.Perforce)
 
-nmap <Plug>(Boni)e <Plug>(Boni.Find)
 nnoremap <Plug>(Boni)n :bnext<CR>
 nnoremap <Plug>(Boni)p :bprevious<CR>
 " Disables auto formatting for pasted text.
