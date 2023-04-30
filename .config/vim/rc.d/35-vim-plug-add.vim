@@ -19,16 +19,6 @@ Plug 'lervag/vimtex'
 "" " Macros for making Markdown documents.
 "" Plug 'vimwiki/vimwiki'
 
-" Vim Markdown - Syntax highlighting, matching rules and mappings
-"                for the original Markdown and extensions.
-Plug 'plasticboy/vim-markdown'
-
-" " Syntax highlightying for MAGMA computer algebra system.
-" Plug 'petRUShka/vim-magma'
-
-"" " Formatting for Typescript.
-"" Plug 'leafgarland/typescript-vim'
-
 " Asynchronous build and test dispatcher.
 Plug 'tpope/vim-dispatch'
 
@@ -38,29 +28,17 @@ Plug 'airblade/vim-gitgutter'
 " Git wrapper
 Plug 'tpope/vim-fugitive'
 
-" Better JSON for VIM
-Plug 'elzr/vim-json'
-
 "" " Conque GDB
 "" Plug 'vim-scripts/Conque-GDB'
 
 "" " TaskWarrior TUI
 "" Plug 'blindFS/vim-taskwarrior'
 
-" " vim-ledger
-" Plug 'ledger/vim-ledger'
-
-" Beancount
-Plug 'https://github.com/nathangrigg/vim-beancount.git'
-
 "" EditorConfig Plugin for vim
 "" The config files are not really used much.
 "" There might be an ALE plugin for it, which is better
 "" as an explicit way of triggering formatting.
 "Plug 'editorconfig/editorconfig-vim'
-
-" Vim syntax highlighting rules for modern CMakeLists.txt.
-Plug 'pboettch/vim-cmake-syntax'
 
 " Commands for working with CMake projects.
 Plug 'https://github.com/vhdirk/vim-cmake.git'
@@ -70,9 +48,6 @@ Plug 'ctrlpvim/ctrlp.vim'
 
 " Vimscript testing.
 Plug 'junegunn/vader.vim'
-
-" Vim syntax highlighting rules for tmux.
-Plug 'tmux-plugins/vim-tmux'
 
 " Run tests depending on context.
 Plug 'vim-test/vim-test'
@@ -87,15 +62,6 @@ Plug 'tpope/vim-projectionist'
 "" Syntastic is blocking.
 "" Disabled in favour of ALE which is an asynchronous LSP linter.
 "Plug 'https://github.com/vim-syntastic/syntastic.git'
-
-" Vim syntax file for Org mode.
-Plug 'https://github.com/axvr/org.vim.git'
-
-" " Vim syntax file for Godot gdscript.
-" Plug 'quabug/vim-gdscript'
-
-" " Vim syntax file for Vue.js components.
-" Plug 'posva/vim-vue'
 
 """ Pass texts to eSpeak.
 """ Using a local copy since upstream is buggy.
@@ -132,9 +98,6 @@ Plug 'jamessan/vim-gnupg'
 
 " Todo.txt
 Plug 'https://github.com/freitass/todo.txt-vim.git'
-
-" Vim syntax highlighting rules for TOML.
-Plug 'https://github.com/cespare/vim-toml.git'
 
 " Interactive scratchpad
 Plug 'https://github.com/metakirby5/codi.vim.git'
