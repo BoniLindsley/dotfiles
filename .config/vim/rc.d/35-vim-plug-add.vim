@@ -1,5 +1,4 @@
 " Make sure you use single quotes
-Plug 'tpope/vim-sensible'
 
 " " Format code with one button press.
 " Plug 'Chiel92/vim-autoformat'

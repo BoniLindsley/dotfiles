@@ -2,6 +2,10 @@
 "set noautoindent
 set autoindent
 
+" BAckspace over indent, new lines, and start of insert.
+"set backspace=''
+set backspace=eol,indent,start
+
 " Move `.swp` files.
 let s:backup_directory = $VIM_DATA_HOME . '/backup'
 let &backupdir = fnameescape(s:backup_directory) . '//'
@@ -21,6 +25,10 @@ if !isdirectory(s:swap_directory)
   call mkdir(s:swap_directory, 'p')
 endif
 
+" End the last line with @@@ if it is too long.
+"set display=''
+set display=lastline
+
 " Default encoding for display.
 "set encoding=utf-8 or $LANG or latin1
 set encoding=utf-8
@@ -32,6 +40,14 @@ set expandtab
 " Default encoding written to file.
 "set fileencoding=""
 set fileencoding=utf-8
+
+" Remove comment leader with joining comment lines.
+"set formatoptions=tcq
+set formatoptions+=j
+
+" Jump to and highlight searches as they are typed.
+"set noincsearch
+set incsearch
 
 " Do not force insert EOL before EOF.
 "set fixendofline
@@ -88,21 +104,54 @@ set nomodeline
 " set norelativenumber
 set relativenumber
 
+" Minimum Number of buffer lines to display between the top and bottom of a window.
+"set ncrolloff=0
+set scrolloff=1
+
 " Width of indentation. Uses tabstop value if 0.
 "set shiftwidth=8
 set shiftwidth=0
+
+" Minimum Number of buffer lines to display between the top and bottom of a window.
+"set sidescroll=0
 
 " Number of spaces for a tab character. Affects view and expand.
 "set tabstop=8
 set tabstop=2
 
+" Recursively search parent directories for tags files.
+"set tags=./tags,tags
+setglobal tags-=./tags
+setglobal tags-=tags
+setglobal tags-=./TAGS
+setglobal tags-=TAGS
+setglobal tags^=TAGS;/
+setglobal tags^=tags;/
+
+
 " Word wrapping at column 74.
 "set textwidth=0
 set textwidth=73
 
+" Timeout duration when waiting for the next key in mappings.
+"set timeoutlen=100
+
+" Allow timeout on terminal key codes to process `Esc` key.
+"set nottimeout
+set ttimeout
+
+" Small timeout on terminal key codes to process `Esc` key.
+" Negative means to use `timeoutlen` which is for mapping.
+"set ttimeoutlen=-1
+set ttimeoutlen=100
+
 " Allow tab completion in macros and maps.
 "set wildcharm=0
 set wildcharm=<C-I>
+
+" Use completion in command line.
+"set nowildmenu
+set wildmenu
 
 " No visual wrapping of lines longer than the window is wide.
 "set wrap
