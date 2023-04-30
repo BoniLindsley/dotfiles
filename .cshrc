@@ -24,7 +24,7 @@ pushd "${__script_dir}" >> /dev/null
 set __files=( .config/csh/rc.d/*.cshrc )
 unset nonomatch
 if ( "__files" != '.config/csh/rc.d/*.cshrc' ) then
-  foreach __file ( ${_files} )
+  foreach __file ( ${__files} )
     if (-x "${__file}") then
       source "${__file}"
     endif
