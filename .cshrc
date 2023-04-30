@@ -9,7 +9,7 @@ if ( "$__called" != '' ) then
   set __script_dir=`dirname "${__script_path}"`
   unset __script_path
 # Source as startup script.
-else if ( "$0" == '-csh' ) then
+else if ( "$0" == '-csh' || "$0" == '/bin/csh' ) then
   set __script_dir="${HOME}"
 # Directly run: `csh .cshrc`. Probably not useful for `.cshrc`.
 else
@@ -19,11 +19,19 @@ else
 endif
 unset __called
 
-foreach __file (${__script_dir}/.config/csh/rc.d/*.cshrc)
-  if (-x "${__file}") then
-    source "${__file}"
-  endif
-end
+set nonomatch=1
+pushd "${__script_dir}" >> /dev/null
+set __files=( .config/csh/rc.d/*.cshrc )
+unset nonomatch
+if ( "__files" != '.config/csh/rc.d/*.cshrc' ) then
+  foreach __file ( ${_files} )
+    if (-x "${__file}") then
+      source "${__file}"
+    endif
+  end
+endif
+popd >> /dev/null
 
 unset __file
+unset __files
 unset __script_dir
