@@ -30,6 +30,7 @@ if ( "__files" != '.config/csh/login.d/*.login' ) then
     endif
   end
 endif
+popd >> /dev/null
 
 unset __file
 unset __files
