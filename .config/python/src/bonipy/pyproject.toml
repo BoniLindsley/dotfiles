@@ -1,0 +1,73 @@
+[tool.coverage.report]
+exclude_lines = [
+  "@typing.overload",  # Type hints do not need to be ran.
+  "def main\\(",  # Main function typically requires full set up to run.
+  "if __name__ == \"__main__\"",  # Ignore main script.
+  "pragma: no cover",  # Fine grained bypass.
+]
+fail_under = 100
+show_missing = true
+skip_covered = true
+
+[tool.coverage.run]
+branch = true
+command_line = "-m pytest"
+omit = [
+  # Usually requires full-fletched set up to use.
+  "*/__main__.py",
+]
+source = [
+  "src",
+]
+
+[tool.mypy]
+mypy_path = "src:stubs:tests"
+show_error_codes = true
+strict = true
+
+[tool.pylint.BASIC]
+# Violation of naming convention that should be accepted.
+good-names = [
+  # Used by convention.
+  "_T",  # TypeVar name.
+  "_T_co",  # TypeVar name.
+]
+
+[tool.pylint."MESSAGES CONTROL"]
+disable = [
+  # Global statements are already explicit.
+  # Not using per-case disables
+  # which will end up being used in every case.
+  # By doing a disable here, finding them when necessary will be easier.
+  "global-statement",
+
+  # It does not always make sense to document.
+  "missing-class-docstring",
+  "missing-function-docstring",
+  "missing-module-docstring",
+
+  # Allow intentionally disabled checks.
+  "locally-disabled",
+  "suppressed-message",
+
+  # Not checking based on numbers.
+  "too-few-public-methods",
+  "too-many-ancestors",
+  "too-many-instance-attributes",
+  "too-many-lines",
+  "too-many-public-methods",
+
+  # Temporary control to before moving to 88 columns.
+  "line-too-long",
+]
+enable = [
+  # Disabled by default.
+  "bad-inline-option",
+  "deprecated-pragma",
+  "file-ignored",
+  "raw-checker-failed",
+  "use-symbolic-message-instead",
+
+  # Ensure future warnings are not hidden.
+  "useless-suppression",
+]
