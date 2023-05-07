@@ -20,6 +20,8 @@ __main() {
   if [[ -x "${config_path}" ]]; then
     export PYTHONSTARTUP="${config_path}"
   fi
+
+  prepend_to_path_if_exists "${XDG_LIB_HOME:="${XDG_LOCAL_HOME:="${HOME:=.}"/.local}"/lib}"/python/venv/default/bin
 }
 
 __main "$@"
