@@ -45,6 +45,7 @@ let g:ale_fixers = {
 \   'trim_whitespace',
 \ ],
 \ 'cmake': ['cmakeformat'],
+\ 'c': ['clang-format'],
 \ 'cpp': ['clang-format'],
 \ 'fortran': ['fprettify'],
 \ 'html': ['prettier'],
@@ -57,6 +58,10 @@ let g:ale_fixers = {
 \}
 
 let g:ale_linters = {
+\ 'c': [
+\   'clangd',
+\   'clangtidy',
+\ ],
 \ 'cpp': [
 \   'clangd',
 \   'clangtidy',
