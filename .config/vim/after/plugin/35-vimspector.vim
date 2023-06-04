@@ -21,13 +21,18 @@ endif
 let g:vimspector_install_gadgets = [ 'debugpy' ]
 
 nnoremap <Plug>(Boni.Vimspector)<F1> :echo
-\ 'vimspector: ( ) launch (q)uit (s)tack (v)ar (w)atch (c-h)elp'
+\ 'vimspector: ( ) launch (q)uit (r)eset (s)tack (v)ar (w)atch (c-h)elp'
 \<CR>
 nnoremap <Plug>(Boni.Vimspector)<Tab>
 \ :call BoniMapWait("\<Plug>(Boni.Vimspector)")<CR>
-"nmap <Plug>(Boni.Vimspector)<Space> <Plug>VimspectorLaunch
+" Start last known launch settings.
 nmap <Plug>(Boni.Vimspector)<Space> <Plug>VimspectorRestart<CR>
+" Stop current launch.
 nnoremap <Plug>(Boni.Vimspector)q :VimspectorReset<CR>
+" Start and ask for new launch settings.
+nmap <Plug>(Boni.Vimspector)r <Plug>VimspectorLaunch<CR>
+
+nnoremap <Plug>(Boni.Vimspector)b :VimspectorBreakpoints<CR><Plug>(Boni.Vimspector)
 nnoremap <Plug>(Boni.Vimspector)s
   \ :sbuffer vimspector.StackTrace<CR><Plug>(Boni.Vimspector)
 nnoremap <Plug>(Boni.Vimspector)v
@@ -70,9 +75,12 @@ function! BoniTestStrategyVimspector(cmd) abort
   call vimspector#LaunchWithSettings(settings)
 endfunction
 
-let g:test#custom_strategies['vimspector'] = function(
-\ 'BoniTestStrategyVimspector'
-\)
+" Customise vim-test if that is installed.
+if exists('g:loaded_test')
+  let g:test#custom_strategies['vimspector'] = function(
+  \ 'BoniTestStrategyVimspector'
+  \)
+endif
 
 function! s:CustomiseUI()
   call win_gotoid(g:vimspector_session_windows.code)
