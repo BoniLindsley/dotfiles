@@ -1,0 +1,18 @@
+{
+    "extensions.autoCheckUpdates": false,
+    "extensions.autoUpdate": false,
+    "telemetry.telemetryLevel": "off",
+    "terminal.integrated.allowChords": false,
+    "terminal.integrated.commandsToSkipShell": [
+        "-workbench.action.quickOpen",
+        "-workbench.action.terminal.focusFind",
+        "-editor.action.toggleTabFocusMode",
+        "-workbench.action.terminal.paste",
+        "-workbench.action.quickOpenView",
+        "-workbench.action.terminal.goToRecentDirectory",
+        "-workbench.action.togglePanel"
+    ],
+    "update.enableWindowsBackgroundUpdates": false,
+    "update.mode": "none",
+    "workbench.startupEditor": "none"
+}
