@@ -43,6 +43,9 @@ Plug 'tpope/vim-fugitive'
 " Commands for working with CMake projects.
 Plug 'https://github.com/vhdirk/vim-cmake.git'
 
+" CMake Integration with CtrlP, vim-dispatch and Vimspector.
+Plug 'https://github.com/ilyachur/cmake4vim.git'
+
 " Vim fuzzy finder.
 Plug 'ctrlpvim/ctrlp.vim'
 
