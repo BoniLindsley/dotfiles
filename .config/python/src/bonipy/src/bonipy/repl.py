@@ -12,7 +12,6 @@ import sys
 import typing
 
 
-
 _logger = logging.getLogger(__name__)
 
 
@@ -101,7 +100,7 @@ class ProcessMap:
         _logger.info("Executing: %s", full_args)
 
         with subprocess.Popen(
-            full_args, stdin=stdin, stdout=stdout, text=True
+            full_args, stdin=stdin, stdout=stdout, universal_newlines=True
         ) as process:
             now_string = datetime.datetime.now().strftime("D%Y_%m_%d_T%H_%M_%S")
             self._mapping[f"{now_string}_P{process.pid}"] = process
