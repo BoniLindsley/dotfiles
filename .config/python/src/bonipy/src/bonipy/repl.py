@@ -2,7 +2,7 @@
 
 # Standard libraries.
 import builtins
-import collections.abc
+import collections.abc  # pylint: disable=unused-import  # Used inside "type hints".
 import datetime
 import logging
 import platform
@@ -11,8 +11,6 @@ import subprocess
 import sys
 import typing
 
-_AnyStr = typing.TypeVar("_AnyStr", bytes, str)
-_FileDescriptor = None | int | typing.IO[_AnyStr]
 
 
 _logger = logging.getLogger(__name__)
@@ -20,10 +18,10 @@ _logger = logging.getLogger(__name__)
 
 class Command:
     def __init__(
-        self, *nested_arguments: collections.abc.Iterable[str] | subprocess.Popen[str]
+        self, *nested_arguments: "collections.abc.Iterable[str] | subprocess.Popen[str]"
     ) -> None:
         """Store arguments that form a command. Lazy expansion at runtime."""
-        self._nested_arguments: list[collections.abc.Iterable[str]] = []
+        self._nested_arguments: "list[collections.abc.Iterable[str]]" = []
         if not nested_arguments:
             try:
                 nested_arguments = (builtins._,)  # type: ignore[attr-defined]
@@ -42,13 +40,13 @@ class Command:
                 self._nested_arguments.append(arguments)
         self._subcommands: dict[str, "Command"] = {}
 
-    def __add__(self, value: collections.abc.Iterable[str]) -> "Command":
+    def __add__(self, value: "collections.abc.Iterable[str]") -> "Command":
         return Command(*self._nested_arguments, value)
 
     def __delitem__(self, key: str) -> None:
         del self._subcommands[key]
 
-    def __dir__(self) -> collections.abc.Iterable[str]:
+    def __dir__(self) -> "collections.abc.Iterable[str]":
         return self._subcommands.keys()
 
     def __getattr__(self, key: str) -> "Command":
@@ -57,7 +55,7 @@ class Command:
     def __getitem__(self, key: str) -> "Command":
         return self._subcommands[key]
 
-    def __iter__(self) -> collections.abc.Iterator[str]:
+    def __iter__(self) -> "collections.abc.Iterator[str]":
         for arguments in self._nested_arguments:
             yield from arguments
 
@@ -65,7 +63,7 @@ class Command:
         return f"Command({list(self)})"
 
     def __setitem__(
-        self, key: str, value: typing.Union["Command", collections.abc.Iterable[str]]
+        self, key: str, value: typing.Union["Command", "collections.abc.Iterable[str]"]
     ) -> None:
         self._subcommands[key] = (
             value if isinstance(value, Command) else Command(self, value)
@@ -74,26 +72,26 @@ class Command:
 
 class ProcessMap:
     def __init__(self) -> None:
-        self._mapping: dict[str, subprocess.Popen[str]] = {}
+        self._mapping: "dict[str, subprocess.Popen[str]]" = {}
 
     def __delattr__(self, key: str) -> None:
         del self._mapping[key]
 
-    def __dir__(self) -> collections.abc.Iterable[str]:
+    def __dir__(self) -> "collections.abc.Iterable[str]":
         return self._mapping.keys()
 
-    def __getattr__(self, key: str) -> subprocess.Popen[str]:
+    def __getattr__(self, key: str) -> "subprocess.Popen[str]":
         return self._mapping[key]
 
-    def __setitem__(self, key: str, value: subprocess.Popen[str]) -> None:
+    def __setitem__(self, key: str, value: "subprocess.Popen[str]") -> None:
         self._mapping[key] = value
 
     def execute(
         self,
-        *args: collections.abc.Iterable[str],
-        stdin: None | _FileDescriptor[str] = None,
-        stdout: None | _FileDescriptor[str] = None,
-    ) -> subprocess.Popen[str]:
+        *args: "collections.abc.Iterable[str]",
+        stdin: "None | int | typing.IO[str]" = None,
+        stdout: "None | int | typing.IO[str]" = None,
+    ) -> "subprocess.Popen[str]":
         if stdin is None:
             stdin = sys.stdin
         if stdout is None:
@@ -114,7 +112,7 @@ oops = ProcessMap()
 U = oops.execute
 
 
-def _pip_break_system_packages() -> list[str]:
+def _pip_break_system_packages() -> "list[str]":
     python_version = tuple(map(int, platform.python_version_tuple()))
     if python_version >= (3, 11, 2):
         if platform.system() == "Linux":

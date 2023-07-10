@@ -12,10 +12,11 @@ _logger = logging.getLogger(__name__)
 
 # Required Python 3.6 for type hints.
 # Required Python 3.6 `open` support for `pathlib.Path`.
+# Required Python 3.9 built-in templates such as `list[str]`.
 # Required Python 3.10 union type support written pipe.
-if tuple(map(int, platform.python_version_tuple())) < (3, 10, 0):
+if tuple(map(int, platform.python_version_tuple())) < (3, 5, 0):
     _logger.warning(
-        "Not loading startup script. Python version 3.10 required."
+        "Not loading startup script. Python version 3.6 required."
     )
 else:
     startup_path = pathlib.Path(

@@ -14,11 +14,12 @@ Usage:
 
   pyenv-init
   pyenv install --list
-  pyenv install 3.10.12
+  pyenv install 3.11.4 3.10.12 3.9.17 3.8.17 3.7.17 3.6.15 3.5.10
   pyenv uninstall 3.10.12
 
   pyenv versions
   pyenv global system 3.10.12 3.5.10
+  python3.5
 EOF
 }
 alias pyenv-help=__pyenv_help
