@@ -1,28 +1,40 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
+import collections.abc
 import asyncio
+import sys
 import tkinter
+import typing as t
 
 # https://tkdocs.com/tutorial/eventloop.html
 # tkinter.Tk.event_generate
 
+_P = t.ParamSpec("_P")
+_T = t.TypeVar("_T")
+
 
 class EventLoop(asyncio.AbstractEventLoop):
     # Running and stopping the event loop.
+    def __init__(self, *args: _P.args, **kwargs: _P.kwargs) -> None:
+        super().__init__(*args, **kwargs)
 
-    def run_forever(self):
+    def run_forever(self) -> None:
         """Run the event loop until stop() is called."""
         raise NotImplementedError
 
-    def run_until_complete(self, future):
+    def run_until_complete(
+        self,
+        future: collections.abc.Generator[t.Any, None, _T]
+        | collections.abc.Awaitable[_T],
+    ) -> _T:
         """Run the event loop until a Future is done.
 
         Return the Future's result, or raise its exception.
         """
         raise NotImplementedError
 
-    def stop(self):
+    def stop(self) -> None:
         """Stop the event loop as soon as reasonable.
 
         Exactly how soon that is may depend on the implementation, but
@@ -30,15 +42,15 @@ class EventLoop(asyncio.AbstractEventLoop):
         """
         raise NotImplementedError
 
-    def is_running(self):
+    def is_running(self) -> bool:
         """Return whether the event loop is currently running."""
         raise NotImplementedError
 
-    def is_closed(self):
+    def is_closed(self) -> bool:
         """Returns True if the event loop was closed."""
         raise NotImplementedError
 
-    def close(self):
+    def close(self) -> None:
         """Close the loop.
 
         The loop should not be running.
@@ -49,57 +61,59 @@ class EventLoop(asyncio.AbstractEventLoop):
         """
         raise NotImplementedError
 
-    async def shutdown_asyncgens(self):
+    async def shutdown_asyncgens(self) -> None:
         """Shutdown all active asynchronous generators."""
         raise NotImplementedError
 
-    async def shutdown_default_executor(self):
+    async def shutdown_default_executor(self) -> None:
         """Schedule the shutdown of the default executor."""
         raise NotImplementedError
 
     # Methods scheduling callbacks.  All these return Handles.
 
-    def _timer_handle_cancelled(self, handle):
+    def _timer_handle_cancelled(self, handle) -> None:
         """Notification that a TimerHandle has been cancelled."""
         raise NotImplementedError
 
-    def call_soon(self, callback, *args, context=None):
+    def call_soon(self, callback, *args, context=None) -> None:
         return self.call_later(0, callback, *args, context=context)
 
-    def call_later(self, delay, callback, *args, context=None):
+    def call_later(self, delay, callback, *args, context=None) -> None:
         raise NotImplementedError
 
-    def call_at(self, when, callback, *args, context=None):
+    def call_at(self, when, callback, *args, context=None) -> None:
         raise NotImplementedError
 
-    def time(self):
+    def time(self) -> None:
         raise NotImplementedError
 
-    def create_future(self):
+    def create_future(self) -> None:
         raise NotImplementedError
 
     # Method scheduling a coroutine object: create a task.
 
-    def create_task(self, coro, *, name=None, context=None):
+    def create_task(self, coro, *, name=None, context=None) -> None:
         raise NotImplementedError
 
     # Methods for interacting with threads.
 
-    def call_soon_threadsafe(self, callback, *args, context=None):
+    def call_soon_threadsafe(self, callback, *args, context=None) -> None:
         raise NotImplementedError
 
-    def run_in_executor(self, executor, func, *args):
+    def run_in_executor(self, executor, func, *args) -> None:
         raise NotImplementedError
 
-    def set_default_executor(self, executor):
+    def set_default_executor(self, executor) -> None:
         raise NotImplementedError
 
     # Network I/O methods returning Futures.
 
-    async def getaddrinfo(self, host, port, *, family=0, type=0, proto=0, flags=0):
+    async def getaddrinfo(
+        self, host, port, *, family=0, type=0, proto=0, flags=0
+    ) -> None:
         raise NotImplementedError
 
-    async def getnameinfo(self, sockaddr, flags=0):
+    async def getnameinfo(self, sockaddr, flags=0) -> None:
         raise NotImplementedError
 
     async def create_connection(
@@ -119,7 +133,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         ssl_shutdown_timeout=None,
         happy_eyeballs_delay=None,
         interleave=None
-    ):
+    ) -> None:
         raise NotImplementedError
 
     async def create_server(
@@ -138,7 +152,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         ssl_handshake_timeout=None,
         ssl_shutdown_timeout=None,
         start_serving=True
-    ):
+    ) -> None:
         """A coroutine which creates a TCP server bound to host and port.
 
         The return value is a Server object which can be used to stop
@@ -189,7 +203,9 @@ class EventLoop(asyncio.AbstractEventLoop):
         """
         raise NotImplementedError
 
-    async def sendfile(self, transport, file, offset=0, count=None, *, fallback=True):
+    async def sendfile(
+        self, transport, file, offset=0, count=None, *, fallback=True
+    ) -> None:
         """Send a file through a transport.
 
         Return an amount of sent bytes.
@@ -206,7 +222,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         server_hostname=None,
         ssl_handshake_timeout=None,
         ssl_shutdown_timeout=None
-    ):
+    ) -> None:
         """Upgrade a transport to TLS.
 
         Return a new transport that *protocol* should start using
@@ -224,7 +240,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         server_hostname=None,
         ssl_handshake_timeout=None,
         ssl_shutdown_timeout=None
-    ):
+    ) -> None:
         raise NotImplementedError
 
     async def create_unix_server(
@@ -238,7 +254,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         ssl_handshake_timeout=None,
         ssl_shutdown_timeout=None,
         start_serving=True
-    ):
+    ) -> None:
         """A coroutine which creates a UNIX Domain Socket server.
 
         The return value is a Server object, which can be used to stop
@@ -277,7 +293,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         ssl=None,
         ssl_handshake_timeout=None,
         ssl_shutdown_timeout=None
-    ):
+    ) -> None:
         """Handle an accepted connection.
 
         This is used by servers that accept connections outside of
@@ -301,7 +317,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         reuse_port=None,
         allow_broadcast=None,
         sock=None
-    ):
+    ) -> None:
         """A coroutine which creates a datagram endpoint.
 
         This method will try to establish the endpoint in the background.
@@ -334,7 +350,7 @@ class EventLoop(asyncio.AbstractEventLoop):
 
     # Pipes and subprocesses.
 
-    async def connect_read_pipe(self, protocol_factory, pipe):
+    async def connect_read_pipe(self, protocol_factory, pipe) -> None:
         """Register read pipe in event loop. Set the pipe to non-blocking mode.
 
         protocol_factory should instantiate object with Protocol interface.
@@ -347,7 +363,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         # close fd in pipe transport then close f and vice versa.
         raise NotImplementedError
 
-    async def connect_write_pipe(self, protocol_factory, pipe):
+    async def connect_write_pipe(self, protocol_factory, pipe) -> None:
         """Register write pipe in event loop.
 
         protocol_factory should instantiate object with BaseProtocol interface.
@@ -369,7 +385,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         **kwargs
-    ):
+    ) -> None:
         raise NotImplementedError
 
     async def subprocess_exec(
@@ -380,7 +396,7 @@ class EventLoop(asyncio.AbstractEventLoop):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         **kwargs
-    ):
+    ) -> None:
         raise NotImplementedError
 
     # Ready-based callback registration methods.
@@ -388,81 +404,91 @@ class EventLoop(asyncio.AbstractEventLoop):
     # The remove_*() methods return True if something was removed,
     # False if there was nothing to delete.
 
-    def add_reader(self, fd, callback, *args):
+    def add_reader(self, fd, callback, *args) -> None:
         raise NotImplementedError
 
-    def remove_reader(self, fd):
+    def remove_reader(self, fd) -> None:
         raise NotImplementedError
 
-    def add_writer(self, fd, callback, *args):
+    def add_writer(self, fd, callback, *args) -> None:
         raise NotImplementedError
 
-    def remove_writer(self, fd):
+    def remove_writer(self, fd) -> None:
         raise NotImplementedError
 
     # Completion based I/O methods returning Futures.
 
-    async def sock_recv(self, sock, nbytes):
+    async def sock_recv(self, sock, nbytes) -> None:
         raise NotImplementedError
 
-    async def sock_recv_into(self, sock, buf):
+    async def sock_recv_into(self, sock, buf) -> None:
         raise NotImplementedError
 
-    async def sock_recvfrom(self, sock, bufsize):
+    async def sock_recvfrom(self, sock, bufsize) -> None:
         raise NotImplementedError
 
-    async def sock_recvfrom_into(self, sock, buf, nbytes=0):
+    async def sock_recvfrom_into(self, sock, buf, nbytes=0) -> None:
         raise NotImplementedError
 
-    async def sock_sendall(self, sock, data):
+    async def sock_sendall(self, sock, data) -> None:
         raise NotImplementedError
 
-    async def sock_sendto(self, sock, data, address):
+    async def sock_sendto(self, sock, data, address) -> None:
         raise NotImplementedError
 
-    async def sock_connect(self, sock, address):
+    async def sock_connect(self, sock, address) -> None:
         raise NotImplementedError
 
-    async def sock_accept(self, sock):
+    async def sock_accept(self, sock) -> None:
         raise NotImplementedError
 
-    async def sock_sendfile(self, sock, file, offset=0, count=None, *, fallback=None):
+    async def sock_sendfile(
+        self, sock, file, offset=0, count=None, *, fallback=None
+    ) -> None:
         raise NotImplementedError
 
     # Signal handling.
 
-    def add_signal_handler(self, sig, callback, *args):
+    def add_signal_handler(self, sig, callback, *args) -> None:
         raise NotImplementedError
 
-    def remove_signal_handler(self, sig):
+    def remove_signal_handler(self, sig) -> None:
         raise NotImplementedError
 
     # Task factory.
 
-    def set_task_factory(self, factory):
+    def set_task_factory(self, factory) -> None:
         raise NotImplementedError
 
-    def get_task_factory(self):
+    def get_task_factory(self) -> None:
         raise NotImplementedError
 
     # Error handlers.
 
-    def get_exception_handler(self):
+    def get_exception_handler(self) -> None:
         raise NotImplementedError
 
-    def set_exception_handler(self, handler):
+    def set_exception_handler(self, handler) -> None:
         raise NotImplementedError
 
-    def default_exception_handler(self, context):
+    def default_exception_handler(self, context) -> None:
         raise NotImplementedError
 
-    def call_exception_handler(self, context):
+    def call_exception_handler(self, context) -> None:
         raise NotImplementedError
 
     # Debug flag management.
 
-    def get_debug(self):
+    def get_debug(self) -> bool:
         raise NotImplementedError
 
-    def set_debug(self, enabled):
+    def set_debug(self, enabled: bool) -> None:
         raise NotImplementedError
+
+
+def main() -> int:
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
