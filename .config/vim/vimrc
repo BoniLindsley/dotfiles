@@ -75,8 +75,10 @@ execute 'set runtimepath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
 execute 'set runtimepath ^=' . fnameescape($VIM_STATE_HOME)
 
 " Let packaging know about custom directories as well.
-execute 'set packpath ^=' . fnameescape($VIM_CONFIG_HOME)
-execute 'set packpath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+if has('packages')
+  execute 'set packpath ^=' . fnameescape($VIM_CONFIG_HOME)
+  execute 'set packpath +=' . fnameescape($VIM_CONFIG_HOME . "/after")
+endif
 
 " Source every file in a `vimrc.d` directory.
 " External plugins, such as those managed by `vim-plug`
