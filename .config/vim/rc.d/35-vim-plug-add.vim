@@ -113,3 +113,6 @@ Plug 'https://github.com/tpope/vim-abolish.git'
 
 " Base16 colour themes.
 Plug 'https://github.com/chriskempson/base16-vim.git'
+
+" New color theme. Better terminal / GUI dual support.
+Plug 'https://github.com/junegunn/seoul256.vim.git'

@@ -1,11 +1,12 @@
-" Pick a custom colour theme.
-colorscheme simple
+" " Pick a custom colour theme.
+" colorscheme simple
 
 " Tell Vim the window background is dark, regardless of what it detects.
 " This does not change text background colour,
 " and themes need to use this variable to change according.
 " Changing this forces a reload of the current colorscheme if any.
-set background=dark
+"set background=dark
+set background=light
 
 " Change status line colour.
 highlight StatusLine   cterm=none ctermfg=magenta
@@ -18,3 +19,5 @@ highlight StatusLineNC   gui=none   guifg=blue
 if has("gui_running")
   silent! colorscheme base16-pop
 endif
+
+silent! colorscheme seoul256-light
