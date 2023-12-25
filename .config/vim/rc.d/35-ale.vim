@@ -2,6 +2,10 @@
 
 " Upstream: https://github.com/dense-analysis/ale
 
+if v:version < 800
+  finish
+endif
+
 " Language server protocol client
 let g:ale_completion_enabled = 1
 

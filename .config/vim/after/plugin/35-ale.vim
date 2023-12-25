@@ -6,6 +6,10 @@ if !exists('g:loaded_ale_dont_use_this_in_other_plugins_please')
     finish
 endif
 
+if v:version < 800
+  finish
+endif
+
 " Provides completion with `<C-x><C-o>`.
 set omnifunc=ale#completion#OmniFunc
 
