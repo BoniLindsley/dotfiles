@@ -74,6 +74,24 @@ async def sync_fs(is_loading: bool) -> object:
     return error_future
 
 
+async def on_mount_idbfs_switch_change(event: pyodide.ffi.JsProxy) -> None:
+    mount_idbfs_save = js.document.getElementById("mount-idbfs-save")
+    if event.target.checked:
+        mount_indexeddb(target=pathlib.Path("/mnt/idbfs"))
+        await sync_fs(True)
+        mount_idbfs_save.disabled = False
+    else:
+        await sync_fs(False)
+        pyodide_js.FS.unmount("/mnt/idbfs")
+        pyodide_js.FS.rmdir("/mnt/idbfs")
+        mount_idbfs_save.disabled = True
+
+
+async def on_mount_idbfs_save(event: pyodide.ffi.JsProxy) -> None:
+    del event
+    await sync_fs(False)
+
+
 def create_breadcrumb_item(
     *, new_cwd: pathlib.Path, text: str
 ) -> pyodide.ffi.JsDomElement:
@@ -258,6 +276,15 @@ def set_up_logging(*, verbosity: int = 0) -> None:
 
 @log_exception(section_name="async script")
 async def amain() -> int:
+    mount_idbfs_switch = js.document.getElementById("mount-idbfs-switch")
+    pyodide.ffi.wrappers.add_event_listener(
+        mount_idbfs_switch, "change", on_mount_idbfs_switch_change
+    )
+    mount_idbfs_save = js.document.getElementById("mount-idbfs-save")
+    pyodide.ffi.wrappers.add_event_listener(
+        mount_idbfs_save, "click", on_mount_idbfs_save
+    )
+
     file_browser = js.document.getElementById("file-browser")
     await use_as_file_browser(cwd=pathlib.Path.cwd(), file_browser=file_browser)
     _logger.debug("Done.")
