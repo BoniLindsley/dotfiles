@@ -97,6 +97,12 @@ let g:ale_fortran_fprettify_options .= ' --enable-decl'
 " `print *   !` -> `print * !`
 let g:ale_fortran_fprettify_options .= ' --strip-comments'
 
+" Always use preprocessor.
+"let g:ale_fortran_gcc_options = '-Wall'
+let g:ale_fortran_gcc_options = '-Wall'
+let g:ale_fortran_gcc_options .= ' -Wextra'
+let g:ale_fortran_gcc_options .= ' -cpp'
+
 "let g:ale_python_pylsp_config = {}
 let g:ale_python_pylsp_config = {
 \ 'pylsp': {
