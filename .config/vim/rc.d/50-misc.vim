@@ -109,8 +109,13 @@ set relativenumber
 set scrolloff=1
 
 " Width of indentation. Uses tabstop value if 0.
+" Older versions did not have the zero behaviour.
 "set shiftwidth=8
-set shiftwidth=0
+try
+  set shiftwidth=0
+catch /^Vim\%((\a\+)\)\=:E487:/
+  set shiftwidth=2
+endtry
 
 " Minimum Number of buffer lines to display between the top and bottom of a window.
 "set sidescroll=0
