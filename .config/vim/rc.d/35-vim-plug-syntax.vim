@@ -23,6 +23,10 @@ Plug 'elzr/vim-json'
 " and mappings for the original Markdown and extensions.
 Plug 'plasticboy/vim-markdown'
 
+" Markdown
+" Syntax highlighting, with some embedded support.
+Plug 'https://github.com/vim-pandoc/vim-pandoc-syntax.git'
+
 " Emacs Org mode.
 Plug 'https://github.com/axvr/org.vim.git'
 
