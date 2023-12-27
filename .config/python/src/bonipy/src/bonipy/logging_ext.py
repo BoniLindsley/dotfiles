@@ -5,8 +5,6 @@ import argparse
 import logging
 import sys
 
-from logging import *  # pylint: disable=unused-wildcard-import,wildcard-import
-
 
 _logger = logging.getLogger(__name__)
 ALL = 1
@@ -41,32 +39,19 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def use_verbose_flag(args: list[str]) -> list[str]:
+def parse_arguments(args: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    add_verbose_flag(parser)
-    arguments, args = parser.parse_known_args(args)
-    set_up_logging(verbosity=arguments.verbosity)
-    return args
-
-
-def parse_arguments(args: list[str]) -> int | argparse.Namespace:
-    args = use_verbose_flag(args)
-
-    parser = argparse.ArgumentParser()
-    # Not used. Pre-parsed by another parser. For help messages only.
     add_verbose_flag(parser)
     parser.add_argument("message")
     return parser.parse_args(args)
 
 
-def main(args: None | list[str] = None) -> int:
-    if args is None:
-        args = sys.argv
+def main(argv: None | list[str] = None) -> int:
+    if argv is None:
+        argv = sys.argv
 
-    args_or_exit = parse_arguments(args)
-    if isinstance(args_or_exit, int):
-        return args_or_exit
-    arguments = args_or_exit
+    arguments = parse_arguments(argv[1:])
+    set_up_logging(verbosity=arguments.verbosity)
 
     print(f"Command is {arguments.message}")
 

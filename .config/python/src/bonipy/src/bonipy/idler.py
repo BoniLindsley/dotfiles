@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
-from collections import abc
+import collections.abc as cabc
 import contextlib
 import curses
 import logging
@@ -21,8 +21,8 @@ class ScreenProtocol(t.Protocol):
 
 @contextlib.contextmanager
 def initialise(
-    initscr: abc.Callable[_P, ScreenProtocol]
-) -> abc.Iterator[ScreenProtocol]:
+    initscr: cabc.Callable[_P, ScreenProtocol]
+) -> cabc.Iterator[ScreenProtocol]:
     with contextlib.ExitStack() as stack:
         stdscr = initscr()
         stack.callback(curses.endwin)
