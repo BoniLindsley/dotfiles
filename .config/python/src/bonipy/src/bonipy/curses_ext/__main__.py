@@ -137,13 +137,13 @@ def new_data() -> Data:
 
 
 class State:
-    def __init__(self, *args: t.Any, window: curses.window, **kwargs: t.Any) -> None:
-        super().__init__(*args, **kwargs)
-        self.data = new_data()
-        self.frame = 0
-        self.message_area = MessageArea(parent=window)
-        self.window = window
-        self.typeahead = Typeahead(window=window)
+    command_map: dict[str, "Command"]
+    data: Data
+    frame: int
+    message_area: MessageArea
+    normal_map: dict[str, str]
+    window: curses.window
+    typeahead: Typeahead
 
 
 Command = t.Callable[[State], None]
@@ -215,7 +215,7 @@ def write(state: State) -> None:
         json.dump(json_data, file)
 
 
-command_map: dict[str, Command] = {
+DEFAULT_COMMAND_MAP: dict[str, Command] = {
     "edit": edit,
     "new": new,
     "noop": noop,
@@ -224,28 +224,45 @@ command_map: dict[str, Command] = {
     "write": write,
 }
 
-key_map: dict[str, str] = {
+DEFAULT_NORMAL_MAP: dict[str, str] = {
     "ZZ": ":q\n",
     "\x0c": ":redraw\n",
 }
 
 
+def new_state(*, window: curses.window) -> State:
+    state = State()
+    state.command_map = DEFAULT_COMMAND_MAP.copy()
+    state.frame = 0
+    state.message_area = MessageArea(parent=window)
+    state.normal_map = DEFAULT_NORMAL_MAP.copy()
+    state.typeahead = Typeahead(window=window)
+    state.window = window
+    edit(state)
+    return state
+
+
 def process_command_in_command_mode(*, command: str, state: State) -> None:
-    if command:
-        potential_sequences = {key for key in command_map if key.startswith(command)}
-        if len(potential_sequences) == 1:
-            command_map[potential_sequences.pop()](state)
-        else:
-            curses.beep()
+    if not command:
+        return
+
+    command_map = state.command_map
+    potential_sequences = {key for key in command_map if key.startswith(command)}
+    if len(potential_sequences) == 1:
+        command_map[potential_sequences.pop()](state)
+    else:
+        curses.beep()
 
 
-async def process_command_in_normal_mode(*, typeahead: Typeahead) -> None:
-    potential_sequences = list(key_map.keys())
+async def process_command_in_normal_mode(
+    *, normal_map: dict[str, str], typeahead: Typeahead
+) -> None:
+    potential_sequences = list(normal_map.keys())
     buffer = ""
     while potential_sequences:
         next_ch = await typeahead.getch()
         buffer += chr(next_ch)
-        new_typeahead_entry = key_map.get(buffer)
+        new_typeahead_entry = normal_map.get(buffer)
         if new_typeahead_entry is not None:
             typeahead.append(new_typeahead_entry)
             break
@@ -258,8 +275,7 @@ async def process_command_in_normal_mode(*, typeahead: Typeahead) -> None:
 
 async def amain() -> int:
     with raii.initialise() as window:
-        state = State(window=window)
-        edit(state)
+        state = new_state(window=window)
 
         while True:
             redraw(state)
@@ -276,7 +292,9 @@ async def amain() -> int:
                 )
                 process_command_in_command_mode(command=command[1:-1], state=state)
             else:
-                await process_command_in_normal_mode(typeahead=state.typeahead)
+                await process_command_in_normal_mode(
+                    normal_map=state.normal_map, typeahead=state.typeahead
+                )
 
             update(state)
 
