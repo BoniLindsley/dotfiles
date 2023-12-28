@@ -1,23 +1,15 @@
 # /usr/bin/env python3
 
 # Standard libraries.
-import argparse
 import asyncio
 import collections.abc as cabc
 import contextlib
 import curses
-import logging
 import os
 import selectors
 import signal
-import sys
 import typing as t
 
-# Internal modules.
-from . import logging_ext
-
-
-_logger = logging.getLogger(__name__)
 
 SelectorEvent = t.Literal[0, 1, 2, 3]
 
@@ -125,56 +117,11 @@ class EventLoopPolicy(asyncio.DefaultEventLoopPolicy):
 
 
 @contextlib.contextmanager
-def initialise(
-    initscr: None | cabc.Callable[[], curses.window] = None
-) -> cabc.Iterator[curses.window]:
-    with contextlib.ExitStack() as stack:
-        if initscr is None:
-            initscr = curses.initscr
-
-        stdscr = initscr()
-        stack.callback(curses.endwin)
-
-        curses.noecho()
-        stack.callback(curses.echo)
-
-        curses.cbreak()
-        stack.callback(curses.nocbreak)
-
-        stdscr.keypad(True)
-        stack.callback(stdscr.keypad, False)
-
-        curses.start_color()
-
-        stack.callback(asyncio.set_event_loop_policy, asyncio.get_event_loop_policy())
-        asyncio.set_event_loop_policy(EventLoopPolicy(stdscr=stdscr))
-
-        yield stdscr
-
-
-async def amain(stdscr: curses.window) -> int:
-    stdscr.timeout(-1)
-    stdscr.getch()
-    await asyncio.sleep(2)
-    return 0
-
-
-def parse_arguments(args: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    logging_ext.add_verbose_flag(parser)
-    return parser.parse_args(args)
-
-
-def main(argv: None | list[str] = None) -> int:
-    if argv is None:
-        argv = sys.argv
-    arguments = parse_arguments(argv[1:])
-
-    logging_ext.set_up_logging(verbosity=arguments.verbosity)
-
-    with initialise() as stdscr:
-        return asyncio.run(amain(stdscr))
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+def use_event_loop_policy(stdscr: curses.window) -> cabc.Iterator[None]:
+    last_policy = asyncio.get_event_loop_policy()
+    asyncio.set_event_loop_policy(EventLoopPolicy(stdscr=stdscr))
+    try:
+        yield
+    except:
+        asyncio.set_event_loop_policy(last_policy)
+        raise
