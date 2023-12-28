@@ -1,4 +1,4 @@
-# /usr/bin/env python3
+#!/usr/bin/env python3
 
 # Standard libraries.
 import collections
@@ -11,7 +11,7 @@ import sys
 import typing as t
 
 # Internal dependencies.
-import bonipy.curses as curses_async
+from . import fake_async
 
 # In Windows native, need windows-curses
 
@@ -28,7 +28,7 @@ logging.basicConfig(level=logging.DEBUG)
 
 
 def stop_running_loop() -> None:
-    curses_async.get_running_loop().stop()
+    fake_async.get_running_loop().stop()
 
 
 class Data(t.TypedDict):
@@ -142,7 +142,7 @@ class Typeahead:
     def __init__(
         self,
         *args: t.Any,
-        getch: t.Callable[[], curses_async.Coroutine[int]],
+        getch: t.Callable[[], fake_async.Coroutine[int]],
         **kwargs: t.Any,
     ) -> None:
         super().__init__(*args, **kwargs)
@@ -150,7 +150,7 @@ class Typeahead:
         self._cache_repeat_count = 0
         self._getch = getch
 
-    def getch(self) -> curses_async.Coroutine[int]:
+    def getch(self) -> fake_async.Coroutine[int]:
         """
         :return: Cached input character or retrieve from ``curses``.
         :raise RecursionError: See ``popleft``.
@@ -192,7 +192,7 @@ class Typeahead:
 
 def get_command_in_command_line_mode(
     *, message_area: MessageArea, typeahead: Typeahead
-) -> curses_async.Coroutine[str]:
+) -> fake_async.Coroutine[str]:
     textbox = message_area.textbox
     window = message_area.window
     window.clear()
@@ -231,7 +231,7 @@ def process_command_in_command_mode(*, command: str, state: State) -> State:
 
 def process_command_in_normal_mode(
     *, typeahead: Typeahead
-) -> curses_async.Coroutine[None]:
+) -> fake_async.Coroutine[None]:
     potential_sequences = list(key_map.keys())
     buffer = ""
     while potential_sequences:
@@ -255,8 +255,8 @@ def refresh(*, window: curses.window) -> collections.abc.Generator[None, None, N
         yield
 
 
-def async_main() -> curses_async.Coroutine[int]:
-    loop = curses_async.get_running_loop()
+def async_main() -> fake_async.Coroutine[int]:
+    loop = fake_async.get_running_loop()
     stdscr = loop.open()
     message_area = MessageArea(parent=stdscr)
     typeahead = Typeahead(getch=loop.getch)
@@ -287,7 +287,7 @@ def async_main() -> curses_async.Coroutine[int]:
 
 
 def main() -> int:
-    return_value = curses_async.run(async_main())
+    return_value = fake_async.run(async_main())
     return return_value if return_value is not None else 1
 
 
