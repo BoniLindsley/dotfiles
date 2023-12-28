@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
+# Standard libraries.
 import asyncio
-from collections import abc
+import collections.abc as cabc
 import typing as t
 
 
@@ -34,7 +35,7 @@ class Subscriber(t.Generic[_T]):
         # This reduces reference count, so that old feeds can be garbage collected.
         self._feed = feed
 
-    async def read(self) -> abc.AsyncIterator[_T]:
+    async def read(self) -> cabc.AsyncIterator[_T]:
         while True:
             try:
                 value, self._feed = await self._feed.get()
