@@ -64,11 +64,11 @@ if-shell 'test 1.6 = `printf "%s\n" "${TMUX_VERSION}" 1.6 | sort | head --lines=
   'source-file ~/.config/tmux/conf.d/navigation/1.6.tmux.conf'
 if-shell 'test 2.3 = `printf "%s\n" "${TMUX_VERSION}" 2.3 | sort | head --lines=1`' \
   'source-file ~/.config/tmux/conf.d/navigation/2.3.tmux.conf'
-if-shell 'test 3.2a = `printf "%s\n" "${TMUX_VERSION}" 3.2a | sort | head --lines=1`' \
-  'source-file ~/.config/tmux/conf.d/navigation/3.2a.tmux.conf'
+if-shell 'test 3.1c = `printf "%s\n" "${TMUX_VERSION}" 3.1c | sort | head --lines=1`' \
+  'source-file ~/.config/tmux/conf.d/navigation/3.1c.tmux.conf'
 
 # Load style settings.
 # Newest version, falling back to old config.
-if-shell 'test 3.2a = `printf "%s\n" "${TMUX_VERSION}" 3.2a | sort | head --lines=1`' \
-  'source-file ~/.config/tmux/conf.d/style/3.2a.tmux.conf' \
+if-shell 'test 3.1c = `printf "%s\n" "${TMUX_VERSION}" 3.1c | sort | head --lines=1`' \
+  'source-file ~/.config/tmux/conf.d/style/3.1c.tmux.conf' \
   'source-file ~/.config/tmux/conf.d/style/1.6.tmux.conf'
