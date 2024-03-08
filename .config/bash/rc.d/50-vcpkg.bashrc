@@ -17,10 +17,11 @@ Usage:
   apt install --no-install-recommends \\
     libltdl-dev libx11-dev libxext-dev libxft-dev
 
-  vcpkg install imgui[sdl2-binding,sdl2-renderer-binding]
+  vcpkg install catch2 imgui[sdl2-binding,sdl2-renderer-binding]
   cmake \\
     -B "\${CMAKE_BINARY_DIR}" \\
     -S "\${CMAKE_SOURCE_DIR}" \\
+    -DBUILD_TESTING=ON \\
     -DCMAKE_TOOLCHAIN_FILE='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake'
   cmake --build "\${CMAKE_BINARY_DIR}"
 EOF
