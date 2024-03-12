@@ -30,6 +30,7 @@ alias vcpkg-help="__vcpkg_help"
 
 __vcpkg_init() {
   prepend_to_path_if_exists "${VCPKG_ROOT}" || exit
+  export CMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
   unalias vcpkg-init || exit
 }
 alias vcpkg-init="__vcpkg_init"
