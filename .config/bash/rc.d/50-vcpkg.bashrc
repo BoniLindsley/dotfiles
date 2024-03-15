@@ -29,17 +29,17 @@ EOF
 alias vcpkg-help="__vcpkg_help"
 
 __vcpkg_init() {
-  prepend_to_path_if_exists "${VCPKG_ROOT}" || exit
+  prepend_to_path_if_exists "${VCPKG_ROOT}" || return
   export CMAKE_TOOLCHAIN_FILE="${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake"
-  unalias vcpkg-init || exit
+  unalias vcpkg-init || return
 }
 alias vcpkg-init="__vcpkg_init"
 
 
 __vcpkg_install() {
-  mkdir -p "${VCPKG_ROOT}" || exit
+  mkdir -p "${VCPKG_ROOT}" || return
   git clone 'https://github.com/Microsoft/vcpkg.git' "${VCPKG_ROOT}" \
-    || exit
-  "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics || exit
+    || return
+  "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics || return
 }
 alias vcpkg-install="__vcpkg_install"
