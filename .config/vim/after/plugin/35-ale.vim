@@ -42,6 +42,12 @@ call ale#fix#registry#Add(
 \ 'Apply fprettify to a file.'
 \)
 
+call ale#fix#registry#Add(
+\ 'mdformat',
+\ 'ale#fixers#mdformat#Fix', ['markdown'],
+\ 'Apply mdformat to a file.'
+\)
+
 " cmakeformat: https://github.com/cheshirekow/cmake_format
 let g:ale_fixers = {
 \ '*': [
@@ -55,7 +61,7 @@ let g:ale_fixers = {
 \ 'html': ['prettier'],
 \ 'javascript': ['prettier'],
 \ 'json': ['prettier'],
-\ 'markdown': ['remark-lint'],
+\ 'markdown': ['mdformat'],
 \ 'python': ['black'],
 \ 'rust': ['rustfmt'],
 \ 'sh': ['shfmt'],
