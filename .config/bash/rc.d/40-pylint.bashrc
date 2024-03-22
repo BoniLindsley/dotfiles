@@ -1,4 +1,3 @@
 #!/usr/bin/env bash
 
-PYLINTHOME="$HOME/.cache/pylint"
-export PYLINTHOME
+export PYLINTHOME="${XDG_CACHE_HOME:="${HOME}/.cache"}/pylint"
