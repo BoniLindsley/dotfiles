@@ -13,6 +13,9 @@ endif
 " Provides completion with `<C-x><C-o>`.
 set omnifunc=ale#completion#OmniFunc
 
+"let g:ale_completion_autoimport = 1
+let g:ale_completion_autoimport = 0
+
 function! BoniLinterStatus() abort
   let l:bufnr = bufnr('')
   let l:lint_count = getbufvar(l:bufnr, 'ale_linted', 0)
