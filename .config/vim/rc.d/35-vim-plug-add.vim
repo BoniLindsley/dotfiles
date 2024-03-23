@@ -20,7 +20,12 @@ Plug 'lervag/vimtex'
 "" Plug 'vimwiki/vimwiki'
 
 " Asynchronous build and test dispatcher.
-Plug 'tpope/vim-dispatch'
+
+if v:version < 801
+  Plug 'tpope/vim-dispatch', {'commit', 'a4d01e6'}
+else
+  Plug 'tpope/vim-dispatch'
+endif
 
 " Shows a git diff in the 'gutter'
 Plug 'airblade/vim-gitgutter'
