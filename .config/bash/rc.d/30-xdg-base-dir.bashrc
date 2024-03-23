@@ -12,7 +12,7 @@ export XDG_LOCAL_HOME="${XDG_LOCAL_HOME:="${HOME}/.local"}"
 export XDG_LIB_HOME="${XDG_LIB_HOME:="${XDG_LOCAL_HOME}/lib"}"
 
 # For files that may be deleted to save space.
-export XDG_CACHE_HOME="${XDG_CACHE_DIRS:="${HOME}/.cache"}"
+export XDG_CACHE_HOME="${XDG_CACHE_HOME:-"${HOME}/.cache"}"
 export XDG_CACHE_DIRS="${XDG_CACHE_HOME}"
 
 # For files that may be deleted to "factory reset" an application.
