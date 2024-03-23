@@ -4,7 +4,7 @@ export VCPKG_DISABLE_METRICS=1
 export VCPKG_ROOT="${XDG_LOCAL_HOME:="${HOME}/.local"}/opt/vcpkg"
 
 __vcpkg_help() {
-  cat << EOF
+  cat <<EOF
 Usage:
   apt install --no-install-recommends curl git tar unzip zip
   vcpkg-install
@@ -35,11 +35,42 @@ __vcpkg_init() {
 }
 alias vcpkg-init="__vcpkg_init"
 
+__vcpkg_init_registry() {
+  local xdg_config_home="${XDG_CONFIG_HOME:="${HOME}/.config"}"
+
+  local vcpkg_registries=()
+  if [[ "$#" -eq 0 ]]; then
+    vcpkg_registries+=("${xdg_config_home}/vcpkg/registries/default")
+  else
+    vcpkg_registries+=("$@")
+  fi
+
+  local script_name='vcpkg-init-registry'
+  printf 1>&2 '%s: %s\n' "${script_name}" \
+    "Creating ${#vcpkg_registries[@]} registries."
+  for vcpkg_registry in "${vcpkg_registries[@]}"; do
+    printf 1>&2 '%s: %s\n' "${script_name}" "Creating ${vcpkg_registry}"
+    mkdir -p "${vcpkg_registry}/ports"
+    mkdir -p "${vcpkg_registry}/versions"
+
+    local baseline_path="${vcpkg_registry}/versions/baseline.json"
+    if [[ ! -e "${baseline_path}" ]]; then
+      cat <<EOF >"${baseline_path}"
+{
+  "default": {}
+}
+EOF
+    fi
+  done
+}
+alias vcpkg-init-registry="__vcpkg_init_registry"
 
 __vcpkg_install() {
-  mkdir -p "${VCPKG_ROOT}" || return
-  git clone 'https://github.com/Microsoft/vcpkg.git' "${VCPKG_ROOT}" \
-    || return
-  "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics || return
+  if [[ ! -d "${VCPKG_ROOT}" ]]; then
+    mkdir -p "${VCPKG_ROOT}" || return
+    git clone 'https://github.com/Microsoft/vcpkg.git' "${VCPKG_ROOT}" ||
+      return
+    "${VCPKG_ROOT}/bootstrap-vcpkg.sh" -disableMetrics || return
+  fi
 }
 alias vcpkg-install="__vcpkg_install"
