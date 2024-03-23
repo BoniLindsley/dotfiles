@@ -7,7 +7,11 @@ if v:version < 800
 endif
 
 " Language server protocol client
-let g:ale_completion_enabled = 1
+"let g:ale_completion_enabled = 0
+
+" Do not send requests too frequently.
+"let g:ale_completion_delay = 100
+let g:ale_completion_delay = 1000
 
 "let g:ale_lint_on_enter = 1
 let g:ale_lint_on_enter = 0
