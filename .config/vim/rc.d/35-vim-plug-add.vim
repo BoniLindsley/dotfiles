@@ -22,7 +22,7 @@ Plug 'lervag/vimtex'
 " Asynchronous build and test dispatcher.
 
 if v:version < 801
-  Plug 'tpope/vim-dispatch', {'commit', 'a4d01e6'}
+  Plug 'tpope/vim-dispatch', {'commit': 'a4d01e6'}
 else
   Plug 'tpope/vim-dispatch'
 endif
