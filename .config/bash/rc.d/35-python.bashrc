@@ -11,6 +11,7 @@ esac
 
 # Move compiled bytecode `.pyc` files to a single directory
 # to not clutter up project directories.
+# Requires Python 3.8.
 export PYTHONPYCACHEPREFIX="${XDG_CACHE_DIRS:="${HOME}/.cache"}/python"
 
 __main() {
