@@ -24,16 +24,21 @@ require('nvim-treesitter.configs').setup {
   -- highlighting will fallback to default Vim syntax highlighting
   highlight = {
     enable = true,
-    -- Required for spellcheck, some LaTex highlights and
-    -- code block highlights that do not have ts grammar
-    additional_vim_regex_highlighting = {'org'},
+    -- -- Required for spellcheck, some LaTex highlights and
+    -- -- code block highlights that do not have ts grammar
+    -- additional_vim_regex_highlighting = {'org'},
   },
   ensure_installed = {'org'}, -- Or run :TSUpdate org
 }
 
 require('orgmode').setup({
---  org_agenda_files = {'~/Dropbox/org/*', '~/my-orgs/**/*'},
+  org_agenda_files = {'~/.local/share/emacs/org/notes.org'},
   org_default_notes_file = '~/.local/share/emacs/org/notes.org',
+  -- org_log_done = 'time',
+  -- org_log_into_drawer = nil,
+  -- org_log_into_drawer = 'LOGBOOK',
+  -- org_todo_keywords = {'TODO', '|', 'DONE'},
+  org_todo_keywords = {'TODO(t!)', '|', 'DONE(d!)', 'DROP(D!)'},
 })
 
 EOF
