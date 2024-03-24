@@ -7,7 +7,6 @@
     ;  ; "TODOSTATE ; Log state changes into "TODOSTATE".
     ;  ; nil ; Do not use a drawer.
     ;)
-    '(org-clock-into-drawer nil)
 
     ; Record a note when clocking out of an item.
     ;org-log-note-clock-out nil
