@@ -1,18 +1,27 @@
 {
+    "editor.accessibilitySupport": "on",
     "extensions.autoCheckUpdates": false,
     "extensions.autoUpdate": false,
     "telemetry.telemetryLevel": "off",
     "terminal.integrated.allowChords": false,
     "terminal.integrated.commandsToSkipShell": [
-        "-workbench.action.quickOpen",
-        "-workbench.action.terminal.focusFind",
         "-editor.action.toggleTabFocusMode",
-        "-workbench.action.terminal.paste",
+        "-workbench.action.debug.openView",
+        "-workbench.action.quickOpen",
         "-workbench.action.quickOpenView",
+        "-workbench.action.showCommands",
+        "-workbench.action.terminal.focusFind",
         "-workbench.action.terminal.goToRecentDirectory",
-        "-workbench.action.togglePanel"
+        "-workbench.action.terminal.paste",
+        "-workbench.action.togglePanel",
     ],
+    "terminal.integrated.enableBell": true,
+    "terminal.integrated.gpuAcceleration": "off",
+    "terminal.integrated.sendKeybindingsToShell": true,
+    "terminal.integrated.tabs.enableAnimation": false,
     "update.enableWindowsBackgroundUpdates": false,
     "update.mode": "none",
-    "workbench.startupEditor": "none"
+    "workbench.startupEditor": "none",
+    "workbench.colorTheme": "Default Light+",
+    "window.titleBarStyle": "native",
 }
