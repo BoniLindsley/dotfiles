@@ -8,16 +8,18 @@ __vcpkg_help() {
 Usage:
   apt install --no-install-recommends curl git tar unzip zip
   vcpkg-install
-  rm -dfr '${VCPKG_ROOT}'
 
   vcpkg-init
   bash -c 'cd ${VCPKG_ROOT} && git pull && vcpkg update'
   vcpkg search sdl2
 
+  vcpkg new --application
+  vcpkg add port boost imgui[sdl2-binding,sdl2-renderer-binding]
+  vcpkg install catch2 imgui[sdl2-binding,sdl2-renderer-binding]
+
   apt install --no-install-recommends \\
     libltdl-dev libx11-dev libxext-dev libxft-dev
 
-  vcpkg install catch2 imgui[sdl2-binding,sdl2-renderer-binding]
   cmake \\
     -B "\${CMAKE_BINARY_DIR}" \\
     -S "\${CMAKE_SOURCE_DIR}" \\
