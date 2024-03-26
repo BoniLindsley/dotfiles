@@ -1,0 +1,11 @@
+{
+  "name": "espeak-ng",
+  "version-semver": "1.51.2",
+  "description": "eSpeak NG is a multi-lingual software speech synthesizer",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    }
+  ]
+}
