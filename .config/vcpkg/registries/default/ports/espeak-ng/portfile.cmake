@@ -10,8 +10,8 @@ vcpkg_cmake_configure(
   SOURCE_PATH ${SOURCE_PATH}
   OPTIONS
     -DESPEAK_COMPAT=ON
-    # Pretend to have detected sonic library, and not use it.
-    -DSONIC_INC=1
+    -DLIBESPEAK_NG_EXPORT=1
+    -DSONIC_INC=1 # Pretend to have detected sonic library, and not use it.
     -DSONIC_LIB=1
     -DUSE_ASYNC=OFF
     -DUSE_KLATT=OFF
@@ -28,4 +28,9 @@ file(
     "${SOURCE_PATH}/COPYING.BSD2"
     "${SOURCE_PATH}/COPYING.UCD"
   DESTINATION "${CURRENT_PACKAGES_DIR}/share/espeak-ng"
+)
+file(
+  INSTALL "${SOURCE_PATH}/COPYING"
+  DESTINATION "${CURRENT_PACKAGES_DIR}/share/espeak-ng"
+  RENAME copyright
 )
