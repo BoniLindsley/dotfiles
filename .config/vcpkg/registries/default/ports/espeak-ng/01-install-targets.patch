@@ -1,0 +1,81 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b3ac06eb..d7110cc2 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -33,4 +33,24 @@ message(STATUS "  async: ${USE_ASYNC}")
+ 
+ install(
+   DIRECTORY vim/ftdetect vim/syntax DESTINATION share/vim/vimfiles
+-)
+\ No newline at end of file
++)
++
++install(
++  TARGETS
++    espeak-include
++    espeak-ng
++    espeak-ng-config
++    ucd
++  EXPORT espeak-ngTargets
++  # NAMESPACE espeak-ng::
++  #FILE "${CMAKE_CURRENT_BINARY_DIR}/cmake/espeak-ng-config.cmake"
++  #FILE "espeak-ng-config.cmake"
++  # DESTINATION cmake
++)
++
++install(
++  EXPORT espeak-ngTargets
++  NAMESPACE espeak-ng::
++  FILE "espeak-ng-config.cmake"
++  DESTINATION "share/espeak-ng"
++)
+diff --git a/src/CMakeLists.txt b/src/CMakeLists.txt
+index 85ead541..b69fd446 100644
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -1,5 +1,11 @@
+ add_library(espeak-include INTERFACE)
+-target_include_directories(espeak-include INTERFACE include include/compat)
++target_include_directories(
++  espeak-include
++  INTERFACE
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
++    $<INSTALL_INTERFACE:include>
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/compat>
++)
+ 
+ add_subdirectory(ucd-tools)
+ add_subdirectory(speechPlayer)
+diff --git a/src/libespeak-ng/CMakeLists.txt b/src/libespeak-ng/CMakeLists.txt
+index 6ca6223b..ed4d57dd 100644
+--- a/src/libespeak-ng/CMakeLists.txt
++++ b/src/libespeak-ng/CMakeLists.txt
+@@ -3,7 +3,12 @@ set(ESPEAK_CONFIG_H ${ESPEAK_CONFIG_DIR}/config.h)
+ configure_file(config.h.in ${ESPEAK_CONFIG_H})
+ 
+ add_library(espeak-ng-config INTERFACE)
+-target_include_directories(espeak-ng-config INTERFACE ${ESPEAK_CONFIG_DIR})
++target_include_directories(
++  espeak-ng-config
++  INTERFACE
++    $<BUILD_INTERFACE:${ESPEAK_CONFIG_DIR}>
++    $<INSTALL_INTERFACE:include>
++)
+ 
+ add_library(espeak-ng
+   common.c
+diff --git a/src/ucd-tools/CMakeLists.txt b/src/ucd-tools/CMakeLists.txt
+index 2050c114..e2bcb9c4 100644
+--- a/src/ucd-tools/CMakeLists.txt
++++ b/src/ucd-tools/CMakeLists.txt
+@@ -6,4 +6,9 @@ add_library(ucd STATIC
+   src/scripts.c
+   src/tostring.c
+ )
+-target_include_directories(ucd PUBLIC src/include)
++target_include_directories(
++  ucd
++  PUBLIC
++    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>
++    $<INSTALL_INTERFACE:include>
++)
