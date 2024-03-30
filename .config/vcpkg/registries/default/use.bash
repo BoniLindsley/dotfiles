@@ -12,12 +12,14 @@ __main() {
   : "${VCPKG_ROOT?}"
 
   local script_path="$(readlink -f "$0")"
-  local script_dir="$(dirname $script_path)"
+  local script_dir="$(dirname "${script_path}")"
+  script_dir="$(realpath "${script_dir}")"
 
   local registry_baseline="$(__registry_baseline "${script_dir}")"
   local vcpkg_baseline="$(__registry_baseline "${VCPKG_ROOT}")"
 
   export registry_baseline
+  export script_dir
   export vcpkg_baseline
   cat "${script_dir}/vcpkg-configuration.json" \
     | envsubst \
