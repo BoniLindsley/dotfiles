@@ -32,7 +32,7 @@ require('nvim-treesitter.configs').setup {
 }
 
 require('orgmode').setup({
-  org_agenda_files = {'~/.local/share/emacs/org/notes.org'},
+  org_agenda_files = { '~/.local/share/emacs/org/*' },
   org_default_notes_file = '~/.local/share/emacs/org/notes.org',
   -- org_log_done = 'time',
   -- org_log_into_drawer = nil,
