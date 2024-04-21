@@ -5,12 +5,13 @@ import argparse
 import logging
 import sys
 
+from typing import Union
+
 
 _logger = logging.getLogger(__name__)
 ALL = 1
 TRACE = 5
-
-_VERBOSITY_MAP: dict[int, int] = {
+_VERBOSITY_MAP = {
     -2: logging.CRITICAL,
     -1: logging.ERROR,
     0: logging.WARNING,
@@ -19,13 +20,37 @@ _VERBOSITY_MAP: dict[int, int] = {
     3: TRACE,
     4: ALL,
 }
+logging.addLevelName(ALL, "ALL")
+logging.addLevelName(TRACE, "TRACE")
 
 
-def set_up_logging(*, verbosity: int = 0) -> None:
-    logging.addLevelName(TRACE, "TRACE")
-    logging_level = _VERBOSITY_MAP.get(min(4, verbosity))
-    logging.basicConfig(level=logging_level)
-    _logger.debug("Logging level is set to %d", logging_level)
+def set_logger_verbosity(
+    *, logger: logging.Logger, verbosity: int
+) -> None:
+    minimum_verbosity = min(_VERBOSITY_MAP)
+    maximum_verbosity = max(_VERBOSITY_MAP)
+    verbosity = int(verbosity)
+    verbosity = min(maximum_verbosity, verbosity)
+    verbosity = max(minimum_verbosity, verbosity)
+    logging_level = _VERBOSITY_MAP.get(verbosity, logging.WARNING)
+    logger.debug("Setting logging level to %d", logging_level)
+    logger.setLevel(logging_level)
+
+
+def set_up_logging(
+    *, logger: logging.Logger, verbosity: Union[None, int] = None
+) -> None:
+    formatter = logging.Formatter(
+        datefmt="%Y-%m-%d %H:%M:%S",
+        fmt="[{asctime}] [python/{name}] [{levelname[0]}] {message}",
+        style="{",
+    )
+    handler = logging.StreamHandler()
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
+    if verbosity is not None:
+        set_logger_verbosity(logger=logger, verbosity=verbosity)
 
 
 def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
@@ -33,9 +58,9 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
         "--verbose",
         "-v",
         action="count",
+        default=0,
         dest="verbosity",
         help="Incrase verbosity.",
-        default=0,
     )
 
 
@@ -51,11 +76,11 @@ def main(argv: None | list[str] = None) -> int:
         argv = sys.argv
 
     arguments = parse_arguments(argv[1:])
-    set_up_logging(verbosity=arguments.verbosity)
+    set_up_logging(logger=_logger, verbosity=arguments.verbosity)
 
     print(f"Command is {arguments.message}")
 
-    _logger.log(1, "%s: Everything", 1)
+    _logger.log(ALL, "%s: Everything", ALL)
     _logger.log(TRACE, "%s: Trace", TRACE)
     _logger.debug("%s: Debug", logging.DEBUG)
     _logger.info("%s: Info", logging.INFO)
