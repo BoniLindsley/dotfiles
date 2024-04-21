@@ -193,8 +193,8 @@ class WrappingFrame(tkinter.Frame):
     def resize(self) -> None:
         # Try to ensure the whole label fits inside the frame.
         label = self.clock_label
-        old_font = label["font"]
-        old_font_size = tkinter.font.Font(font=old_font)["size"]
+        label_font = tkinter.font.Font(font=label["font"])
+        old_font_size = label_font["size"]
         old_height = get_font_height(
             old_font_size,
             size_to_height_cache=self.font_size_to_height_cache,
@@ -216,7 +216,8 @@ class WrappingFrame(tkinter.Frame):
                 new_height,
                 size_to_height_cache=self.font_size_to_height_cache,
             )
-            label.config(font=tkinter.font.Font(size=new_font_size))
+            label_font.config(size=new_font_size)
+            label.config(font=label_font)
             _logger.log(
                 TRACE,
                 "Resizing clock to font size %s for height %s.",
