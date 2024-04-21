@@ -216,7 +216,7 @@ class WrappingFrame(tkinter.Frame):
                 new_height,
                 size_to_height_cache=self.font_size_to_height_cache,
             )
-            label.config(font=(None, new_font_size))
+            label.config(font=tkinter.font.Font(size=new_font_size))
             _logger.log(
                 TRACE,
                 "Resizing clock to font size %s for height %s.",
