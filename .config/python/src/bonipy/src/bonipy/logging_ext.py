@@ -5,8 +5,6 @@ import argparse
 import logging
 import sys
 
-from typing import Union
-
 
 _logger = logging.getLogger(__name__)
 ALL = 1
@@ -24,9 +22,7 @@ logging.addLevelName(ALL, "ALL")
 logging.addLevelName(TRACE, "TRACE")
 
 
-def set_logger_verbosity(
-    *, logger: logging.Logger, verbosity: int
-) -> None:
+def set_logger_verbosity(*, logger: logging.Logger, verbosity: int) -> None:
     minimum_verbosity = min(_VERBOSITY_MAP)
     maximum_verbosity = max(_VERBOSITY_MAP)
     verbosity = int(verbosity)
@@ -37,9 +33,7 @@ def set_logger_verbosity(
     logger.setLevel(logging_level)
 
 
-def set_up_logging(
-    *, logger: logging.Logger, verbosity: Union[None, int] = None
-) -> None:
+def set_up_logging(*, logger: logging.Logger, verbosity: "None | int" = None) -> None:
     formatter = logging.Formatter(
         datefmt="%Y-%m-%d %H:%M:%S",
         fmt="[{asctime}] [python/{name}] [{levelname[0]}] {message}",
@@ -64,21 +58,21 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def parse_arguments(args: list[str]) -> argparse.Namespace:
+def parse_arguments(args: "list[str]") -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     add_verbose_flag(parser)
     parser.add_argument("message")
     return parser.parse_args(args)
 
 
-def main(argv: None | list[str] = None) -> int:
+def main(argv: "None | list[str]" = None) -> int:
     if argv is None:
         argv = sys.argv
 
     arguments = parse_arguments(argv[1:])
     set_up_logging(logger=_logger, verbosity=arguments.verbosity)
 
-    print(f"Command is {arguments.message}")
+    print("Command is", arguments.message)
 
     _logger.log(ALL, "%s: Everything", ALL)
     _logger.log(TRACE, "%s: Trace", TRACE)
