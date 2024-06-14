@@ -10,20 +10,15 @@ fi
 proc__parse_maps() {
   local pid="${1?}"
 
-  local REPLY
   local data
-  local end
-  local length
-  local start
+  local address perms offset dev inode pathname
 
-  while IFS=' -' read -r start end REPLY; do
-    unset REPLY
-    start="0x${start}"
-    end="0x${end}"
+  while read -r address perms offset dev inode pathname; do
+    start="0x${address%-*}"
+    end="0x${address##*-}"
     length="$((end - start))"
-    data="$(xxd -len 1 -plain -s "$((start))" "/proc/${pid}/mem")" || return
-    log_debug "Start: ${start} | Length: ${length} | Data: '${data}'" ||
-      return
+    data="$(xxd -len 1 -plain -s "$((start))" "/proc/${pid}/mem" 2>/dev/null)" || data="(None)"
+    log_trace "Start: ${start} | Length: ${length} | Data: '${data}' | Perms: ${perms} | Offset: ${offset} | Dev: ${dev} | Inode: ${inode} | Pathname: ${pathname}" || return
   done <"/proc/${pid}/maps"
 }
 
