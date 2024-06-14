@@ -17,8 +17,8 @@ proc__parse_maps() {
     start="0x${address%-*}"
     end="0x${address##*-}"
     length="$((end - start))"
-    data="$(xxd -len 1 -plain -s "$((start))" "/proc/${pid}/mem" 2>/dev/null)" || data="(None)"
-    log_trace "Start: ${start} | Length: ${length} | Data: '${data}' | Perms: ${perms} | Offset: ${offset} | Dev: ${dev} | Inode: ${inode} | Pathname: ${pathname}" || return
+    data="$(xxd -len 1 -plain -s "$((start))" "/proc/${pid}/mem" 2>/dev/null)"
+    log_trace "Start: ${start} | End: ${end} | Length: ${length} | Data: '${data}' | Perms: ${perms} | Offset: ${offset} | Dev: ${dev} | Inode: ${inode} | Pathname: ${pathname}" || return
   done <"/proc/${pid}/maps"
 }
 
