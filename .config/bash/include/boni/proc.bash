@@ -105,7 +105,7 @@ main() {
   logging__set_verbosity "${arguments[verbose]}" || return
   log_trace "Running script: ${script_path}" || return
 
-  proc__parse_maps "${arguments[pid]}" || return
+  proc__pid_maps "${arguments[pid]}" || return
 }
 
 main "$@"
