@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
+# Support Python 3.5.3 for Debian 9.
+
 # Standard libraries.
-import typing as _t
+import typing
+
+_T = typing.TypeVar("_T")
+_U = typing.TypeVar("_U")
 
 
-_T = _t.TypeVar("_T")
-_U = _t.TypeVar("_U")
-
-
-class Err(_t.Generic[_T]):
+class Err(typing.Generic[_T]):
     def __init__(self, value: _T) -> None:
         self._value = value
 
@@ -18,14 +19,15 @@ class Err(_t.Generic[_T]):
     def is_ok(self) -> bool:
         return False
 
-    def unwrap(self) -> _t.NoReturn:
+    # TODO(Python 3.5.10): Use NoReturn without quote.
+    def unwrap(self) -> "typing.NoReturn":
         raise RuntimeError("Unable to unwrap error as ok result.")
 
     def unwrap_err(self) -> _T:
         return self._value
 
 
-class Ok(_t.Generic[_T]):
+class Ok(typing.Generic[_T]):
     def __init__(self, value: _T) -> None:
         self._value = value
 
@@ -38,8 +40,10 @@ class Ok(_t.Generic[_T]):
     def unwrap(self) -> _T:
         return self._value
 
-    def unwrap_err(self) -> _t.NoReturn:
+    # TODO(Python 3.5.10): Use NoReturn without quote.
+    def unwrap_err(self) -> "typing.NoReturn":
         raise RuntimeError("Unable to unwrap ok result as an error.")
 
 
-Result = Ok[_T] | Err[_U]
+# TODO(Python 3.9): Use pipe instead of typing.Union.
+Result = typing.Union[Ok[_T], Err[_U]]
