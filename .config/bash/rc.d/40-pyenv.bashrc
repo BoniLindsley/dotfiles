@@ -14,7 +14,7 @@ Usage:
 
   pyenv-init
   pyenv install --list
-  pyenv install 3.11.4 3.10.12 3.9.17 3.8.17 3.7.17 3.6.15 3.5.10
+  pyenv install 3.11.4 3.10.12 3.9.17 3.9.2 3.8.17 3.7.17 3.6.15 3.5.10 3.5.3
   pyenv uninstall 3.10.12
 
   pyenv versions
