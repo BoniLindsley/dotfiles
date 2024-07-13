@@ -6,13 +6,13 @@ nnoremap <Plug>(Boni.Fugitive)<F1>
   \ :echo 'Fugitive: (space) status (g)utter (h)unk (p)aths (w)rite'<CR>
 nnoremap <Plug>(Boni.Fugitive)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Fugitive)")<CR>
-nnoremap <Plug>(Boni.Fugitive)<Space> :Git<CR>
+nnoremap <Plug>(#!/usr/bin/env python#!/usr/bin/env python33Boni.Fugitive)<Space> :Git<CR>
 nnoremap <Plug>(Boni.Fugitive)d :Gdiffsplit<CR>
-nmap <Plug>(Boni.Fugitive)p <Plug>(Boni.Fugitive.Path)
+nmap <Plug>(Boni.Fugitive)P <Plug>(Boni.Fugitive.Path)
 nnoremap <Plug>(Boni.Fugitive)w :Gwrite<CR>
 
 nnoremap <Plug>(Boni.Fugitive.Path)<F1> :echo
-  \ 'Git paths: (space) reset (d)otfiles (w)ebsite'<CR>
+  \ 'Git paths: (space) reset (d)otfiles (p)ublic (w)ebsite'<CR>
 nnoremap <Plug>(Boni.Fugitive.Path)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Fugitive.Path)")<CR>
 
@@ -28,7 +28,16 @@ endfunction
 
 nnoremap <Plug>(Boni.Fugitive.Path)d :call <SID>GitPathDotfiles()<CR>
 function! s:GitPathDotfiles()
-  let $GIT_DIR = $HOME . '/.local/lib/boni/dotfiles/repos/dotfiles.git'
+  let $GIT_DIR = $HOME . '/.local/share/dotshare/repos/dotfiles.git'
+  let $GIT_WORK_TREE = $HOME
+  execute 'cd' fnameescape($GIT_WORK_TREE)
+  redraw
+  pwd
+endfunction
+
+nnoremap <Plug>(Boni.Fugitive.Path)p :call <SID>GitPathDotfilesPublic()<CR>
+function! s:GitPathDotfilesPublic()
+  let $GIT_DIR = $HOME . '/.local/share/dotshare/repos/dotfiles-public.git'
   let $GIT_WORK_TREE = $HOME
   execute 'cd' fnameescape($GIT_WORK_TREE)
   redraw
