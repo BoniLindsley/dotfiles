@@ -1,42 +1,45 @@
 #!/usr/bin/env python3
 
 import asyncio
-import collections.abc as cabc
 import contextlib
 import logging
 import pathlib
-import typing as t
+import typing
+
+from collections.abc import AsyncIterator
 
 # External dependencies.
 import watchdog.events
 import watchdog.observers
 import watchdog.observers.api
 
-
-_P = t.ParamSpec("_P")
-_T = t.TypeVar("_T")
-_U = t.TypeVar("_U")
+_P = typing.ParamSpec("_P")
+_T = typing.TypeVar("_T")
+_U = typing.TypeVar("_U")
 
 _logger = logging.getLogger(__name__)
 
 
-class PubSub(t.Generic[_T]):
-    Message = asyncio.Future[tuple[_U, "Message[_U]"]]
+class PubSub(typing.Generic[_T]):
+    Message = asyncio.Future["tuple[_U, Message[_U]]"]
 
     def __init__(self, *args: _P.args, **kwargs: _P.kwargs) -> None:
         super().__init__(*args, **kwargs)
-        self._item: "PubSub.Message[_T]"
-        self._item = asyncio.get_running_loop().create_future()
+        self._item = self.create_message()
+
+    @classmethod
+    def create_message(cls) -> "PubSub.Message[_T]":
+        return asyncio.get_running_loop().create_future()
 
     def publish(self, value: _T) -> None:
-        next_item: "PubSub.Message[_T]" = asyncio.get_running_loop().create_future()
+        next_item = self.create_message()
         self._item.set_result((value, next_item))
         self._item = next_item
 
     def stop(self) -> None:
         self._item.cancel()
 
-    async def subscribe(self) -> cabc.AsyncIterator[_T]:
+    async def subscribe(self) -> AsyncIterator[_T]:
         next_item = self._item
         while True:
             try:
@@ -59,16 +62,14 @@ class PubSubEventQueue:
 
     def put(
         self,
-        item: tuple[
-            watchdog.events.FileSystemEvent, watchdog.observers.api.ObservedWatch
-        ],
+        item: "tuple[watchdog.events.FileSystemEvent, watchdog.observers.api.ObservedWatch]",
     ) -> None:
         # Called by emitters in separate threads.
         # So this method must be thread-safe. The only thread-safe one.
         self._running_loop.call_soon_threadsafe(self._pubsub.publish, item[0])
 
 
-def get_default_emitter_class() -> type[watchdog.observers.api.EventEmitter]:
+def get_default_emitter_class() -> "type[watchdog.observers.api.EventEmitter]":
     # pylint: disable=protected-access
     observer = watchdog.observers.Observer()
     return observer._emitter_class  # type: ignore[no-any-return]
@@ -78,14 +79,14 @@ def get_default_emitter_class() -> type[watchdog.observers.api.EventEmitter]:
 async def schedule(
     *,
     path: pathlib.Path,
-    emitter_class: None | type[watchdog.observers.api.EventEmitter] = None,
+    emitter_class: "None | type[watchdog.observers.api.EventEmitter]" = None,
     recursive: bool = False,
     timeout: float = watchdog.observers.api.DEFAULT_EMITTER_TIMEOUT
-) -> cabc.AsyncIterator[PubSub[watchdog.events.FileSystemEvent]]:
+) -> AsyncIterator[PubSub[watchdog.events.FileSystemEvent]]:
     if emitter_class is None:
         emitter_class = get_default_emitter_class()
 
-    pubsub: PubSub[watchdog.events.FileSystemEvent] = PubSub()
+    pubsub = PubSub()  # type: PubSub[watchdog.events.FileSystemEvent]
     try:
         emitter = emitter_class(
             event_queue=PubSubEventQueue(pubsub=pubsub),
