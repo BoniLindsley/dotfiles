@@ -115,7 +115,12 @@ def _pip_break_system_packages() -> "list[str]":
     python_version = tuple(map(int, platform.python_version_tuple()))
     if python_version >= (3, 11, 2):
         if platform.system() == "Linux":
-            os_release = platform.freedesktop_os_release()["ID"]
+            try:
+                freedesktop_os_release = platform.freedesktop_os_release()
+            except OSError:
+                # Raises when trying to access /etc nor /usr/lib on Termux.
+                freedesktop_os_release  = dict()
+            os_release = freedesktop_os_release.get("ID")
             if os_release == "debian":
                 return ["--break-system-packages"]
     return []
