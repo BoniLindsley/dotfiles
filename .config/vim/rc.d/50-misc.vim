@@ -25,6 +25,14 @@ if !isdirectory(s:swap_directory)
   call mkdir(s:swap_directory, 'p')
 endif
 
+" Completion setting.
+" -   fuzzy: Allow non-substring matches.
+" -   longest: Auto-insert longest common prefix in completion.
+" -   menu: Show completion options in a pop-up menu.
+" -   preview: Show documentation in a separate window.
+"set completeopt=menu,preview
+set completeopt=longest,menu,preview
+
 " End the last line with @@@ if it is too long.
 "set display=''
 set display=lastline
