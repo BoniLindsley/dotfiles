@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Open on WSL2.
+# chromium  --enable-features=UseOzonePlatform --ozone-platform=wayland
+
 __parse_arguments() {
   while [[ 0 -lt $# ]]; do
     case "$1" in
