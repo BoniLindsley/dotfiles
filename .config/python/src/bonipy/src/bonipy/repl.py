@@ -112,7 +112,7 @@ U = oops.execute
 
 
 def _pip_break_system_packages() -> "list[str]":
-    python_version = tuple(map(int, platform.python_version_tuple()))
+    python_version = tuple(map(int, platform.python_version_tuple()[:2]))
     if python_version >= (3, 11, 2):
         if platform.system() == "Linux":
             try:

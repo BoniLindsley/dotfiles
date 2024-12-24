@@ -13,8 +13,8 @@ import platform
 # Required Python 3.6 `open` support for `pathlib.Path`.
 # Required Python 3.9 built-in templates such as `list[str]`.
 # Required Python 3.10 union type support written with pipes.
-required_version = (3, 6, 0)
-if tuple(map(int, platform.python_version_tuple())) < required_version:
+required_version = (3, 6)
+if tuple(map(int, platform.python_version_tuple()[:2])) < required_version:
     import logging
 
     logging.getLogger(__name__).warning(
