@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+# Using todo as issue tracker.
+# pylint: disable=fixme
+
+# TODO: Add blackjack as a way to select attack pattern.
+# TODO: Allow tab navigation only in debug mode.
+# TODO: Allow attack pattern to be changed in debug mode.
+# TODO: End battle if hit points of either character reaches zero.
+
 # Standard libraries.
 import collections.abc as cabc
 import dataclasses
