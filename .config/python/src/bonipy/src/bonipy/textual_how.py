@@ -39,21 +39,26 @@ class Character:
 
 class IntegerStatic(Static):
     label = reactive("")
+    maximum = reactive(0)
     text = reactive("")
     value = reactive(0)
 
     def __init__(
-        self, *args: typing.Any, label: str = "", value: int = 0, **kwargs: typing.Any
+        self, *args: typing.Any, label: str = "", **kwargs: typing.Any
     ) -> None:
         super().__init__(*args, **kwargs)
         self.label = label
-        self.value = value
 
     def compute_text(self) -> str:
         if not self.value:
             text = ""
         elif self.label:
-            text = f"{self.label}: {self.value}"
+            if self.maximum:
+                text = f"{self.label}: {self.value} / {self.maximum}"
+            else:
+                text = f"{self.label}: {self.value}"
+        elif self.maximum:
+            text = f"{self.value} / {self.maximum}"
         else:
             text = f"{self.value}"
         return text
@@ -67,47 +72,24 @@ class IntegerStatic(Static):
 
 
 class CharacterStatus(Vertical):
-    username = reactive("")
-    ap = reactive(0)
-    hp = reactive(0)
-    max_hp = reactive(0)
+    value = reactive(Character())
 
     def compose(self) -> ComposeResult:
-        yield Static(id="username_text")
-        yield Static(id="hp_text")
+        yield Static(id="username")
+        yield IntegerStatic(id="hp", label="HP")
         yield ProgressBar(id="hp_bar", show_eta=False, show_percentage=False, total=20)
-        yield Static(id="ap_text")
+        yield IntegerStatic(id="ap", label="AP")
         yield ProgressBar(id="ap_bar", show_eta=False, show_percentage=False, total=20)
 
-    def set_character(self, new_character: Character) -> None:
-        self.ap = new_character.ap
-        self.max_hp = new_character.max_hp
-        self.hp = new_character.hp
-        self.username = new_character.username
-
-    def watch_ap(self, old_ap: int, new_ap: int) -> None:
-        del old_ap
-        ap_bar = self.query_one("#ap_bar", ProgressBar)
-        ap_bar.progress = new_ap
-        ap_text = self.query_one("#ap_text", Static)
-        ap_text.update(f"AP: {new_ap}")
-
-    def watch_hp(self, old_hp: int, new_hp: int) -> None:
-        del old_hp
-        hp_bar = self.query_one("#hp_bar", ProgressBar)
-        hp_bar.progress = new_hp
-        hp_text = self.query_one("#hp_text", Static)
-        hp_text.update(f"HP: {new_hp} / {self.max_hp}")
-
-    def watch_max_hp(self, old_max_hp: int, new_max_hp: int) -> None:
-        del old_max_hp
-        hp_text = self.query_one("#hp_text", Static)
-        hp_text.update(f"HP: {self.hp} / {new_max_hp}")
-
-    def watch_username(self, old_username: str, new_username: str) -> None:
-        del old_username
-        username_text = self.query_one("#username_text", Static)
-        username_text.update(new_username)
+    def watch_value(self, old_character: Character, new_character: Character) -> None:
+        del old_character
+        self.query_one("#ap_bar", ProgressBar).progress = new_character.ap
+        self.query_one("#ap", IntegerStatic).value = new_character.ap
+        hp_widget = self.query_one("#hp", IntegerStatic)
+        hp_widget.maximum = new_character.max_hp
+        hp_widget.value = new_character.hp
+        self.query_one("#hp_bar", ProgressBar).progress = new_character.hp
+        self.query_one("#username", Static).update(new_character.username)
 
 
 class AttackPatternPicker(Vertical):
@@ -238,8 +220,6 @@ id_attack_patterns = {
 
 
 class AttackPatternTable(textual.widgets.DataTable[str]):
-    attack_pattern_ids = reactive((0, 0))
-
     def on_mount(self) -> None:
         self.add_columns("Attacker", "1", "2", "3", "4")
         self.cursor_type = "column"
@@ -335,10 +315,8 @@ class BattleScreen(textual.screen.Screen[None]):
     ) -> None:
         turn = message.cursor_column
         result = self.turn_results[turn]
-        user_turn_status = self.query_one("#user_turn_status", CharacterStatus)
-        user_turn_status.set_character(result[0])
-        enemy_turn_status = self.query_one("#enemy_turn_status", CharacterStatus)
-        enemy_turn_status.set_character(result[1])
+        self.query_one("#user_turn_status", CharacterStatus).value = result[0]
+        self.query_one("#enemy_turn_status", CharacterStatus).value = result[1]
 
     def on_data_table_column_selected(
         self, message: AttackPatternTable.ColumnSelected
@@ -399,10 +377,8 @@ class BattleScreen(textual.screen.Screen[None]):
         new_characters: tuple[Character, Character],
     ) -> None:
         del old_characters
-        user_status = self.query_one("#user_status", CharacterStatus)
-        user_status.set_character(new_characters[0])
-        enemy_status = self.query_one("#enemy_status", CharacterStatus)
-        enemy_status.set_character(new_characters[1])
+        self.query_one("#user_status", CharacterStatus).value = new_characters[0]
+        self.query_one("#enemy_status", CharacterStatus).value = new_characters[1]
         self.attack_pattern_ids = (0, 0)
         self.query_one("#picker", AttackPatternPicker).reset()
 
