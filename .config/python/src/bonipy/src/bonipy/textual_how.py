@@ -3,7 +3,6 @@
 # Using todo as issue tracker.
 # pylint: disable=fixme
 
-# TODO: Add blackjack as a way to select attack pattern.
 # TODO: Allow tab navigation only in debug mode.
 # TODO: Allow attack pattern to be changed in debug mode.
 # TODO: End battle if hit points of either character reaches zero.
@@ -13,17 +12,19 @@ import collections.abc as cabc
 import dataclasses
 import random
 import sys
+import typing
 
 # External dependencies.
 import textual.app
 import textual.coordinate
 import textual.binding
+import textual.message
 import textual.widgets
 
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.reactive import reactive
-from textual.widgets import Button, OptionList, ProgressBar, Rule, Static
+from textual.widgets import Button, Digits, OptionList, ProgressBar, Rule, Static
 
 # Reference: https://textual.textualize.io/widget_gallery
 
@@ -34,6 +35,35 @@ class Character:
     ap: int = 0
     hp: int = 0
     max_hp: int = 0
+
+
+class IntegerStatic(Static):
+    label = reactive("")
+    text = reactive("")
+    value = reactive(0)
+
+    def __init__(
+        self, *args: typing.Any, label: str = "", value: int = 0, **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.label = label
+        self.value = value
+
+    def compute_text(self) -> str:
+        if not self.value:
+            text = ""
+        elif self.label:
+            text = f"{self.label}: {self.value}"
+        else:
+            text = f"{self.value}"
+        return text
+
+    def reset(self) -> None:
+        self.value = 0
+
+    def watch_text(self, old_text: str, new_text: str) -> None:
+        del old_text
+        self.update(new_text)
 
 
 class CharacterStatus(Vertical):
@@ -80,6 +110,119 @@ class CharacterStatus(Vertical):
         username_text.update(new_username)
 
 
+class AttackPatternPicker(Vertical):
+    @dataclasses.dataclass
+    class Picked(textual.message.Message):
+        result: tuple[int, int] = (0, 0)
+
+    class Card(Digits):
+        number = reactive(0)
+
+        def set_random(self) -> None:
+            self.number = min(10, random.randrange(1, 13))
+
+        def reset(self) -> None:
+            self.number = 0
+
+        def watch_number(self, old_number: int, new_number: int) -> None:
+            del old_number
+            if new_number > 9:
+                character = "E"
+            elif new_number > 0:
+                character = str(new_number)
+            else:
+                character = ""
+            self.update(character)
+
+    class Hand(Vertical):
+        def compose(self) -> ComposeResult:
+            with Horizontal():
+                yield AttackPatternPicker.Card()
+                yield AttackPatternPicker.Card()
+                yield AttackPatternPicker.Card()
+            yield IntegerStatic(id="total", label="Total")
+            yield IntegerStatic(id="base", label="Base")
+            yield IntegerStatic(id="bonus", label="Bonus")
+
+        def draw(self) -> None:
+            cards = list(self.query(AttackPatternPicker.Card))
+            cards[2].set_random()
+
+        def get_value(self) -> int:
+            base = self.query_one("#base", IntegerStatic).value
+            bonus = self.query_one("#bonus", IntegerStatic).value
+            return max(1, min(9, base + bonus))
+
+        def reset(self) -> None:
+            for card in self.query(AttackPatternPicker.Card):
+                card.reset()
+            for integer_widget in self.query(IntegerStatic):
+                integer_widget.reset()
+
+        def set_bonus(self, other_hand: "AttackPatternPicker.Hand") -> None:
+            limit = 21
+            total = self.query_one("#total", IntegerStatic).value
+            other_total = other_hand.query_one("#total", IntegerStatic).value
+            if total > limit:
+                bonus = 0
+            elif other_total > limit:
+                bonus = 2
+            elif total > other_total:
+                bonus = 2
+            elif total == other_total:
+                bonus = 1
+            else:
+                bonus = 0
+            self.query_one("#bonus", IntegerStatic).value = bonus
+
+        def start(self) -> None:
+            cards = list(self.query(AttackPatternPicker.Card))
+            cards[0].set_random()
+            cards[1].set_random()
+            cards[2].reset()
+            for integer_widget in self.query(IntegerStatic):
+                integer_widget.reset()
+
+        def stop(self) -> None:
+            total = self.query_one("#total", IntegerStatic).value = sum(
+                card.number for card in self.query(AttackPatternPicker.Card)
+            )
+            self.query_one("#base", IntegerStatic).value = int((total - 1) / 3) % 7 + 1
+
+    def compose(self) -> ComposeResult:
+        with Horizontal():
+            yield self.Hand(id="user_hand")
+            yield OptionList("Add", "Skip", id="action")
+            yield self.Hand(id="enemy_hand")
+
+    async def on_option_list_option_selected(
+        self, message: OptionList.OptionSelected
+    ) -> None:
+        if message.option_list.id == "action":
+            user_hand = self.query_one("#user_hand", self.Hand)
+            enemy_hand = self.query_one("#enemy_hand", self.Hand)
+            if message.option.prompt == "Add":
+                user_hand.draw()
+            elif message.option.prompt == "Skip":
+                enemy_hand.draw()
+            user_hand.stop()
+            enemy_hand.stop()
+            user_hand.set_bonus(enemy_hand)
+            enemy_hand.set_bonus(user_hand)
+            self.post_message(
+                self.Picked(result=(user_hand.get_value(), enemy_hand.get_value()))
+            )
+
+    def reset(self) -> None:
+        for hand in self.query(self.Hand):
+            hand.reset()
+
+    def start(self) -> None:
+        for hand in self.query(self.Hand):
+            hand.start()
+        self.query_one("#action", OptionList).focus()
+
+
 id_attack_patterns = {
     0: (0, 0, 0, 0),
     1: (0, 0, 0, 1),
@@ -100,10 +243,9 @@ class AttackPatternTable(textual.widgets.DataTable[str]):
     def on_mount(self) -> None:
         self.add_columns("Attacker", "1", "2", "3", "4")
         self.cursor_type = "column"
-
         self.clear()
-        self.add_row("User", "O", "", "O", "")
-        self.add_row("Enemy", "O", "", "O", "")
+        self.add_row("", "", "", "", "")
+        self.add_row("", "", "", "", "")
 
     def watch_attack_pattern_ids(
         self,
@@ -111,6 +253,18 @@ class AttackPatternTable(textual.widgets.DataTable[str]):
         new_attack_pattern_ids: tuple[int, int],
     ) -> None:
         del old_attack_pattern_ids
+
+        self.update_cell_at(
+            textual.coordinate.Coordinate(row=0, column=0),
+            "User"
+            + (f"({new_attack_pattern_ids[0]})" if new_attack_pattern_ids[0] else ""),
+        )
+        self.update_cell_at(
+            textual.coordinate.Coordinate(row=1, column=0),
+            "Enemy"
+            + (f"({new_attack_pattern_ids[1]})" if new_attack_pattern_ids[1] else ""),
+        )
+
         for row, pattern_id in enumerate(new_attack_pattern_ids):
             for column, is_attacking in enumerate(
                 id_attack_patterns[pattern_id], start=1
@@ -149,11 +303,7 @@ class BattleScreen(textual.screen.Screen[None]):
             yield CharacterStatus(id="enemy_status")
         yield Rule()
         yield Static("Attack Pattern")
-        with Horizontal():
-            yield OptionList(*map(str, range(1, 10)), id="user_attack_option")
-            yield OptionList(
-                *map(str, range(1, 10)), disabled=True, id="enemy_attack_option"
-            )
+        yield AttackPatternPicker(id="picker")
         yield Rule()
         yield Static("Result")
         with Horizontal():
@@ -164,6 +314,12 @@ class BattleScreen(textual.screen.Screen[None]):
             yield CharacterStatus(id="enemy_turn_status")
         yield textual.widgets.Footer()
         yield Button("Continue", id="continue_button")
+
+    def on_attack_pattern_picker_picked(
+        self, message: AttackPatternPicker.Picked
+    ) -> None:
+        self.attack_pattern_ids = message.result
+        self.query_one("#attack_pattern_table", AttackPatternTable).focus()
 
     def on_button_pressed(self, message: Button.Pressed) -> None:
         if message.button.id == "continue_button":
@@ -199,30 +355,9 @@ class BattleScreen(textual.screen.Screen[None]):
     ) -> None:
         if message.option_list.id == "user_action":
             if message.option.prompt == "Attack":
-                user_attack_option = self.query_one("#user_attack_option", OptionList)
-                user_attack_option.focus()
+                self.query_one("#picker", AttackPatternPicker).start()
             elif message.option.prompt == "Run":
                 await self.app.action_quit()
-                return
-        elif message.option_list.id == "user_attack_option":
-            user_pattern_id = message.option_list.highlighted
-            if user_pattern_id is None:
-                user_pattern_id = 0
-            else:
-                user_pattern_id += 1
-
-            enemy_attack_option = self.query_one("#enemy_attack_option", OptionList)
-            enemy_pattern_id = (
-                int(random.gauss(mu=5, sigma=3)) % enemy_attack_option.option_count
-            ) + 1
-            enemy_attack_option.highlighted = enemy_pattern_id - 1
-
-            self.attack_pattern_ids = (user_pattern_id, enemy_pattern_id)
-
-            attack_pattern_table = self.query_one(
-                "#attack_pattern_table", AttackPatternTable
-            )
-            attack_pattern_table.focus()
 
     def watch_attack_pattern_ids(
         self,
@@ -269,6 +404,7 @@ class BattleScreen(textual.screen.Screen[None]):
         enemy_status = self.query_one("#enemy_status", CharacterStatus)
         enemy_status.set_character(new_characters[1])
         self.attack_pattern_ids = (0, 0)
+        self.query_one("#picker", AttackPatternPicker).reset()
 
 
 class HowApp(textual.app.App):  # type: ignore[type-arg]
