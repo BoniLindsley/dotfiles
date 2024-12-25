@@ -205,7 +205,10 @@ class AttackPatternPicker(Vertical):
         self.query_one("#action", OptionList).focus()
 
 
-id_attack_patterns = {
+AttackPatternID = int
+AttackPattern = tuple[int, int, int, int]
+
+id_attack_patterns: dict[AttackPatternID, AttackPattern] = {
     0: (0, 0, 0, 0),
     1: (0, 0, 0, 1),
     2: (0, 0, 1, 0),
@@ -220,6 +223,8 @@ id_attack_patterns = {
 
 
 class AttackPatternTable(textual.widgets.DataTable[str]):
+    attack_patterns = reactive(((0, 0, 0, 0), (0, 0, 0, 0)))
+
     def on_mount(self) -> None:
         self.add_columns("Attacker", "1", "2", "3", "4")
         self.cursor_type = "column"
@@ -227,28 +232,30 @@ class AttackPatternTable(textual.widgets.DataTable[str]):
         self.add_row("", "", "", "", "")
         self.add_row("", "", "", "", "")
 
-    def watch_attack_pattern_ids(
+    def set_pattern_by_id(
         self,
-        old_attack_pattern_ids: tuple[int, int],
-        new_attack_pattern_ids: tuple[int, int],
+        characters: tuple[Character, Character],
+        pattern_ids: tuple[AttackPatternID, AttackPatternID],
     ) -> None:
-        del old_attack_pattern_ids
+        for row, (character, pattern_id) in enumerate(zip(characters, pattern_ids)):
+            self.update_cell_at(
+                textual.coordinate.Coordinate(row=row, column=0),
+                character.username + (f"({pattern_id})" if pattern_id else ""),
+            )
 
-        self.update_cell_at(
-            textual.coordinate.Coordinate(row=0, column=0),
-            "User"
-            + (f"({new_attack_pattern_ids[0]})" if new_attack_pattern_ids[0] else ""),
-        )
-        self.update_cell_at(
-            textual.coordinate.Coordinate(row=1, column=0),
-            "Enemy"
-            + (f"({new_attack_pattern_ids[1]})" if new_attack_pattern_ids[1] else ""),
+        self.attack_patterns = (
+            id_attack_patterns[pattern_ids[0]],
+            id_attack_patterns[pattern_ids[1]],
         )
 
-        for row, pattern_id in enumerate(new_attack_pattern_ids):
-            for column, is_attacking in enumerate(
-                id_attack_patterns[pattern_id], start=1
-            ):
+    def watch_attack_patterns(
+        self,
+        old_attack_patterns: tuple[AttackPattern, AttackPattern],
+        new_attack_patterns: tuple[AttackPattern, AttackPattern],
+    ) -> None:
+        del old_attack_patterns
+        for row, pattern in enumerate(new_attack_patterns):
+            for column, is_attacking in enumerate(pattern, start=1):
                 self.update_cell_at(
                     textual.coordinate.Coordinate(row=row, column=column),
                     "O" if is_attacking else "",
@@ -257,7 +264,6 @@ class AttackPatternTable(textual.widgets.DataTable[str]):
 
 
 class BattleScreen(textual.screen.Screen[None]):
-    attack_pattern_ids = reactive((0, 0))
     characters = reactive(
         (
             Character(username="User", ap=1, hp=6, max_hp=6),
@@ -288,9 +294,7 @@ class BattleScreen(textual.screen.Screen[None]):
         yield Static("Result")
         with Horizontal():
             yield CharacterStatus(id="user_turn_status")
-            yield AttackPatternTable(id="attack_pattern_table").data_bind(
-                BattleScreen.attack_pattern_ids
-            )
+            yield AttackPatternTable(id="attack_pattern_table")
             yield CharacterStatus(id="enemy_turn_status")
         yield textual.widgets.Footer()
         yield Button("Continue", id="continue_button")
@@ -298,8 +302,38 @@ class BattleScreen(textual.screen.Screen[None]):
     def on_attack_pattern_picker_picked(
         self, message: AttackPatternPicker.Picked
     ) -> None:
-        self.attack_pattern_ids = message.result
-        self.query_one("#attack_pattern_table", AttackPatternTable).focus()
+        table = self.query_one("#attack_pattern_table", AttackPatternTable)
+        table.set_pattern_by_id(self.characters, message.result)
+
+        def process_battle() -> cabc.Generator[tuple[Character, Character], None, None]:
+            user = self.characters[0]
+            enemy = self.characters[1]
+            yield (user, enemy)
+            for is_user_attacking, is_enemy_attacking in zip(
+                table.attack_patterns[0],
+                table.attack_patterns[1],
+            ):
+                user_attack = user.ap if is_user_attacking else 0
+                enemy_attack = enemy.ap if is_enemy_attacking else 0
+
+                if user_attack == enemy_attack:
+                    user_attack = 0
+                    enemy_attack = 0
+                elif user_attack < enemy_attack:
+                    user_attack = 0
+                else:
+                    enemy_attack = 0
+
+                new_user = dataclasses.replace(user, hp=user.hp - enemy_attack)
+                new_enemy = dataclasses.replace(enemy, hp=enemy.hp - user_attack)
+                user = new_user
+                enemy = new_enemy
+                yield (user, enemy)
+
+        self.turn_results = tuple(process_battle())  # type: ignore[assignment]
+        table.move_cursor(column=1)
+        table.move_cursor(column=0)
+        table.focus()
 
     def on_button_pressed(self, message: Button.Pressed) -> None:
         if message.button.id == "continue_button":
@@ -337,40 +371,6 @@ class BattleScreen(textual.screen.Screen[None]):
             elif message.option.prompt == "Run":
                 await self.app.action_quit()
 
-    def watch_attack_pattern_ids(
-        self,
-        old_attack_pattern_ids: tuple[int, int],
-        new_attack_pattern_ids: tuple[int, int],
-    ) -> None:
-        del old_attack_pattern_ids
-
-        def process_battle() -> cabc.Generator[tuple[Character, Character], None, None]:
-            user = self.characters[0]
-            enemy = self.characters[1]
-            yield (user, enemy)
-            for is_user_attacking, is_enemy_attacking in zip(
-                id_attack_patterns[new_attack_pattern_ids[0]],
-                id_attack_patterns[new_attack_pattern_ids[1]],
-            ):
-                user_attack = user.ap if is_user_attacking else 0
-                enemy_attack = enemy.ap if is_enemy_attacking else 0
-
-                if user_attack == enemy_attack:
-                    user_attack = 0
-                    enemy_attack = 0
-                elif user_attack < enemy_attack:
-                    user_attack = 0
-                else:
-                    enemy_attack = 0
-
-                new_user = dataclasses.replace(user, hp=user.hp - enemy_attack)
-                new_enemy = dataclasses.replace(enemy, hp=enemy.hp - user_attack)
-                user = new_user
-                enemy = new_enemy
-                yield (user, enemy)
-
-        self.turn_results = tuple(process_battle())  # type: ignore[assignment]
-
     def watch_characters(
         self,
         old_characters: tuple[Character, Character],
@@ -379,8 +379,10 @@ class BattleScreen(textual.screen.Screen[None]):
         del old_characters
         self.query_one("#user_status", CharacterStatus).value = new_characters[0]
         self.query_one("#enemy_status", CharacterStatus).value = new_characters[1]
-        self.attack_pattern_ids = (0, 0)
         self.query_one("#picker", AttackPatternPicker).reset()
+        self.query_one("#attack_pattern_table", AttackPatternTable).set_pattern_by_id(
+            new_characters, (0, 0)
+        )
 
 
 class HowApp(textual.app.App):  # type: ignore[type-arg]
