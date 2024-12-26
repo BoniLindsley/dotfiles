@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 
+# Using TODO as reminder.
+# pylint: disable=fixme
+
 # Standard libraries
 import asyncio
 import collections.abc as cabc
@@ -13,6 +16,8 @@ import js  # type: ignore[import-not-found]  # pylint: disable=import-error
 import pyodide.ffi  # type: ignore[import-not-found]  # pylint: disable=import-error
 import pyodide_js  # type: ignore[import-not-found]  # pylint: disable=import-error
 
+# Internal modules.
+import pygame_how
 
 _logger = logging.getLogger(__name__)
 
@@ -130,7 +135,7 @@ def set_file_browser_path(
     *,
     cwd: pathlib.Path,
     file_browser: pyodide.ffi.JsDomElement,
-    nav_list: pyodide.ffi.JsDomElement
+    nav_list: pyodide.ffi.JsDomElement,
 ) -> None:
     set_file_browser_nav_list_cwd(cwd=cwd, nav_list=nav_list)
     new_rows = pyodide.ffi.to_js([[child.name] for child in cwd.iterdir()])
@@ -254,26 +259,6 @@ async def use_as_file_browser(
     )
 
 
-def set_up_logging(*, verbosity: int = 0) -> None:
-    all_level = 1
-    trace_level = 5
-
-    verbosity_map: dict[int, int] = {
-        -2: logging.CRITICAL,
-        -1: logging.ERROR,
-        0: logging.WARNING,
-        1: logging.INFO,
-        2: logging.DEBUG,
-        3: trace_level,
-        4: all_level,
-    }
-
-    logging.addLevelName(trace_level, "TRACE")
-    logging_level = verbosity_map.get(min(4, verbosity))
-    logging.basicConfig(level=logging_level)
-    _logger.debug("Logging level is set to %d", logging_level)
-
-
 @log_exception(section_name="async script")
 async def amain() -> int:
     mount_idbfs_switch = js.document.getElementById("mount-idbfs-switch")
@@ -288,7 +273,11 @@ async def amain() -> int:
     file_browser = js.document.getElementById("file-browser")
     await use_as_file_browser(cwd=pathlib.Path.cwd(), file_browser=file_browser)
     _logger.debug("Done.")
-    return 0
+
+    canvas = js.document.getElementById("canvas")
+    pyodide_js.canvas.setCanvas2D(canvas)
+
+    return await pygame_how.amain()
 
 
 task: asyncio.Task[object]
@@ -296,7 +285,11 @@ task: asyncio.Task[object]
 
 def main() -> int:
     global task
-    set_up_logging(verbosity=2)
+
+    logging_level = logging.DEBUG
+    logging.basicConfig(level=logging_level)
+    _logger.debug("Logging level is set to %d", logging_level)
+
     # Ideally, this should be `asyncio.run`.
     # Not available in pyscript at the moment.
     # Need to keep the instance alive.
