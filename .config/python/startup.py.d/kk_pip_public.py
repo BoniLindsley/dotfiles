@@ -49,12 +49,14 @@ class SetupPython:
             "IMAPClient",  # IMAP protocol library
             "Importmagic",  # Automatically manage imports.
             "PySide6",  # GUI library.
+            "appdirs",  # Default directories. Deprecated by platformdirs.
             "asciimatics",  # TUI library.
             "colour",
             "epc",  # Emacs RPC stack.
             "keyring",  # Password storage.
             "myst-parser",  # Markdown parser. For Sphinx.
             "netifaces",  # For network traffic.
+            "platformdirs",  # Default directories by convention.
             "psutil",  # For computer metrics.
             "pydantic",  # Data validation
             "textual",  # TUI library.
@@ -76,7 +78,6 @@ class SetupPython:
     def get_library_list(cls) -> "list[str]":
         return [
             "Markdown",  # Parser library.
-            "appdirs",  # Default directories by convention.
             "click",  # Library for argument parsing.
             "click-repl",  # Library for interactive prompt.
             "portalocker",  # Exclusive file access.
