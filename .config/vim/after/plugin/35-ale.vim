@@ -57,6 +57,7 @@ let g:ale_fixers = {
 \   'remove_trailing_lines',
 \   'trim_whitespace',
 \ ],
+\ 'bash': ['shfmt'],
 \ 'cmake': ['cmakeformat'],
 \ 'c': ['clang-format'],
 \ 'cpp': ['clang-format'],
@@ -71,6 +72,7 @@ let g:ale_fixers = {
 \}
 
 let g:ale_linters = {
+\ 'bash': ['shellcheck'],
 \ 'c': [
 \   'clangd',
 \   'clangtidy',
