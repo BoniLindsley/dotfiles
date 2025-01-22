@@ -1,13 +1,25 @@
 #!/usr/bin/env python3
 
+# Keep this Python 3.5 compatible for Debian 9 support.
+
 # Standard libraries.
 import argparse
 import contextlib
 import logging
 import sys
-import typing
 
-from typing import Generator, List  # Deprecated in newer Python versions.
+# TODO(Python 3.9): Use collections.abc version.
+from typing import Generator
+
+# TODO(Python 3.9): Use builtin.
+from typing import List
+
+# TODO(Python 3.10): Use | instead of Union.
+from typing import Union
+
+# ========
+# Common code
+# ========
 
 
 _logger = logging.getLogger(__name__)
@@ -30,7 +42,7 @@ def set_up_logging(*, logger: logging.Logger) -> None:
 
 
 def set_logger_verbosity(
-    *, logger: logging.Logger, verbosity: typing.Union[None | int] = None
+    *, logger: logging.Logger, verbosity: Union[None, int] = None
 ) -> None:
     if verbosity is None:
         verbosity = 0
@@ -63,10 +75,18 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def parse_arguments(args: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    add_verbose_flag(parser)
-    return parser.parse_args(args)
+@contextlib.contextmanager
+def suppress_keyboard_interrupt() -> Generator[None, None, None]:
+    try:
+        yield
+    except KeyboardInterrupt:
+        # Clear line echo-ing "^C".
+        print()
+
+
+# ========
+# Actual implementation
+# ========
 
 
 def run() -> int:
@@ -80,17 +100,14 @@ def run() -> int:
     return 0
 
 
-@contextlib.contextmanager
-def suppress_keyboard_interrupt() -> Generator[None, None, None]:
-    try:
-        yield
-    except KeyboardInterrupt:
-        # Clear line echo-ing "^C".
-        print()
+def parse_arguments(args: List[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser()
+    add_verbose_flag(parser)
+    return parser.parse_args(args)
 
 
 @suppress_keyboard_interrupt()
-def main(argv: typing.Union[None, List[str]] = None) -> int:
+def main(argv: Union[None, List[str]] = None) -> int:
     if argv is None:
         argv = sys.argv
 
