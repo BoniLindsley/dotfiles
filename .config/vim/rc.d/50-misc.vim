@@ -104,6 +104,13 @@ set listchars=tab:>\ ,trail:-,extends:>,precedes:<,nbsp:+,eol:$
 "set nolist
 set list
 
+" Mouse support.
+" Mode 'a' equals 'nvich' for normal, visual, insert, command, help
+" setmouse=''
+" setmouse='nvi' " In GUI.
+" setmouse='a' " In nvim.
+set mouse=""
+
 " Disable modeline -- comments in file seen as commands to execute.
 "set modeline
 set nomodeline
