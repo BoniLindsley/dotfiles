@@ -154,3 +154,10 @@ autocmd FileType netrw setlocal buflisted
 ""           \|     set bufhidden=hide
 ""           \| endif
 "" augroup end
+
+" Map cd to change pwd to the directory of the buffer.
+" It is the default in Neovim.
+" It is the default in Vim, with netrw v162 from 2017-02-06.
+if !has('nvim')
+  autocmd FileType netrw nmap <buffer> cd :cd %:h <CR>
+endif
