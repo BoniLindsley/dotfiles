@@ -96,9 +96,6 @@ class SetupPython:
             "autopep8",  # Code formatter. Prefer Black.
             "build",  # Creates packages for PyPI.
             "devpi-server",  # Cache Python PyPI packages.
-            "pylsp-mypy",  # LSP plugin for static type checking.
-            "python-lsp-black",  # LSP plugin for formatting.
-            "python-lsp-server[Rope]",  # LSP. Rope for completion.
             "twine",  # Uploads packages to PyPI.
             "yapf",  # Code formatter. Prefer Black.
         ]
@@ -116,7 +113,10 @@ class SetupPython:
             "mypy",  # Static type checker.
             "pipenv",  # Virtual environments based on "${PWD}"
             "pylint",  # Static code analysis.
+            "pylsp-mypy",  # LSP plugin for static type checking.
             "pytest",  # Unit test framework.
+            "python-lsp-black",  # LSP plugin for formatting.
+            "python-lsp-server[Rope]",  # LSP. Rope for completion.
             "tox",  # Continuous integration package.
             "types-six",  # Library type hint.
         ]
