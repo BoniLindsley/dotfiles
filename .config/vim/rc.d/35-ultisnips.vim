@@ -13,5 +13,5 @@ if py3eval('int(platform.python_version_tuple()[1]) < 6')
   finish
 endif
 
-" Group dependencies, vim-snippets depends on ultisnips
-Plug 'SirVer/ultisnips' | Plug 'honza/vim-snippets'
+"" Group dependencies, vim-snippets depends on ultisnips
+"Plug 'SirVer/ultisnips' | Plug 'honza/vim-snippets'

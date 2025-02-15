@@ -10,11 +10,11 @@
 "" " Reference: http://vim-latex.sourceforge.net/
 "" Plug 'vim-latex/vim-latex'
 
-" Force `.tex` file type to be loaded as`latex` instead of `plaintex`.
-" This allows small `\include` files to be detected as `latex` files.
-let g:tex_flavor = "latex"
-" A modern vim plugin for editing LaTeX files.
-Plug 'lervag/vimtex'
+"" Force `.tex` file type to be loaded as`latex` instead of `plaintex`.
+"" This allows small `\include` files to be detected as `latex` files.
+"let g:tex_flavor = "latex"
+"" A modern vim plugin for editing LaTeX files.
+"Plug 'lervag/vimtex'
 
 "" " Macros for making Markdown documents.
 "" Plug 'vimwiki/vimwiki'
@@ -27,8 +27,8 @@ else
   Plug 'tpope/vim-dispatch'
 endif
 
-" Shows a git diff in the 'gutter'
-Plug 'airblade/vim-gitgutter'
+"" Shows a git diff in the 'gutter'
+"Plug 'airblade/vim-gitgutter'
 
 " Git wrapper
 Plug 'tpope/vim-fugitive'
@@ -45,23 +45,23 @@ Plug 'tpope/vim-fugitive'
 "" as an explicit way of triggering formatting.
 "Plug 'editorconfig/editorconfig-vim'
 
-" Commands for working with CMake projects.
-Plug 'https://github.com/vhdirk/vim-cmake.git'
+"" Commands for working with CMake projects.
+"Plug 'https://github.com/vhdirk/vim-cmake.git'
 
-" CMake Integration with CtrlP, vim-dispatch and Vimspector.
-Plug 'https://github.com/ilyachur/cmake4vim.git'
+"" CMake Integration with CtrlP, vim-dispatch and Vimspector.
+"Plug 'https://github.com/ilyachur/cmake4vim.git'
 
-" Vim fuzzy finder.
-Plug 'ctrlpvim/ctrlp.vim'
+"" Vim fuzzy finder.
+"Plug 'ctrlpvim/ctrlp.vim'
 
-" Vimscript testing.
-Plug 'junegunn/vader.vim'
+"" Vimscript testing.
+"Plug 'junegunn/vader.vim'
 
-" Run tests depending on context.
-Plug 'vim-test/vim-test'
+"" Run tests depending on context.
+"Plug 'vim-test/vim-test'
 
-" Project management.
-Plug 'tpope/vim-projectionist'
+"" Project management.
+"Plug 'tpope/vim-projectionist'
 
 "" netrw extension.
 "Plug 'https://github.com/tpope/vim-vinegar.git'
@@ -95,29 +95,29 @@ Plug 'tpope/vim-projectionist'
 " Unmanaged plugin (manually installed and updated)
 " Plug '~/my-prototype-plugin'
 
-" Walyand support. Requires wl-clipboard.
-Plug 'https://github.com/jasonccox/vim-wayland-clipboard.git'
+"" Walyand support. Requires wl-clipboard.
+"Plug 'https://github.com/jasonccox/vim-wayland-clipboard.git'
 
-" Visual undo tree.
-Plug 'sjl/gundo.vim'
+"" Visual undo tree.
+"Plug 'sjl/gundo.vim'
 
 " GPG file extension.
 Plug 'jamessan/vim-gnupg'
 
-" Todo.txt
-Plug 'https://github.com/freitass/todo.txt-vim.git'
+"" Todo.txt
+"Plug 'https://github.com/freitass/todo.txt-vim.git'
 
-" Interactive scratchpad
-Plug 'https://github.com/metakirby5/codi.vim.git'
+"" Interactive scratchpad
+"Plug 'https://github.com/metakirby5/codi.vim.git'
 
-" Interactve with Jupyter.
-Plug 'https://github.com/jupyter-vim/jupyter-vim.git'
+"" Interactve with Jupyter.
+"Plug 'https://github.com/jupyter-vim/jupyter-vim.git'
 
-" Word substitutions.
-Plug 'https://github.com/tpope/vim-abolish.git'
+"" Word substitutions.
+"Plug 'https://github.com/tpope/vim-abolish.git'
 
-" Base16 colour themes.
-Plug 'https://github.com/chriskempson/base16-vim.git'
+"" Base16 colour themes.
+"Plug 'https://github.com/chriskempson/base16-vim.git'
 
 " New color theme. Better terminal / GUI dual support.
 Plug 'https://github.com/junegunn/seoul256.vim.git'

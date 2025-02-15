@@ -1,16 +1,16 @@
 " Plugs for syntax highlighting.
 
-" Beancount
-Plug 'https://github.com/nathangrigg/vim-beancount.git'
+"" Beancount
+"Plug 'https://github.com/nathangrigg/vim-beancount.git'
 
-" CMakeLists.txt
-Plug 'pboettch/vim-cmake-syntax'
+"" CMakeLists.txt
+"Plug 'pboettch/vim-cmake-syntax'
 
 " Godot gdscript.
 "Plug 'quabug/vim-gdscript'
 
-" JSON
-Plug 'elzr/vim-json'
+"" JSON
+"Plug 'elzr/vim-json'
 
 " ledger
 " Plug 'ledger/vim-ledger'
@@ -23,18 +23,18 @@ Plug 'elzr/vim-json'
 " and mappings for the original Markdown and extensions.
 Plug 'plasticboy/vim-markdown'
 
-" Markdown
-" Syntax highlighting, with some embedded support.
-Plug 'https://github.com/vim-pandoc/vim-pandoc-syntax.git'
+"" Markdown
+"" Syntax highlighting, with some embedded support.
+"Plug 'https://github.com/vim-pandoc/vim-pandoc-syntax.git'
 
-" Emacs Org mode.
-Plug 'https://github.com/axvr/org.vim.git'
+"" Emacs Org mode.
+"Plug 'https://github.com/axvr/org.vim.git'
 
-" tmux configuration
-Plug 'tmux-plugins/vim-tmux'
+"" tmux configuration
+"Plug 'tmux-plugins/vim-tmux'
 
-" TOML.
-Plug 'https://github.com/cespare/vim-toml.git'
+"" TOML.
+"Plug 'https://github.com/cespare/vim-toml.git'
 
 " Typescript.
 "Plug 'leafgarland/typescript-vim'
