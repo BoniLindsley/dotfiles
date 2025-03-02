@@ -1,0 +1,3 @@
+Duration / h | Headline
+     8760.00 | Total
+     8760.00 | * Feed cat

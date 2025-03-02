@@ -1,0 +1,283 @@
+#!/usr/bin/env python3
+
+# Standard libraries.
+import datetime
+import io
+
+# Internal modules.
+from bonipy.users.boni.todo import (
+    Clock,
+    Entry,
+    Title,
+    Token,
+    create_markdown_parser,
+    create_token_parser,
+    parse_document,
+    to_clock,
+    to_datetime,
+    to_title,
+)
+
+
+class TestToTitle:
+    def test_fails_if_not_heading(self) -> None:
+        assert to_title("Paragraph") is None
+
+    def test_fails_with_leading_spaces(self) -> None:
+        assert to_title(" ### Not Title") is None
+
+    def test_ignore_multiple_leading_spaces(self) -> None:
+        source = "#####   Content"
+        result = to_title(source)
+        assert result == Title(
+            level=5, state="", priority="", content="Content", tags=[]
+        )
+
+    def test_level_by_indent(self) -> None:
+        source = "### Okay"
+        result = to_title(source)
+        assert result == Title(level=3, state="", priority="", content="Okay", tags=[])
+
+    def test_prefix_by_priority(self) -> None:
+        source = "## [#A] Title"
+        result = to_title(source)
+        assert result == Title(
+            level=2, state="", priority="A", content="Title", tags=[]
+        )
+
+    def test_prefix_by_state(self) -> None:
+        source = "## TODO Title"
+        result = to_title(source)
+        assert result == Title(
+            level=2, state="TODO", priority="", content="Title", tags=[]
+        )
+
+    def test_splits_tags(self) -> None:
+        source = "## Title :tag1:tag2:"
+        result = to_title(source)
+        assert result == Title(
+            level=2, state="", priority="", content="Title", tags=["tag1", "tag2"]
+        )
+
+
+class TestToDatetime:
+    def test_fails_without_timezone(self) -> None:
+        source = "1987-12-31T23:59:59"
+        result = to_datetime(source)
+        assert result is None
+
+    def test_has_date_time_and_timezone(self) -> None:
+        source = "1987-12-31T23:59:59+0123"
+        result = to_datetime(source)
+        assert result == datetime.datetime(
+            1987,
+            12,
+            31,
+            23,
+            59,
+            59,
+            tzinfo=datetime.timezone(datetime.timedelta(seconds=4980)),
+        )
+
+
+class TestToClock:
+    def test_allows_spaces_before_time(self) -> None:
+        source = "CLOCK:    [2000-07-01T00:00:00+0000]--[2001-08-31T00:00:00+0000]"
+        result = to_clock(source)
+        assert result == Clock(
+            start=datetime.datetime(2000, 7, 1, tzinfo=datetime.timezone.utc),
+            end=datetime.datetime(2001, 8, 31, tzinfo=datetime.timezone.utc),
+        )
+
+    def test_fails_if_clock_time_missing_timezone(self) -> None:
+        source = " CLOCK: [2000-07-01T00:00:00]--[2001-08-31T00:00:00+0000]"
+        result = to_clock(source)
+        assert result is None
+
+    def test_fails_if_missing_hyphen(self) -> None:
+        source = " CLOCK: [2000-07-01T00:00:00+0000]-[2001-08-31T00:00:00+0000]"
+        result = to_clock(source)
+        assert result is None
+
+    def test_fails_if_prefix_with_space(self) -> None:
+        source = " CLOCK: [2000-07-01T00:00:00+0000]--[2001-08-31T00:00:00+0000]"
+        result = to_clock(source)
+        assert result is None
+
+    def test_parses_start_and_end(self) -> None:
+        source = "CLOCK: [2000-07-01T00:00:00+0100]--[2001-08-31T23:59:59+0100]"
+        result = to_clock(source)
+        assert result == Clock(
+            start=datetime.datetime(
+                2000,
+                7,
+                1,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=3600)),
+            ),
+            end=datetime.datetime(
+                2001,
+                8,
+                31,
+                23,
+                59,
+                59,
+                tzinfo=datetime.timezone(datetime.timedelta(seconds=3600)),
+            ),
+        )
+
+
+class TestCreateMarkdownParser:
+    def test_todo_with_clock_priority_state_changes_and_tags(
+        self,
+    ) -> None:
+        lines = (
+            "# DONE [#A] Task Title :quad_world:xyz:",
+            "```org.logbook",
+            '- State "DONE" from "TODO" [2001-08-31T23:59:59+0100]',
+            "CLOCK: [2000-07-01T00:00:00+0100]--[2001-08-31T23:59:59+0100]",
+            '- State "TODO" from [2000-07-01T00:00:00+0100]',
+            "```",
+        )
+        markdown_parser = create_markdown_parser()
+        next(markdown_parser)
+        result = [markdown_parser.send(line) for line in lines]
+        assert result == [
+            Title(1, "DONE", "A", "Task Title", ["quad_world", "xyz"]),
+            None,
+            None,
+            Clock(
+                datetime.datetime(
+                    2000,
+                    7,
+                    1,
+                    tzinfo=datetime.timezone(datetime.timedelta(seconds=3600)),
+                ),
+                datetime.datetime(
+                    2001,
+                    8,
+                    31,
+                    23,
+                    59,
+                    59,
+                    tzinfo=datetime.timezone(datetime.timedelta(seconds=3600)),
+                ),
+            ),
+            None,
+            None,
+        ]
+
+
+class TestCreateTokenParser:
+    def send_to_parser(self, lines: "list[Token]") -> "list[Entry | None]":
+        # Initialise parser.
+        parser = create_token_parser()
+        next(parser)
+
+        result = [parser.send(line) for line in lines]
+        try:
+            parser.throw(GeneratorExit())
+        except StopIteration as error:
+            result.append(error.value)
+
+        return result
+
+    def test_empty_entry_if_no_lines(self) -> None:
+        title = Title(level=0, state="", priority="", content="", tags=[])
+        assert self.send_to_parser([]) == [
+            Entry(title=title, clocks=[], children=[]),
+        ]
+
+    def test_include_clock_in_last_title(self) -> None:
+        title_0 = Title(level=0, state="", priority="", content="", tags=[])
+        title = Title(level=5, state="", priority="", content="Content", tags=[])
+        clock_1 = Clock(
+            start=datetime.datetime(2000, 7, 1, tzinfo=datetime.timezone.utc),
+            end=datetime.datetime(2001, 8, 31, tzinfo=datetime.timezone.utc),
+        )
+        clock_2 = Clock(
+            start=datetime.datetime(2001, 7, 1, tzinfo=datetime.timezone.utc),
+            end=datetime.datetime(2002, 8, 31, tzinfo=datetime.timezone.utc),
+        )
+        assert self.send_to_parser([title, clock_1, clock_2]) == [
+            Entry(title=title_0, clocks=[], children=[]),
+            None,
+            None,
+            Entry(title=title, clocks=[clock_1, clock_2], children=[]),
+        ]
+
+    def test_no_clock_if_title_only(self) -> None:
+        title_0 = Title(level=0, state="", priority="", content="", tags=[])
+        title_1 = Title(level=1, state="", priority="", content="Title 1", tags=[])
+        title_2 = Title(level=2, state="", priority="", content="Title 2", tags=[])
+        clock = Clock(
+            start=datetime.datetime(2000, 7, 1, tzinfo=datetime.timezone.utc),
+            end=datetime.datetime(2001, 8, 31, tzinfo=datetime.timezone.utc),
+        )
+        assert self.send_to_parser([title_1, title_2, clock]) == [
+            Entry(title=title_0, clocks=[], children=[]),
+            Entry(title=title_1, clocks=[], children=[]),
+            None,
+            Entry(title=title_2, clocks=[clock], children=[]),
+        ]
+
+    def test_include_untitled_clock_in_unlisted_entry(self) -> None:
+        title_0 = Title(level=0, state="", priority="", content="", tags=[])
+        clock = Clock(
+            start=datetime.datetime(2000, 7, 1, tzinfo=datetime.timezone.utc),
+            end=datetime.datetime(2001, 8, 31, tzinfo=datetime.timezone.utc),
+        )
+        assert self.send_to_parser([clock]) == [
+            None,
+            Entry(title=title_0, clocks=[clock], children=[]),
+        ]
+
+
+class TestReadDocument:
+    def test_todo_with_clock_priority_state_changes_and_tags(
+        self,
+    ) -> None:
+        source = io.StringIO(
+            "\n".join(
+                (
+                    "# DONE [#A] Task Title :quad_world:xyz:",
+                    "```org.logbook",
+                    '- State "DONE" from "TODO" [2001-08-31T23:59:59+0100]',
+                    "CLOCK: [2000-07-01T00:00:00+0100]--[2001-08-31T23:59:59+0100]",
+                    '- State "TODO" from [2000-07-01T00:00:00+0100]',
+                    "```",
+                )
+            )
+        )
+        assert parse_document(source) == Entry(
+            title=Title(0, "", "", "", []),
+            clocks=[],
+            children=[
+                Entry(
+                    title=Title(1, "DONE", "A", "Task Title", ["quad_world", "xyz"]),
+                    clocks=[
+                        Clock(
+                            datetime.datetime(
+                                2000,
+                                7,
+                                1,
+                                tzinfo=datetime.timezone(
+                                    datetime.timedelta(seconds=3600)
+                                ),
+                            ),
+                            datetime.datetime(
+                                2001,
+                                8,
+                                31,
+                                23,
+                                59,
+                                59,
+                                tzinfo=datetime.timezone(
+                                    datetime.timedelta(seconds=3600)
+                                ),
+                            ),
+                        ),
+                    ],
+                    children=[],
+                )
+            ],
+        )
