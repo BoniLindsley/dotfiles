@@ -1,0 +1,4 @@
+Duration / h | Headline
+       33.00 | Total
+       13.00 | * Grocery
+       11.00 |   * Laundry
