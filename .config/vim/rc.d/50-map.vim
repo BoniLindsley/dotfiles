@@ -17,12 +17,16 @@ nnoremap <Plug>(Boni)<F1> :echo
   \<CR>
 nnoremap <Plug>(Boni)<Tab> :call BoniMapWait("\<Plug>(Boni)")<CR>
 
+nmap <Plug>(Boni)A <Plug>(Boni.Application)
 nmap <Plug>(Boni)a <Plug>(Boni.Application)
-nnoremap <Plug>(Boni.Application)<F1> :echo 'application: (g)it'<CR>
+nnoremap <Plug>(Boni.Application)<F1> :echo
+ \ 'application: (c)alendar (g)it (s)peech (t)erminal'<CR>
 nnoremap <Plug>(Boni.Application)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Application)")<CR>
+nmap <Plug>(Boni.Application)C <Plug>(Boni.Calendar)
 nmap <Plug>(Boni.Application)G <Plug>(Boni.Fugitive)
 nmap <Plug>(Boni.Application)T <Plug>(Boni.Terminal)
+nmap <Plug>(Boni.Application)c :call g:bonivim#taskmd#run()<CR>
 nmap <Plug>(Boni.Application)g <Plug>(Boni.Application)G<Space>
 nmap <Plug>(Boni.Application)s :call g:boni#speech#init()<CR>
 nmap <Plug>(Boni.Application)t <Plug>(Boni.Application)T<Space>

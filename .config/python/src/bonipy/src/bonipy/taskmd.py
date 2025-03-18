@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 
+# Keep this Python 3.5 compatible for Debian 9 support.
+
 # This is work in progress. Leaving in TODO as progress reminder.
 # pylint: disable=fixme
 
@@ -16,7 +18,18 @@ import re
 import sys
 import typing
 
+# TODO(Python 3.9): Use collections.abc version.
 from typing import Generator
+
+# TODO(Python 3.9): Use builtin.
+from typing import List
+
+# TODO(Python 3.10): Use | instead of Union.
+from typing import Union
+
+# ========
+# Common code
+# ========
 
 
 _logger = logging.getLogger(__name__)
@@ -39,7 +52,7 @@ def set_up_logging(*, logger: logging.Logger) -> None:
 
 
 def set_logger_verbosity(
-    *, logger: logging.Logger, verbosity: typing.Union[None | int] = None
+    *, logger: logging.Logger, verbosity: Union[None, int] = None
 ) -> None:
     if verbosity is None:
         verbosity = 0
@@ -73,7 +86,7 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
 
 
 def read_lines(
-    *, buffer_size: None | int = None, source: typing.TextIO
+    *, buffer_size: Union[None, int] = None, source: typing.TextIO
 ) -> Generator[str, None, None]:
 
     default_buffer_size = 4096
@@ -105,12 +118,19 @@ def suppress_keyboard_interrupt() -> Generator[None, None, None]:
         print()
 
 
+# ========
+# Actual implementation
+# ========
+
+
+# TODO: Need to handle unclosed clocks.
+# TODO: Handle range duration suffix.
 to_clock_regex = re.compile(
     "(?P<level>#+)"
     "( +)CLOCK:( +)"
-    r"\[(?P<start>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:[0-9]+)\]"
+    r"\[(?P<start>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\]"
     "--"
-    r"\[(?P<end>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:[0-9]+)\]"
+    r"\[(?P<end>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\]"
 )
 
 
@@ -118,9 +138,10 @@ class Clock(typing.TypedDict):
     level: int
     start: datetime.datetime
     end: datetime.datetime
+    line_number: int
 
 
-def to_clock(line: str) -> None | Clock:
+def to_clock(line: str, *, line_number: int) -> Union[None, Clock]:
     match = to_clock_regex.match(line)
     if not match:
         return None
@@ -128,6 +149,7 @@ def to_clock(line: str) -> None | Clock:
         "level": len(match["level"]),
         "start": datetime.datetime.fromisoformat(match["start"]),
         "end": datetime.datetime.fromisoformat(match["end"]),
+        "line_number": line_number,
     }
 
 
@@ -142,13 +164,14 @@ to_title_regex = re.compile(
 
 class Title(typing.TypedDict):
     level: int
-    state: None | str
-    priority: None | str
-    headline: None | str
-    tags: None | str
+    state: Union[None, str]
+    priority: Union[None, str]
+    headline: Union[None, str]
+    tags: Union[None, str]
+    line_number: int
 
 
-def to_title(line: str) -> None | Title:
+def to_title(line: str, *, line_number: int) -> Union[None, Title]:
     match = to_title_regex.match(line)
     if not match:
         return None
@@ -158,23 +181,43 @@ def to_title(line: str) -> None | Title:
         "priority": match["priority"],
         "headline": match["headline"],
         "tags": match["tags"],
+        "line_number": line_number,
     }
 
 
-def to_headings(stdin: typing.TextIO) -> list[Clock | Title]:
-    headings = []  # type: list[Clock | Title]
-    inside_code_block = False
-    for line in read_lines(source=stdin):
-        if inside_code_block:
+class HeadingParser:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.headings = []  # type: list[Clock | Title]
+        self.last_line_number = 0
+        self.is_inside_code_block = False
+
+    def send_line(self, line: str, line_number: Union[None, int] = None) -> None:
+        if line_number is None:
+            line_number = self.last_line_number + 1
+        self.last_line_number = line_number
+
+        if self.is_inside_code_block:
             if line == "```":
-                inside_code_block = False
-        elif line.startswith("```"):
-            inside_code_block = True
-        elif clock := to_clock(line):
-            headings.append(clock)
-        elif title := to_title(line):
-            headings.append(title)
-    return headings
+                self.is_inside_code_block = False
+            return
+        if line.startswith("```"):
+            self.is_inside_code_block = True
+            return
+        clock = to_clock(line, line_number=line_number)
+        if clock:
+            self.headings.append(clock)
+            return
+        title = to_title(line, line_number=line_number)
+        if title:
+            self.headings.append(title)
+
+
+def to_headings(stdin: typing.TextIO) -> List[Clock | Title]:
+    heading_parser = HeadingParser()
+    for line in read_lines(source=stdin):
+        heading_parser.send_line(line)
+    return heading_parser.headings
 
 
 class TitleDuration(Title):
@@ -189,6 +232,7 @@ def get_title_durations(headings: list[Clock | Title]) -> list[TitleDuration]:
         "headline": "",
         "tags": None,
         "duration": datetime.timedelta(),
+        "line_number": 1,
     }  # type: TitleDuration
     title_durations = [last_title_duration]
     for heading in headings:
@@ -275,7 +319,7 @@ def parse_arguments(args: list[str]) -> argparse.Namespace:
 
 
 @suppress_keyboard_interrupt()
-def main(argv: None | list[str] = None) -> int:
+def main(argv: Union[None, List[str]] = None) -> int:
     if argv is None:
         argv = sys.argv
 
