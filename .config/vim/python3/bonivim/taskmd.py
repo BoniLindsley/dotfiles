@@ -37,43 +37,66 @@ def set_up_logging(*, logger: logging.Logger) -> None:
 
 
 def end_clock() -> None:
-    # TODO: Close the first unclosed clock.
-    pass
+    headline_parser = bonipy.taskmd.HeadlineParser()
+
+    last_level = 0
+
+    for line in vim.current.buffer:
+        result = headline_parser.send(line)
+        if not result:
+            continue
+
+        line_number, headline_entries = result
+
+        if "level" in headline_entries:
+            headline = typing.cast(bonipy.taskmd.Headline, headline_entries)
+            last_level = headline["level"]
+
+        if "start" not in headline_entries:
+            continue
+
+        clock = typing.cast(bonipy.taskmd.Clock, headline_entries)
+        if "end" in clock:
+            continue
+
+        clock["end"] = (
+            datetime.datetime.now(datetime.timezone.utc)
+            .astimezone()
+            .replace(microsecond=0)
+        )
+
+        new_clock_line = bonipy.taskmd.to_string_from_clock(clock)
+        vim.current.buffer[line_number - 1] = (
+            "#" * (last_level + 1) + " " + new_clock_line
+        )
+
+        break
+    else:
+        print("No clock has been started.")
 
 
 def start_clock() -> None:
-    last_title = None  # type: None | bonipy.taskmd.Title
     cursor_row = vim.current.window.cursor[0]
+    headlines = bonipy.taskmd.HeadlineParser.parse_all(
+        stdin=vim.current.buffer[: cursor_row + 1]
+    )
+    for new_line_number, last_headline in reversed(headlines.items()):
+        if "title" in last_headline:
+            last_title = typing.cast(bonipy.taskmd.Headline, last_headline)
+            new_clock_level = last_title["level"] + 1
+            break
+    else:
+        new_clock_level = 1
+        new_line_number = cursor_row
 
-    heading_parser = bonipy.taskmd.HeadingParser()
-    last_heading = None  # type: None | bonipy.taskmd.Clock | bonipy.taskmd.Title
-    for line in vim.current.buffer[: cursor_row + 1]:
-        heading_parser.send_line(line)
-        if not heading_parser.headings:
-            continue
-        if heading_parser.headings[-1] is last_heading:
-            continue
-        last_heading = heading_parser.headings[-1]
-        if "headline" in last_heading:
-            last_title = typing.cast(bonipy.taskmd.Title, last_heading)
-
-    new_line_number = 1
-    new_clock_level = 1
-    if last_title:
-        new_line_number = last_title["line_number"]
-        new_clock_level = last_title["level"] + 1
-    now = datetime.datetime.now(datetime.timezone.utc).astimezone()
-    new_start_time = now.strftime("%Y-%m-%dT%H:%M:%S%z")
+    clock = {
+        "start": datetime.datetime.now(datetime.timezone.utc)
+        .astimezone()
+        .replace(microsecond=0)
+    }  # type: bonipy.taskmd.Clock
+    clock_line = bonipy.taskmd.to_string_from_clock(clock)
     vim.current.buffer.append(
-        [
-            "",
-            "#" * new_clock_level + " CLOCK: [" + new_start_time + "]",
-            "",
-            str(heading_parser.headings),
-            str(last_heading),
-            str(last_title),
-            str(new_line_number),
-        ],
+        ["#" * new_clock_level + " " + clock_line],
         new_line_number,
     )
 
@@ -90,13 +113,11 @@ def fix_clocks() -> None:
 
 
 def write_summary_to_qlist() -> None:
-    heading_parser = bonipy.taskmd.HeadingParser()
     bufnr = vim.current.buffer.number
-    for line in vim.current.buffer[:]:
-        heading_parser.send_line(line)
+    headlines = bonipy.taskmd.HeadlineParser.parse_all(stdin=vim.current.buffer[:])
 
-    title_durations = bonipy.taskmd.get_title_durations(heading_parser.headings)
-    summed_durations = bonipy.taskmd.sum_durations(title_durations)
+    headline_durations = bonipy.taskmd.get_headline_durations(headlines)
+    summed_durations = bonipy.taskmd.sum_durations(headline_durations)
     summed_durations = collections.deque(
         filter(
             lambda title_total_duration: title_total_duration["total_duration"],
@@ -111,7 +132,7 @@ def write_summary_to_qlist() -> None:
     for title_total_duration in summed_durations:
         if title_total_duration["total_duration"]:
             level = title_total_duration["level"]
-            headline = title_total_duration["headline"] or ""
+            headline = title_total_duration.get("title") or ""
             if level:
                 headline = "  " * (level - 1) + "* " + headline
             else:

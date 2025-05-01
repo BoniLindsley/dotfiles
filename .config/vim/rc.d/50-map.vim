@@ -26,7 +26,7 @@ nnoremap <Plug>(Boni.Application)<Tab>
 nmap <Plug>(Boni.Application)C <Plug>(Boni.Calendar)
 nmap <Plug>(Boni.Application)G <Plug>(Boni.Fugitive)
 nmap <Plug>(Boni.Application)T <Plug>(Boni.Terminal)
-nmap <Plug>(Boni.Application)c :call g:bonivim#taskmd#run()<CR>
+nmap <Plug>(Boni.Application)c <Plug>(Boni.Application)C<Space>
 nmap <Plug>(Boni.Application)g <Plug>(Boni.Application)G<Space>
 nmap <Plug>(Boni.Application)s :call g:boni#speech#init()<CR>
 nmap <Plug>(Boni.Application)t <Plug>(Boni.Application)T<Space>
