@@ -30,7 +30,7 @@ __get_source() {
   __log_info "Cloning repository." || return
   local repository='https://github.com/neovim/neovim.git'
   __log_info "  Repository: ${repository}" || return
-  local version_tag='v0.9.5'
+  local version_tag='v0.11.1'
   __log_info "  Version: ${version_tag}" || return
   __log_info "  Target: ${PWD}" || return
   git clone --branch="${version_tag}" --depth=1 \
