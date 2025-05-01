@@ -20,7 +20,7 @@ import typing
 from typing import Generator, Iterator
 
 # TODO(Python 3.9): Use builtin.
-from typing import Dict, List
+from typing import Dict, List, Tuple
 
 # TODO(Python 3.10): Use | instead of Union.
 from typing import Union
@@ -241,7 +241,7 @@ class HeadlineParser:
         self.is_inside_code_block = False
         self.line_number = 0
 
-    def send(self, line: str) -> Union[None, tuple[int, "Clock | Headline"]]:
+    def send(self, line: str) -> Union[None, Tuple[int, "Clock | Headline"]]:
         self.line_number += 1
 
         if self.is_inside_code_block:
@@ -263,7 +263,7 @@ class HeadlineParser:
         return self.line_number, clock
 
     @classmethod
-    def parse_all(cls, *, stdin: Iterator[str]) -> dict[int, "Clock | Headline"]:
+    def parse_all(cls, *, stdin: Iterator[str]) -> Dict[int, "Clock | Headline"]:
         headline_parser = cls()
         headlines = {}  # type: dict[int, Clock | Headline]
         for line in stdin:
@@ -281,7 +281,7 @@ class HeadlineDuration(Headline):
 
 
 def get_headline_durations(
-    headlines: Dict[int, Clock | Headline],
+    headlines: "dict[int, Clock | Headline]",
 ) -> List[HeadlineDuration]:
     last_headline_duration = {
         "level": 0,
@@ -313,7 +313,7 @@ class HeadlineTotalDuration(HeadlineDuration):
 
 def sum_durations(
     headline_durations: List[HeadlineDuration],
-) -> collections.deque[HeadlineTotalDuration]:
+) -> "collections.deque[HeadlineTotalDuration]":
     summed_durations = (
         collections.deque()
     )  # type: collections.deque[HeadlineTotalDuration]
