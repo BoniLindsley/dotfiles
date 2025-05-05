@@ -211,7 +211,7 @@ def write_timesheet_to_qlist() -> None:
     end = datetime.datetime(year=date.year, month=date.month + 1, day=1).astimezone()
 
     buffer = vim.current.buffer
-    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
+    buffer_parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
 
     quicklist_rows = []  # type: list[QuicklistRow]
     bufnr = vim.current.buffer.number
@@ -220,7 +220,7 @@ def write_timesheet_to_qlist() -> None:
     while day_start < end:
         day_end = day_start + one_day
         parsed_lines = bonipy.taskmd.bound_clocks(
-            parsed_lines, start=day_start, end=day_end
+            buffer_parsed_lines, start=day_start, end=day_end
         )
         parsed_line_durations = bonipy.taskmd.get_parsed_line_durations(parsed_lines)
         parsed_line_total_durations = bonipy.taskmd.get_parsed_line_total_durations(
