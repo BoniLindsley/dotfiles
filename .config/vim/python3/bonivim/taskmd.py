@@ -207,9 +207,7 @@ def write_timesheet_to_qlist() -> None:
         return
     timesheet_argument["date"] = date
 
-    start = datetime.datetime(
-        year=date.year, month=date.month, day=date.day
-    ).astimezone()
+    start = datetime.datetime(year=date.year, month=date.month, day=1).astimezone()
     end = datetime.datetime(year=date.year, month=date.month + 1, day=1).astimezone()
 
     buffer = vim.current.buffer
