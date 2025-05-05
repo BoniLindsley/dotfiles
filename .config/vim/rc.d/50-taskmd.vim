@@ -9,7 +9,7 @@ if !has('python3')
 endif
 
 nnoremap <Plug>(Boni.Calendar)<F1> :echo
-  \ 'calendar: (F)ix (I)n (O)ut (s)ummary
+  \ 'calendar: (F)ix (I)n (O)ut (s)ummary'
   \<CR>
 nnoremap <Plug>(Boni.Calendar)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Calendar)")<CR>
