@@ -10,6 +10,7 @@
 import argparse
 import collections
 import contextlib
+import copy
 import datetime
 import logging
 import re
@@ -182,8 +183,49 @@ def to_headline(line: str) -> Union[None, Headline]:
     return headline
 
 
-# TODO: Need to handle unclosed clocks when using clocks.
-# TODO: Add range duration suffix in output.
+def to_string_from_headline(headline: Headline) -> str:
+    level_as_string = "#" * headline["level"]
+
+    keyword_as_string = headline.get("keyword")
+
+    priority_as_string = None
+    priority = headline.get("priority")
+    if priority:
+        priority_as_string = "[#" + priority + "]"
+
+    comment_as_string = "COMMENT" if "comment" in headline else None
+
+    title_as_string = headline.get("title")
+
+    tags_as_string = None
+    tags = headline.get("tags")
+    if tags:
+        tags_as_string = ":".join(filter(None, tags))
+    if tags_as_string:
+        tags_as_string = ":" + tags_as_string + ":"
+
+    content_parts = tuple(
+        filter(
+            None,
+            (
+                level_as_string,
+                keyword_as_string,
+                priority_as_string,
+                comment_as_string,
+                title_as_string,
+                tags_as_string,
+            ),
+        )
+    )
+
+    if len(content_parts) == 1:
+        content_as_string = content_parts[0] + " "
+    else:
+        content_as_string = " ".join(content_parts)
+
+    return content_as_string
+
+
 to_clock_regex = re.compile(
     # "CLOCK: [2024-11-12T00:00:00+00:00]"
     r"CLOCK:\s+"
@@ -227,12 +269,310 @@ def to_string_from_clock(clock: Clock) -> str:
         end = clock["end"]
         end_string = end.strftime("%Y-%m-%dT%H:%M:%S%z")
         duration = end - start
-        duration_hours, duration_minutes = divmod(duration, datetime.timedelta(hours=1))
         duration_string = str(duration)
 
         clock_line += "--" "[" + end_string + "]" " => " + duration_string
 
     return clock_line
+
+
+class ParsedLineRequired(typing.TypedDict):
+    line_number: int
+    content: str
+
+
+class ParsedLine(ParsedLineRequired, total=False):
+    headline: Headline
+    clock: Clock
+
+
+def to_parsed_lines(lines: List[str]) -> List[ParsedLine]:
+    is_inside_code_block = False
+
+    parsed_lines = []  # type: list[ParsedLine]
+    for line_number, line in enumerate(lines, start=1):
+        parsed_line = {
+            "line_number": line_number,
+            "content": line,
+        }  # type: ParsedLine
+        parsed_lines.append(parsed_line)
+
+        if is_inside_code_block:
+            if line == "```":
+                is_inside_code_block = False
+            continue
+        if line.startswith("```"):
+            is_inside_code_block = True
+            continue
+
+        headline = to_headline(line)
+        if not headline:
+            continue
+        parsed_line["headline"] = headline
+
+        clock = to_clock(headline["title"])
+        if not clock:
+            continue
+        parsed_line["clock"] = clock
+
+    return parsed_lines
+
+
+def to_string_from_parsed_line(parsed_line: ParsedLine) -> str:
+    title_as_string = None
+    clock = parsed_line.get("clock")
+    if clock:
+        title_as_string = to_string_from_clock(clock)
+
+    headline = parsed_line.get("headline")
+    if title_as_string:
+        level = 1
+        if headline:
+            level = headline["level"]
+
+        headline = {
+            "level": level,
+            "title": title_as_string,
+        }
+
+    content_as_string = None
+    if headline:
+        content_as_string = to_string_from_headline(headline)
+
+    if not content_as_string:
+        content_as_string = parsed_line["content"]
+
+    return content_as_string
+
+
+def get_now() -> datetime.datetime:
+    return (
+        datetime.datetime.now(datetime.timezone.utc).astimezone().replace(microsecond=0)
+    )
+
+
+# TODO: Add unit test.
+def bound_clocks(
+    parsed_lines: List[ParsedLine], *, start: datetime.datetime, end: datetime.datetime
+) -> List[ParsedLine]:
+    new_parsed_lines = []  # type: list[ParsedLine]
+    for parsed_line in parsed_lines:
+        new_parsed_line = copy.deepcopy(parsed_line)
+        clock = new_parsed_line.get("clock")
+        if clock:
+            clock_start = clock["start"]
+            if clock_start >= end:
+                continue
+            if clock_start < start:
+                clock["start"] = start
+
+            clock_end = clock.get("end")
+            if clock_end:
+                if clock_end <= start:
+                    continue
+                if clock_end > end:
+                    clock["end"] = end
+        new_parsed_lines.append(new_parsed_line)
+    return new_parsed_lines
+
+
+def end_first_clock(
+    parsed_lines: List[ParsedLine], *, now: datetime.datetime
+) -> Union[None, ParsedLine]:
+    for parsed_line in parsed_lines:
+        clock = parsed_line.get("clock")
+        if not clock:
+            continue
+
+        if "end" in clock:
+            continue
+
+        new_parsed_line = copy.deepcopy(parsed_line)
+        new_parsed_line["clock"]["end"] = now
+        return new_parsed_line
+
+    return None
+
+
+def fix_clocks(lines: List[str]) -> List[Tuple[int, str]]:
+    fixes = []  # type: list[tuple[int, str]]
+
+    last_level = 0
+
+    headlines = HeadlineParser.parse_all(stdin=iter(lines))
+    for line_number, headline_entries in headlines.items():
+        if "level" in headline_entries:
+            headline = typing.cast(Headline, headline_entries)
+            last_level = headline["level"]
+
+        if "start" not in headline_entries:
+            continue
+
+        clock = typing.cast(Clock, headline_entries)
+        new_clock_line = to_string_from_clock(clock)
+        fixes.append((line_number, "#" * (last_level + 1) + " " + new_clock_line))
+
+    return fixes
+
+
+def start_clock(
+    parsed_lines: List[ParsedLine], *, now: datetime.datetime
+) -> ParsedLine:
+    for parsed_line in reversed(parsed_lines):
+        if "clock" in parsed_line:
+            continue
+
+        headline = parsed_line.get("headline")
+        if not headline:
+            continue
+
+        new_line_number = parsed_line["line_number"] + 1
+        new_clock_level = headline["level"] + 1
+        break
+    else:
+        new_clock_level = 1
+        new_line_number = 1
+
+    return {
+        "line_number": new_line_number,
+        "content": "",
+        "headline": {
+            "level": new_clock_level,
+        },
+        "clock": {
+            "start": now,
+        },
+    }
+
+
+class ParsedLineDuration(ParsedLine):
+    duration: datetime.timedelta
+
+
+# TODO: Add unit test.
+def get_parsed_line_durations(
+    parsed_lines: List[ParsedLine],
+) -> List[ParsedLineDuration]:
+    parsed_line_durations = []  # type: list[ParsedLineDuration]
+    for parsed_line in parsed_lines:
+        parsed_line_duration = {
+            **copy.deepcopy(parsed_line),
+            "duration": datetime.timedelta(),
+        }  # type: ParsedLineDuration
+        parsed_line_durations.append(parsed_line_duration)
+
+        clock = parsed_line.get("clock")
+        if clock:
+            end = clock.get("end")
+            if end:
+                parsed_line_duration["duration"] = end - clock["start"]
+
+    return parsed_line_durations
+
+
+class ParsedLineTotalDuration(ParsedLineDuration):
+    total_duration: datetime.timedelta
+
+
+# TODO: Add unit test.
+def get_parsed_line_total_durations(
+    parsed_line_durations: List[ParsedLineDuration],
+) -> List[ParsedLineTotalDuration]:
+    parsed_line_total_durations = []  # type: list[ParsedLineTotalDuration]
+
+    # Level zero is root.
+    child_level_durations = [datetime.timedelta()]
+    for parse_line_duration in reversed(parsed_line_durations):
+        parsed_line_total_duration = {
+            **parse_line_duration,
+            "total_duration": parse_line_duration["duration"],
+        }  # type: ParsedLineTotalDuration
+        parsed_line_total_durations.append(parsed_line_total_duration)
+
+        headline = parsed_line_total_duration.get("headline")
+        if not headline:
+            continue
+
+        level = headline["level"]
+        parsed_line_total_duration["total_duration"] = sum(
+            child_level_durations[level + 1 :],
+            start=parsed_line_total_duration["total_duration"],
+        )
+
+        missing_levels = level + 1 - len(child_level_durations)
+        if missing_levels > 0:
+            child_level_durations += [datetime.timedelta()] * missing_levels
+        else:
+            child_level_durations = child_level_durations[: level + 1]
+        child_level_durations[level] += parsed_line_total_duration["total_duration"]
+
+    parsed_line_total_durations.append(
+        {
+            "line_number": 1,
+            "content": "",
+            "headline": {
+                "level": 0,
+            },
+            "duration": datetime.timedelta(),
+            "total_duration": sum(
+                child_level_durations,
+                start=datetime.timedelta(),
+            ),
+        }
+    )
+
+    return list(reversed(parsed_line_total_durations))
+
+
+class QuicklistItem(typing.TypedDict):
+    lnum: int
+    text: str
+
+
+# TODO: Add unit test.
+def get_summary_quicklist(
+    parsed_line_total_durations: List[ParsedLineTotalDuration],
+) -> List[QuicklistItem]:
+    quicklist = [
+        {
+            "lnum": 1,
+            "text": "| Duration / h | Headline",
+        }
+    ]  # type: List[QuicklistItem]
+
+    hour = datetime.timedelta(hours=1)
+    for parsed_line_total_duration in parsed_line_total_durations:
+        total_duration = parsed_line_total_duration["total_duration"]
+        if not total_duration:
+            continue
+
+        headline = parsed_line_total_duration.get("headline")
+        if not headline:
+            continue
+
+        title = headline.get("title")
+        if not title:
+            title = parsed_line_total_duration["content"]
+
+        level = headline["level"]
+        if level:
+            title = "#" * level + " " + title
+        elif title:
+            title = f"Total: {title}"
+        else:
+            title = "Total"
+
+        quicklist.append(
+            {
+                "lnum": parsed_line_total_duration["line_number"],
+                "text": f"| {total_duration / hour:>12.2f} | {title}",
+            }
+        )
+
+    return quicklist
+
+
+######
 
 
 class HeadlineParser:

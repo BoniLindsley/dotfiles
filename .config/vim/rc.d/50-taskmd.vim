@@ -9,13 +9,15 @@ if !has('python3')
 endif
 
 nnoremap <Plug>(Boni.Calendar)<F1> :echo
-  \ 'calendar: (I)n (s)ummary
+  \ 'calendar: (F)ix (I)n (O)ut (s)ummary
   \<CR>
 nnoremap <Plug>(Boni.Calendar)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Calendar)")<CR>
-nmap <Plug>(Boni.Calendar)<Space> <Plug>(Boni.Calendar)s
-nnoremap <Plug>(Boni.Calendar)I :py3 bonivim.taskmd.start_clock()<CR>
-nnoremap <Plug>(Boni.Calendar)O :py3 bonivim.taskmd.end_clock()<CR>
+nmap <Plug>(Boni.Calendar)<Space> <Plug>(Boni.Calendar)S
+nnoremap <Plug>(Boni.Calendar)F :call g:bonivim#taskmd#fix_clocks()<CR>
 nnoremap <Plug>(Boni.Calendar)I :call g:bonivim#taskmd#start_clock()<CR>
 nnoremap <Plug>(Boni.Calendar)O :call g:bonivim#taskmd#end_clock()<CR>
-nnoremap <Plug>(Boni.Calendar)s :call g:bonivim#taskmd#run()<CR>
+nnoremap <Plug>(Boni.Calendar)D :call g:bonivim#taskmd#write_day_report_to_qlist()<CR>
+nnoremap <Plug>(Boni.Calendar)M :call g:bonivim#taskmd#write_month_report_to_qlist()<CR>
+nnoremap <Plug>(Boni.Calendar)S :call g:bonivim#taskmd#write_summary_to_qlist()<CR>
+nnoremap <Plug>(Boni.Calendar)T :call g:bonivim#taskmd#write_timesheet_to_qlist()<CR>
