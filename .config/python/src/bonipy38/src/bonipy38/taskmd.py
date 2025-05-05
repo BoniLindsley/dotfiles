@@ -249,12 +249,12 @@ def to_clock(title: str) -> Union[None, Clock]:
         return None
 
     clock = {
-        "start": datetime.datetime.fromisoformat(match["start"]),
+        "start": datetime.datetime.strptime(match["start"], "%Y-%m-%dT%H:%M:%S%z"),
     }  # type: Clock
 
     end = match["end"]
     if end is not None:
-        clock["end"] = datetime.datetime.fromisoformat(end)
+        clock["end"] = datetime.datetime.strptime(end, "%Y-%m-%dT%H:%M:%S%z")
 
     return clock
 
