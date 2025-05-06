@@ -227,11 +227,11 @@ def to_string_from_headline(headline: Headline) -> str:
 
 
 to_clock_regex = re.compile(
-    # "CLOCK: [2024-11-12T00:00:00+00:00]"
+    # "CLOCK: (2024-11-12T00:00:00+00:00)"
     r"CLOCK:\s+"
-    r"\[(?P<start>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\]"
-    # "--[2025-11-12T00:01:00+00:00]": Optional
-    r"(--\[(?P<end>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\])?"
+    r"\((?P<start>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\)"
+    # "--(2025-11-12T00:01:00+00:00)": Optional
+    r"(--\((?P<end>[0-9]+-[0-9]+-[0-9]+T[0-9]+:[0-9]+:[0-9]+[+-][0-9]+:?[0-9]+)\))?"
 )
 
 
@@ -263,7 +263,7 @@ def to_string_from_clock(clock: Clock) -> str:
     start = clock["start"]
     start_string = start.strftime("%Y-%m-%dT%H:%M:%S%z")
 
-    clock_line = "CLOCK: [" + start_string + "]"
+    clock_line = "CLOCK: (" + start_string + ")"
 
     if "end" in clock:
         end = clock["end"]
@@ -271,7 +271,7 @@ def to_string_from_clock(clock: Clock) -> str:
         duration = end - start
         duration_string = str(duration)
 
-        clock_line += "--" "[" + end_string + "]" " => " + duration_string
+        clock_line += "--" "(" + end_string + ")" " => " + duration_string
 
     return clock_line
 

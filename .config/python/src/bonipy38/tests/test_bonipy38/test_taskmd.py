@@ -189,7 +189,7 @@ class TestToStringFromHeadline:
 
 class TestToClock:
     def test_start_with_end(self) -> None:
-        line = "CLOCK: [2024-11-12T00:00:00+00:00]--[2025-11-12T00:00:00+00:00]"
+        line = "CLOCK: (2024-11-12T00:00:00+00:00)--(2025-11-12T00:00:00+00:00)"
         clock = to_clock(line)
         expected_clock = {
             "start": datetime.datetime(2024, 11, 12, tzinfo=datetime.timezone.utc),
@@ -200,7 +200,7 @@ class TestToClock:
 
     def test_ignore_duration_suffix(self) -> None:
         line = (
-            "CLOCK: [2024-11-12T00:00:00+00:00]--[2025-11-12T00:01:00+00:00] => 01:00"
+            "CLOCK: (2024-11-12T00:00:00+00:00)--(2025-11-12T00:01:00+00:00) => 01:00"
         )
         clock = to_clock(line)
         expected_clock = {
@@ -211,7 +211,7 @@ class TestToClock:
         assert clock == expected_clock
 
     def test_no_end(self) -> None:
-        line = "CLOCK: [2024-11-12T00:00:00+00:00]"
+        line = "CLOCK: (2024-11-12T00:00:00+00:00)"
         clock = to_clock(line)
         expected_clock = {
             "start": datetime.datetime(2024, 11, 12, tzinfo=datetime.timezone.utc),
@@ -224,7 +224,7 @@ class TestToStringFromClock:
     def test_start_only(self) -> None:
         clock = {"start": datetime.datetime(2000, 1, 1)}  # type: Clock
         as_string = to_string_from_clock(clock)
-        assert as_string == "CLOCK: [2000-01-01T00:00:00]"
+        assert as_string == "CLOCK: (2000-01-01T00:00:00)"
 
     def test_start_with_end(self) -> None:
         clock = {
@@ -234,7 +234,7 @@ class TestToStringFromClock:
         as_string = to_string_from_clock(clock)
         assert (
             as_string
-            == "CLOCK: [2000-01-01T00:00:00]--[2000-01-01T01:02:00] => 1:02:00"
+            == "CLOCK: (2000-01-01T00:00:00)--(2000-01-01T01:02:00) => 1:02:00"
         )
 
 
@@ -246,7 +246,7 @@ class TestToStringFromParsedLine:
             "clock": {"start": datetime.datetime(2000, 1, 1)},
         }  # type: ParsedLine
         as_string = to_string_from_parsed_line(parsed_line)
-        assert as_string == "# CLOCK: [2000-01-01T00:00:00]"
+        assert as_string == "# CLOCK: (2000-01-01T00:00:00)"
 
     def test_clock_ignores_headline_title(self) -> None:
         parsed_line = {
@@ -259,7 +259,7 @@ class TestToStringFromParsedLine:
             "clock": {"start": datetime.datetime(2000, 1, 1)},
         }  # type: ParsedLine
         as_string = to_string_from_parsed_line(parsed_line)
-        assert as_string == "# CLOCK: [2000-01-01T00:00:00]"
+        assert as_string == "# CLOCK: (2000-01-01T00:00:00)"
 
     def test_content_is_default(self) -> None:
         parsed_line = {
@@ -299,13 +299,13 @@ class TestParse:
         assert not parsed_lines
 
     def test_one_clock(self) -> None:
-        lines = ["# CLOCK: [2000-09-09T00:00:00+00:00]"]  # type: list[str]
+        lines = ["# CLOCK: (2000-09-09T00:00:00+00:00)"]  # type: list[str]
         parsed_lines = to_parsed_lines(lines)
         expected_parsed_lines = [
             {
                 "line_number": 1,
-                "content": "# CLOCK: [2000-09-09T00:00:00+00:00]",
-                "headline": {"level": 1, "title": "CLOCK: [2000-09-09T00:00:00+00:00]"},
+                "content": "# CLOCK: (2000-09-09T00:00:00+00:00)",
+                "headline": {"level": 1, "title": "CLOCK: (2000-09-09T00:00:00+00:00)"},
                 "clock": {
                     "start": datetime.datetime(2000, 9, 9, tzinfo=datetime.timezone.utc)
                 },
@@ -331,8 +331,8 @@ class TestEndFirstClock:
         parsed_lines = [
             {
                 "line_number": 1,
-                "content": "# CLOCK: [2000-09-09T00:00:00+00:00]",
-                "headline": {"level": 1, "title": "CLOCK: [2000-09-09T00:00:00+00:00]"},
+                "content": "# CLOCK: (2000-09-09T00:00:00+00:00)",
+                "headline": {"level": 1, "title": "CLOCK: (2000-09-09T00:00:00+00:00)"},
                 "clock": {
                     "start": datetime.datetime(2000, 9, 9, tzinfo=datetime.timezone.utc)
                 },
@@ -343,8 +343,8 @@ class TestEndFirstClock:
         )
         expected_parsed_line = {
             "line_number": 1,
-            "content": "# CLOCK: [2000-09-09T00:00:00+00:00]",
-            "headline": {"level": 1, "title": "CLOCK: [2000-09-09T00:00:00+00:00]"},
+            "content": "# CLOCK: (2000-09-09T00:00:00+00:00)",
+            "headline": {"level": 1, "title": "CLOCK: (2000-09-09T00:00:00+00:00)"},
             "clock": {
                 "start": datetime.datetime(2000, 9, 9, tzinfo=datetime.timezone.utc),
                 "end": datetime.datetime(2000, 9, 9, 1),
@@ -380,10 +380,10 @@ class TestEndFirstClock:
         parsed_lines = [
             {
                 "line_number": 1,
-                "content": "# CLOCK: [2000-09-09T00:00:00+00:00]--[2000-09-09T00:00:00+00:00]",
+                "content": "# CLOCK: (2000-09-09T00:00:00+00:00)--(2000-09-09T00:00:00+00:00)",
                 "headline": {
                     "level": 1,
-                    "title": "CLOCK: [2000-09-09T00:00:00+00:00]--[2000-09-09T00:00:00+00:00]",
+                    "title": "CLOCK: (2000-09-09T00:00:00+00:00)--(2000-09-09T00:00:00+00:00)",
                 },
                 "clock": {
                     "start": datetime.datetime(
