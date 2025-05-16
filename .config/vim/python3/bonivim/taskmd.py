@@ -73,15 +73,17 @@ def set_timezone() -> None:
 
 def start_clock() -> None:
     buffer = vim.current.buffer
-    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
     now = bonipy.taskmd.get_now()
 
+    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
     new_parsed_line = bonipy.taskmd.end_first_clock(parsed_lines, now=now)
     if new_parsed_line:
         new_line_number = new_parsed_line["line_number"]
         new_content = bonipy.taskmd.to_string_from_parsed_line(new_parsed_line)
         buffer[new_line_number - 1] = new_content
 
+    cursor_row = vim.current.window.cursor[0]  # First line is 1.
+    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer[:cursor_row])
     new_parsed_line = bonipy.taskmd.start_clock(parsed_lines, now=now)
     new_line_number = new_parsed_line["line_number"]
     new_content = bonipy.taskmd.to_string_from_parsed_line(new_parsed_line)
