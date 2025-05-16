@@ -345,9 +345,50 @@ def to_string_from_parsed_line(parsed_line: ParsedLine) -> str:
     return content_as_string
 
 
+class Config:
+    def __init__(self) -> None:
+        self.timezone = None  # type: Union[None, datetime.timezone]
+
+    def set_timezone(self, timezone_as_string: str) -> None:
+        if not timezone_as_string:
+            self.timezone = None
+            return
+
+        is_negative = False
+        assert isinstance(timezone_as_string, str)
+        if timezone_as_string[0] == "+":
+            timezone_as_string = timezone_as_string[1:]
+        elif timezone_as_string[0] == "-":
+            is_negative = True
+            timezone_as_string = timezone_as_string[1:]
+
+        if not timezone_as_string:
+            self.timezone = None
+            return
+
+        if len(timezone_as_string) <= 2:
+            timezone_hour = int(timezone_as_string)
+            timezone_minute = 0
+        else:
+            timezone_hour = int(timezone_as_string[:2])
+            timezone_minute = int(timezone_as_string[2:])
+
+        if is_negative:
+            timezone_hour *= -1
+
+        self.timezone = datetime.timezone(
+            datetime.timedelta(hours=timezone_hour, minutes=timezone_minute)
+        )
+
+
+config = Config()
+
+
 def get_now() -> datetime.datetime:
     return (
-        datetime.datetime.now(datetime.timezone.utc).astimezone().replace(microsecond=0)
+        datetime.datetime.now(datetime.timezone.utc)
+        .astimezone(tz=config.timezone)
+        .replace(microsecond=0)
     )
 
 

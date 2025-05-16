@@ -66,6 +66,11 @@ def fix_clocks() -> None:
         buffer[line_number - 1] = new_clock_line
 
 
+def set_timezone() -> None:
+    timezone_as_string = typing.cast(str, vim.eval("input('Timezone: ')"))
+    bonipy.taskmd.config.set_timezone(timezone_as_string)
+
+
 def start_clock() -> None:
     buffer = vim.current.buffer
     parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)

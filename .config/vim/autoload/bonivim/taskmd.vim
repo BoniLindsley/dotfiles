@@ -23,6 +23,10 @@ function g:bonivim#taskmd#fix_clocks()
   py3 bonivim.taskmd.fix_clocks()
 endfunction
 
+function g:bonivim#taskmd#set_timezone()
+  py3 bonivim.taskmd.set_timezone()
+endfunction
+
 function g:bonivim#taskmd#write_day_report_to_qlist()
   py3 bonivim.taskmd.write_day_report_to_qlist()
   copen

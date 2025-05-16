@@ -21,3 +21,4 @@ nnoremap <Plug>(Boni.Calendar)D :call g:bonivim#taskmd#write_day_report_to_qlist
 nnoremap <Plug>(Boni.Calendar)M :call g:bonivim#taskmd#write_month_report_to_qlist()<CR>
 nnoremap <Plug>(Boni.Calendar)S :call g:bonivim#taskmd#write_summary_to_qlist()<CR>
 nnoremap <Plug>(Boni.Calendar)T :call g:bonivim#taskmd#write_timesheet_to_qlist()<CR>
+nnoremap <Plug>(Boni.Calendar), :call g:bonivim#taskmd#set_timezone()<CR>
