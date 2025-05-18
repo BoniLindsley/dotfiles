@@ -456,6 +456,23 @@ def fix_clocks(lines: List[str]) -> List[Tuple[int, str]]:
     return fixes
 
 
+def get_started_clocks(parsed_lines: List[ParsedLine]) -> List[ParsedLine]:
+    new_end_clocks = []  # list[ParsedLine]
+
+    for parsed_line in parsed_lines:
+        clock = parsed_line.get("clock")
+        if not clock:
+            continue
+
+        if "end" in clock:
+            continue
+
+        new_parsed_line = copy.deepcopy(parsed_line)
+        new_end_clocks.append(new_parsed_line)
+
+    return new_end_clocks
+
+
 def start_clock(
     parsed_lines: List[ParsedLine], *, now: datetime.datetime
 ) -> ParsedLine:

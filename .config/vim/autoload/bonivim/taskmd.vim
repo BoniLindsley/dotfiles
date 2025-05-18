@@ -23,6 +23,10 @@ function g:bonivim#taskmd#fix_clocks()
   py3 bonivim.taskmd.fix_clocks()
 endfunction
 
+function g:bonivim#taskmd#jump_to_started_clock()
+  py3 bonivim.taskmd.jump_to_started_clock()
+endfunction
+
 function g:bonivim#taskmd#set_timezone()
   py3 bonivim.taskmd.set_timezone()
 endfunction

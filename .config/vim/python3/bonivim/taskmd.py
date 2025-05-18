@@ -65,6 +65,20 @@ def fix_clocks() -> None:
     for line_number, new_clock_line in fixes:
         buffer[line_number - 1] = new_clock_line
 
+def jump_to_started_clock() -> None:
+    buffer = vim.current.buffer
+    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
+    started_clocks = bonipy.taskmd.get_started_clocks(parsed_lines)
+
+    if not started_clocks:
+        print("No clock has been started.")
+        return
+
+    vim.current.window.cursor = (started_clocks[0]["line_number"], 0)
+
+    if len(started_clocks) != 1:
+        print(f"There ware {len(started_clocks)} started clocks.")
+
 
 def set_timezone() -> None:
     timezone_as_string = typing.cast(str, vim.eval("input('Timezone: ')"))

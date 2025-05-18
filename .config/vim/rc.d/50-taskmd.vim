@@ -16,6 +16,7 @@ nnoremap <Plug>(Boni.Calendar)<Tab>
 nmap <Plug>(Boni.Calendar)<Space> <Plug>(Boni.Calendar)S
 nnoremap <Plug>(Boni.Calendar)F :call g:bonivim#taskmd#fix_clocks()<CR>
 nnoremap <Plug>(Boni.Calendar)I :call g:bonivim#taskmd#start_clock()<CR>
+nnoremap <Plug>(Boni.Calendar)J :call g:bonivim#taskmd#jump_to_started_clock()<CR>
 nnoremap <Plug>(Boni.Calendar)O :call g:bonivim#taskmd#end_clock()<CR>
 nnoremap <Plug>(Boni.Calendar)D :call g:bonivim#taskmd#write_day_report_to_qlist()<CR>
 nnoremap <Plug>(Boni.Calendar)M :call g:bonivim#taskmd#write_month_report_to_qlist()<CR>
