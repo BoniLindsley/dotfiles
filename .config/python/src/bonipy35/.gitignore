@@ -1,0 +1,7 @@
+# Python
+*.egg-info/
+.coverage
+.mypy_cache/
+.tox/
+Pipfile
+Pipfile.lock
