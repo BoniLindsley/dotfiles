@@ -161,6 +161,8 @@ def write_day_report_to_qlist() -> None:
         )
 
     vim.eval(f"setqflist({quicklist_rows})")
+    vim.command(":copen")
+    vim.command(":wincmd p")
 
 
 def write_month_report_to_qlist() -> None:
@@ -197,6 +199,8 @@ def write_month_report_to_qlist() -> None:
         )
 
     vim.eval(f"setqflist({quicklist_rows})")
+    vim.command(":copen")
+    vim.command(":wincmd p")
 
 
 def write_summary_to_qlist() -> None:
@@ -220,6 +224,8 @@ def write_summary_to_qlist() -> None:
         )
 
     vim.eval(f"setqflist({quicklist_rows})")
+    vim.command(":copen")
+    vim.command(":wincmd p")
 
 
 def write_timesheet_to_qlist() -> None:
@@ -274,3 +280,5 @@ def write_timesheet_to_qlist() -> None:
         day_start = day_end
 
     vim.eval(f"setqflist({quicklist_rows})")
+    vim.command(":copen")
+    vim.command(":wincmd p")

@@ -33,26 +33,18 @@ endfunction
 
 function g:bonivim#taskmd#write_day_report_to_qlist()
   py3 bonivim.taskmd.write_day_report_to_qlist()
-  copen
-  wincmd p
 endfunction
 
 function g:bonivim#taskmd#write_month_report_to_qlist()
   py3 bonivim.taskmd.write_month_report_to_qlist()
-  copen
-  wincmd p
 endfunction
 
 function g:bonivim#taskmd#write_summary_to_qlist()
   py3 bonivim.taskmd.write_summary_to_qlist()
-  copen
-  wincmd p
 endfunction
 
 function g:bonivim#taskmd#write_timesheet_to_qlist()
   py3 bonivim.taskmd.write_timesheet_to_qlist()
-  copen
-  wincmd p
 endfunction
 
 function g:bonivim#taskmd#start_clock()
