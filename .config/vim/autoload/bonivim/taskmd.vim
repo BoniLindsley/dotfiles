@@ -23,6 +23,7 @@ function g:bonivim#taskmd#remap()
   nnoremap <Plug>(Boni.Calendar)<Tab>
     \ :call BoniMapWait("\<Plug>(Boni.Calendar)")<CR>
   nmap <Plug>(Boni.Calendar)<Space> <Plug>(Boni.Calendar)S
+  nnoremap <Plug>(Boni.Calendar)A :py3 bonivim.taskmd.write_agenda_to_qlist()<CR>
   nnoremap <Plug>(Boni.Calendar)F :py3 bonivim.taskmd.fix_clocks()<CR>
   nnoremap <Plug>(Boni.Calendar)I :py3 bonivim.taskmd.start_clock()<CR>
   nnoremap <Plug>(Boni.Calendar)J :py3 bonivim.taskmd.jump_to_started_clock()<CR>

@@ -65,6 +65,7 @@ def fix_clocks() -> None:
     for line_number, new_clock_line in fixes:
         buffer[line_number - 1] = new_clock_line
 
+
 def jump_to_started_clock() -> None:
     buffer = vim.current.buffer
     parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
@@ -122,6 +123,66 @@ timesheet_argument = {
     "days": 1,
     "start": bonipy.taskmd.get_now(),
 }  # type: TimesheetArgument
+
+
+def write_agenda_to_qlist() -> None:
+    date_as_string = vim.eval(f"input('Date: ', '{timesheet_argument['date']}')")
+    assert isinstance(date_as_string, str)
+    try:
+        date = datetime.date.fromisoformat(date_as_string)
+    except ValueError:
+        print("Unable to parse given date.")
+        return
+    timesheet_argument["date"] = date
+
+    start = datetime.datetime(
+        year=date.year, month=date.month, day=date.day
+    ).astimezone()
+    end = start + datetime.timedelta(days=1)
+
+    buffer = vim.current.buffer
+    parsed_lines = bonipy.taskmd.to_parsed_lines(buffer)
+    parsed_lines = bonipy.taskmd.bound_clocks(parsed_lines, start=start, end=end)
+    parsed_lines = sorted(
+        (parsed_line for parsed_line in parsed_lines if "clock" in parsed_line),
+        key=lambda parsed_line: parsed_line["clock"]["start"],
+    )
+    parsed_lines_durations = bonipy.taskmd.get_parsed_line_durations(parsed_lines)
+    if not parsed_lines_durations:
+        print("No clocks found for agenda.")
+        return
+
+    total_duration = sum(
+        (
+            parsed_lines_duration["duration"]
+            for parsed_lines_duration in parsed_lines_durations
+            if "duration" in parsed_lines_duration
+        ),
+        start=datetime.timedelta(),
+    )
+
+    bufnr = vim.current.buffer.number
+    quicklist_rows = [
+        {
+            "bufnr": bufnr,
+            "col": 1,
+            "lnum": 1,
+            "text": f"Total: {total_duration}",
+        }
+    ]  # type: list[QuicklistRow]
+    for parsed_line_duration in parsed_lines_durations:
+        quicklist_rows.append(
+            {
+                "bufnr": bufnr,
+                "col": 1,
+                "lnum": parsed_line_duration["line_number"],
+                "text": bonipy.taskmd.to_string_from_parsed_line(parsed_line_duration),
+            }
+        )
+
+    vim.eval(f"setqflist({quicklist_rows})")
+    vim.command(":copen")
+    vim.command(":wincmd p")
 
 
 # TODO: Refactor reports.
