@@ -63,23 +63,9 @@ def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
     )
 
 
-def parse_arguments(args: "list[str]") -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    add_verbose_flag(parser)
-    parser.add_argument("message")
-    return parser.parse_args(args)
-
-
-def main(argv: "None | list[str]" = None) -> int:
-    if argv is None:
-        argv = sys.argv
-
-    set_up_logging(logger=_logger)
-
-    arguments = parse_arguments(argv[1:])
-    set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
-
-    print("Command is", arguments.message)
+def run(message: str) -> int:
+    """Parse arguments and call `run`."""
+    print("Command is", message)
 
     _logger.log(ALL, "%s: Everything", ALL)
     _logger.log(TRACE, "%s: Trace", TRACE)
@@ -90,6 +76,24 @@ def main(argv: "None | list[str]" = None) -> int:
     _logger.critical("%s: Critical", logging.CRITICAL)
 
     return 0
+
+
+def main(argv: "None | list[str]" = None) -> int:
+    """Parse command line arguments and call `run`."""
+
+    if argv is None:
+        argv = sys.argv
+
+    set_up_logging(logger=_logger)
+
+    parser = argparse.ArgumentParser()
+    add_verbose_flag(parser)
+    parser.add_argument("message")
+    arguments = parser.parse_args(argv[1:])
+
+    set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
+
+    return run(message=arguments.message)
 
 
 if __name__ == "__main__":
