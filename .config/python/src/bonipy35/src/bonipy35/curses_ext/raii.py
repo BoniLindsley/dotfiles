@@ -8,8 +8,8 @@ import curses
 
 @contextlib.contextmanager
 def initialise(
-    initscr: None | cabc.Callable[[], curses.window] = None
-) -> cabc.Iterator[curses.window]:
+    initscr: "None | cabc.Callable[[], curses.window]" = None,
+) -> "cabc.Iterator[curses.window]":
     with contextlib.ExitStack() as stack:
         if initscr is None:
             initscr = curses.initscr

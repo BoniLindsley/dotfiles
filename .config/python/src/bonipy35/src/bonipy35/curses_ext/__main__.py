@@ -7,32 +7,36 @@ import curses
 import curses.textpad
 import datetime
 import json
+import logging
 import sys
-import typing as t
+import typing
 
 # Internal modules.
-import bonipy.asyncio_ext
-import bonipy.logging_ext
+from .. import asyncio_ext
+from .. import contextlib_ext
+from .. import logging_ext
 from . import raii
 
-JsonData = t.Any
+JsonData = typing.Any
+
+_logger = logging.getLogger(__name__)
 
 
-async def getch_from_window(window: curses.window) -> int:
+async def getch_from_window(window: "curses.window") -> int:
     window.timeout(0)
     curses.doupdate()
 
     next_ch = window.getch()
     if next_ch == -1:
         # Timed out waiting for input.
-        await bonipy.asyncio_ext.stdin_ready()
+        await asyncio_ext.stdin_ready()
         next_ch = window.getch()
     assert next_ch != -1
 
     return next_ch
 
 
-def getch_from_cache(cache: list[int | str]) -> int:
+def getch_from_cache(cache: "list[int | str]") -> int:
     try:
         next_entry = cache.pop()
     except IndexError:
@@ -46,10 +50,12 @@ def getch_from_cache(cache: list[int | str]) -> int:
 
 
 class Typeahead:
-    def __init__(self, *args: t.Any, window: curses.window, **kwargs: t.Any) -> None:
+    def __init__(
+        self, *args: typing.Any, window: "curses.window", **kwargs: typing.Any
+    ) -> None:
         super().__init__(*args, **kwargs)
 
-        self._cache: list[int | str] = []
+        self._cache = []  # type: list[int | str]
         self._cache_repeat_count = 0
         self._cache_repeat_limit = sys.getrecursionlimit()
         self._window = window
@@ -76,14 +82,16 @@ class Typeahead:
         self._cache_repeat_count = 0
         return await getch_from_window(self._window)
 
-    def append(self, next_entry: int | str) -> None:
+    def append(self, next_entry: "int | str") -> None:
         if not next_entry and isinstance(next_entry, str):
             return
         self._cache.append(next_entry)
 
 
 class MessageArea:
-    def __init__(self, *args: t.Any, parent: curses.window, **kwargs: t.Any) -> None:
+    def __init__(
+        self, *args: typing.Any, parent: "curses.window", **kwargs: typing.Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         height, width = parent.getmaxyx()
         self.window = parent.derwin(1, width, height - 1, 0)
@@ -119,34 +127,30 @@ async def get_command_in_command_line_mode(
     return textbox.gather()
 
 
-class Data(t.TypedDict):
-    red_herb: int
-    red_potion: int
-    updated_at: datetime.datetime
-    zenny: int
-
-
-def new_data() -> Data:
-    data: Data = {
-        "red_herb": 0,
-        "red_potion": 0,
-        "zenny": 0,
-        "updated_at": datetime.datetime.now(),
-    }
-    return data
+class Data:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.red_herb = 0
+        self.red_potion = 0
+        self.updated_at = datetime.datetime.now()
+        self.zenny = 0
 
 
 class State:
-    command_map: dict[str, "Command"]
-    data: Data
-    frame: int
-    message_area: MessageArea
-    normal_map: dict[str, str]
-    window: curses.window
-    typeahead: Typeahead
+    def __init__(
+        self, *args: typing.Any, window: "curses.window", **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.command_map = DEFAULT_COMMAND_MAP.copy()
+        self.data = Data()
+        self.frame = 0
+        self.message_area = MessageArea(parent=window)
+        self.normal_map = DEFAULT_NORMAL_MAP.copy()
+        self.typeahead = Typeahead(window=window)
+        self.window = window
 
 
-Command = t.Callable[[State], None]
+Command = typing.Callable[[State], None]
 
 
 def edit(state: State) -> None:
@@ -156,13 +160,13 @@ def edit(state: State) -> None:
     except FileNotFoundError:
         new(state)
         return
-    data["updated_at"] = datetime.datetime.fromisoformat(data["updated_at"])
-    state.data = t.cast(Data, data)
+    data.updated_at = datetime.datetime.fromisoformat(data["updated_at"])
+    state.data = typing.cast(Data, data)
     update(state)
 
 
 def new(state: State) -> None:
-    state.data = new_data()
+    state.data = Data()
 
 
 def noop(state: State) -> None:
@@ -178,16 +182,16 @@ def redraw(state: State) -> None:
     data = state.data
     window = state.window
 
-    last_now_string = data["updated_at"].strftime("%y-%m-%d %H:%M:%S")
+    last_now_string = data.updated_at.strftime("%y-%m-%d %H:%M:%S")
 
     window.erase()
 
-    window.addstr(0, 0, f"Time: {last_now_string}")
-    window.addstr(1, 0, f"Frame: {state.frame}")
+    window.addstr(0, 0, "Time: " + str(last_now_string))
+    window.addstr(1, 0, "Frame: " + str(state.frame))
 
-    window.addstr(2, 0, f"Zenny: {data['zenny']}")
-    window.addstr(3, 0, f"Red Herb: {data['red_herb']}")
-    window.addstr(4, 0, f"Red Potion: {data['red_potion']}")
+    window.addstr(2, 0, "Zenny: " + str(data.zenny))
+    window.addstr(3, 0, "Red Herb: " + str(data.red_herb))
+    window.addstr(4, 0, "Red Potion: " + str(data.red_potion))
 
     window.noutrefresh()
 
@@ -196,50 +200,38 @@ def update(state: State) -> None:
     state.frame += 1
     data = state.data
 
-    last_updated_at = data["updated_at"].replace(microsecond=0)
+    last_updated_at = data.updated_at.replace(microsecond=0)
     now = datetime.datetime.now()
-    data["updated_at"] = now
+    data.updated_at = now
 
     time_passed = now.replace(microsecond=0) - last_updated_at
     steps = int(time_passed.total_seconds())
-    data["zenny"] += steps
+    data.zenny += steps
 
 
 def write(state: State) -> None:
     update(state)
 
     data = state.data
-    json_data: JsonData = data.copy()
-    json_data["updated_at"] = data["updated_at"].isoformat()
+    json_data = vars(data)  # type: JsonData
+    json_data["updated_at"] = data.updated_at.isoformat()
     with open("data.json", "w", encoding="utf-8") as file:
         json.dump(json_data, file)
 
 
-DEFAULT_COMMAND_MAP: dict[str, Command] = {
+DEFAULT_COMMAND_MAP = {
     "edit": edit,
     "new": new,
     "noop": noop,
     "quit": quit_,
     "redraw": redraw,
     "write": write,
-}
+}  # type: dict[str, Command]
 
-DEFAULT_NORMAL_MAP: dict[str, str] = {
+DEFAULT_NORMAL_MAP = {
     "ZZ": ":q\n",
     "\x0c": ":redraw\n",
 }
-
-
-def new_state(*, window: curses.window) -> State:
-    state = State()
-    state.command_map = DEFAULT_COMMAND_MAP.copy()
-    state.frame = 0
-    state.message_area = MessageArea(parent=window)
-    state.normal_map = DEFAULT_NORMAL_MAP.copy()
-    state.typeahead = Typeahead(window=window)
-    state.window = window
-    edit(state)
-    return state
 
 
 def process_command_in_command_mode(*, command: str, state: State) -> None:
@@ -255,7 +247,7 @@ def process_command_in_command_mode(*, command: str, state: State) -> None:
 
 
 async def process_command_in_normal_mode(
-    *, normal_map: dict[str, str], typeahead: Typeahead
+    *, normal_map: "dict[str, str]", typeahead: Typeahead
 ) -> None:
     potential_sequences = list(normal_map.keys())
     buffer = ""
@@ -275,7 +267,8 @@ async def process_command_in_normal_mode(
 
 async def amain() -> int:
     with raii.initialise() as window:
-        state = new_state(window=window)
+        state = State(window=window)
+        edit(state)
 
         while True:
             redraw(state)
@@ -301,25 +294,31 @@ async def amain() -> int:
     return 0
 
 
-def parse_arguments(args: list[str]) -> argparse.Namespace:
-    parser = argparse.ArgumentParser()
-    bonipy.logging_ext.add_verbose_flag(parser)
-    return parser.parse_args(args)
-
-
-def main(argv: None | list[str] = None) -> int:
-    if argv is None:
-        argv = sys.argv
-    arguments = parse_arguments(argv[1:])
-
-    bonipy.logging_ext.set_up_logging(verbosity=arguments.verbosity)
-
+def run() -> int:
     try:
         return asyncio.run(amain())
-    except (KeyboardInterrupt, asyncio.CancelledError):
+    except asyncio.CancelledError:
         pass
 
     return 0
+
+
+def main(argv: "None | list[str]" = None) -> int:
+    if argv is None:
+        argv = sys.argv
+
+    logging_ext.set_up_logging(logger=_logger)
+
+    parser = argparse.ArgumentParser()
+    logging_ext.add_verbose_flag(parser)
+    arguments = parser.parse_args(argv[1:])
+
+    logging_ext.set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
+
+    with contextlib_ext.suppress_keyboard_interrupt():
+        return run()
+
+    return 2
 
 
 if __name__ == "__main__":

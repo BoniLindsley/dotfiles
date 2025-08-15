@@ -1,44 +1,31 @@
 #!/usr/bin/env python3
 
-from __future__ import annotations
+# In Windows native, need windows-curses
+
+# In MSYS2, might need
+# export TERMINFO=$MSYSTEM_PREFIX/share/terminfo
 
 # Standard libraries.
-import collections.abc
 import curses
 import functools
 import logging
 import os
 import signal
 import types
-import typing as t
+import typing
 
-# In Windows native, need windows-curses
+from typing import Type, Union
 
-# In MSYS2, might need
-# export TERMINFO=$MSYSTEM_PREFIX/share/terminfo
+_T = typing.TypeVar("_T")
 
 _logger = logging.getLogger(__name__)
-logging.basicConfig(level=logging.DEBUG)
 
-NullaryCallable = t.Callable[[], t.Any]
-DoneCallback = t.Callable[["Future"], t.Any]
-
-_T = t.TypeVar("_T")
-_Copyable = t.TypeVar("_Copyable", bound="Copyable")
-
-Coroutine = collections.abc.Generator[
-    "Future[t.Any]",  # Yield type
+UnaryCallback = typing.Callable[[_T], typing.Any]
+Coroutine = typing.Generator[
+    "Future[typing.Any]",  # Yield type
     None,  # Send type
     _T,  # Return type
 ]
-
-
-class Copyable(t.Protocol):
-    def copy(self: _T) -> _T:
-        ...
-
-    def clear(self) -> None:
-        ...
 
 
 class CancelledError(RuntimeError):
@@ -58,86 +45,44 @@ class _FutureCancelled:
 
 
 class _FutureException:
-    exception: BaseException
+    def __init__(
+        self, *args: typing.Any, exception: BaseException, **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.exception = exception
 
 
-class _FutureResult(t.Generic[_T]):
-    result: _T
+class _FutureResult(typing.Generic[_T]):
+    def __init__(self, *args: typing.Any, result: _T, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.result = result
 
 
-_FutureState = _FutureWaiting | _FutureCancelled | _FutureException | _FutureResult[_T]
-
-
-def cut(source: _Copyable) -> _Copyable:
-    try:
-        return source.copy()
-    finally:
-        source.clear()
+_FutureState = Union[
+    _FutureWaiting, _FutureCancelled, _FutureException, _FutureResult[_T]
+]
 
 
 class Future(Coroutine[_T]):
-    __Self = t.TypeVar("__Self", bound="Future[_T]")
-
-    _state: _FutureState[_T] = _FutureWaiting()
+    _state = _FutureWaiting()  # type: _FutureState[_T]
 
     def __init__(
         self,
-        *args: t.Any,
-        loop: "EventLoop" | None = None,
-        **kwargs: t.Any,
+        *args: typing.Any,
+        loop: Union[None, "EventLoop"] = None,
+        **kwargs: typing.Any
     ) -> None:
         super().__init__(*args, **kwargs)
-        self._done_callbacks: list[DoneCallback] = []
+        self._done_callbacks = []  # type: list[UnaryCallback[typing.Self]]
         if loop is None:
             loop = get_running_loop()
-        self._loop: "EventLoop" = loop
+        self._loop = loop  # type: "EventLoop"
 
-    def result(self) -> _T:
-        state = self._state
-        if isinstance(state, _FutureResult):
-            return state.result
-        if isinstance(state, _FutureException):
-            raise state.exception
-        if isinstance(state, _FutureCancelled):
-            raise CancelledError()
-        raise InvalidStateError()
-
-    def set_result(self, result: _T) -> None:
-        if self.done():
-            raise InvalidStateError()
-        _state = self._state = _FutureResult()
-        _state.result = result
-        self._call_done_callbacks()
-
-    def set_exception(self, exception: BaseException) -> None:
-        if self.done():
-            raise InvalidStateError()
-        _state = self._state = _FutureException()
-        _state.exception = exception
-        self._call_done_callbacks()
-
-    def done(self) -> bool:
-        return isinstance(
-            self._state,
-            _FutureCancelled | _FutureException | _FutureResult,
-        )
-
-    def cancelled(self) -> bool:
-        return isinstance(self._state, _FutureCancelled)
-
-    def add_done_callback(self, callback: DoneCallback) -> None:
+    def add_done_callback(self, callback: "UnaryCallback[typing.Self]") -> None:
         if self.done():
             self.get_loop().call_soon(callback)
             return
         self._done_callbacks.append(callback)
-
-    def remove_done_callback(self, callback: DoneCallback) -> int:
-        callbacks = self._done_callbacks
-        original_len = len(callbacks)
-        callbacks = self._done_callbacks = [
-            entry for entry in callbacks if entry is not callback
-        ]
-        return len(callbacks) - original_len
 
     def cancel(self) -> bool:
         if self.done():
@@ -146,12 +91,16 @@ class Future(Coroutine[_T]):
         self._call_done_callbacks()
         return True
 
-    def _call_done_callbacks(self) -> None:
-        loop = self.get_loop()
-        for callback in self._done_callbacks.copy():
-            loop.call_soon(callback, self)
+    def cancelled(self) -> bool:
+        return isinstance(self._state, _FutureCancelled)
 
-    def exception(self) -> BaseException | None:
+    def done(self) -> bool:
+        return isinstance(
+            self._state,
+            (_FutureCancelled, _FutureException, _FutureResult),
+        )
+
+    def exception(self) -> Union[None, BaseException]:
         state = self._state
         if isinstance(state, _FutureResult):
             return None
@@ -164,7 +113,37 @@ class Future(Coroutine[_T]):
     def get_loop(self) -> "EventLoop":
         return self._loop
 
-    def send(self: __Self, value: None) -> __Self:
+    def remove_done_callback(self, callback: "UnaryCallback[typing.Self]") -> int:
+        callbacks = self._done_callbacks
+        original_len = len(callbacks)
+        callbacks = self._done_callbacks = [
+            entry for entry in callbacks if entry is not callback
+        ]
+        return len(callbacks) - original_len
+
+    def result(self) -> _T:
+        state = self._state
+        if isinstance(state, _FutureResult):
+            return state.result
+        if isinstance(state, _FutureException):
+            raise state.exception
+        if isinstance(state, _FutureCancelled):
+            raise CancelledError()
+        raise InvalidStateError()
+
+    def set_exception(self, exception: BaseException) -> None:
+        if self.done():
+            raise InvalidStateError()
+        _state = self._state = _FutureException(exception=exception)
+        self._call_done_callbacks()
+
+    def set_result(self, result: _T) -> None:
+        if self.done():
+            raise InvalidStateError()
+        _state = self._state = _FutureResult(result=result)
+        self._call_done_callbacks()
+
+    def send(self, value: None) -> "typing.Self":
         assert value is None, "Futures do not receive sent values."
         del value
         if self.done():
@@ -173,15 +152,20 @@ class Future(Coroutine[_T]):
 
     def throw(
         self,
-        typ: BaseException | type[BaseException] | None = None,
-        val: object | None = None,
-        tb: types.TracebackType | None = None,
-    ) -> t.Any:
+        typ: Union[None, BaseException, Type[BaseException]] = None,
+        val: Union[None, object] = None,
+        tb: Union[None, types.TracebackType] = None,
+    ) -> typing.Any:
         del tb
         assert typ is not None
         if isinstance(typ, GeneratorExit):
             return
         raise typ
+
+    def _call_done_callbacks(self) -> None:
+        loop = self.get_loop()
+        for callback in self._done_callbacks.copy():
+            loop.call_soon(callback, self)
 
 
 class _TaskCancelling(_FutureWaiting):
@@ -189,17 +173,12 @@ class _TaskCancelling(_FutureWaiting):
 
 
 class Task(Future[_T]):
-    __Self = t.TypeVar("__Self", bound="Task[_T]")
-
     def __init__(
-        self,
-        coro: Coroutine[_T],
-        *args: t.Any,
-        **kwargs: t.Any,
+        self, coro: Coroutine[_T], *args: typing.Any, **kwargs: typing.Any
     ) -> None:
         super().__init__(*args, **kwargs)
         self._coro = coro
-        self._awaited_on: Future[t.Any] | None = None
+        self._awaited_on = None  # type: None | Future[typing.Any]
 
     def cancel(self) -> bool:
         if self.done():
@@ -212,7 +191,10 @@ class Task(Future[_T]):
                 awaited_on.cancel()
         return True
 
-    def send(self: __Self, value: None) -> __Self:
+    def close(self) -> None:
+        self.throw(CancelledError())
+
+    def send(self, value: None) -> "typing.Self":
         assert value is None, "Tasks do not receive sent values."
         if isinstance(self._state, _FutureCancelled):
             self.throw(CancelledError())
@@ -225,22 +207,12 @@ class Task(Future[_T]):
             )
         return super().send(value)
 
-    def _is_send_ready(self) -> bool:
-        if self.done():
-            return False
-        if isinstance(self._state, _TaskCancelling):
-            return True
-        awaited_on = self._awaited_on
-        if awaited_on is None:
-            return True
-        return awaited_on.done()
-
     def throw(
         self,
-        typ: BaseException | type[BaseException] | None = None,
-        val: object | None = None,
-        tb: types.TracebackType | None = None,
-    ) -> t.Any:
+        typ: Union[None, BaseException, Type[BaseException]] = None,
+        val: Union[None, object] = None,
+        tb: Union[None, types.TracebackType] = None,
+    ) -> typing.Any:
         del tb
         assert typ is not None
         if isinstance(typ, type):
@@ -254,12 +226,19 @@ class Task(Future[_T]):
             )
         )
 
-    def close(self) -> None:
-        self.throw(CancelledError())
+    def _is_send_ready(self) -> bool:
+        if self.done():
+            return False
+        if isinstance(self._state, _TaskCancelling):
+            return True
+        awaited_on = self._awaited_on
+        if awaited_on is None:
+            return True
+        return awaited_on.done()
 
     def _step_coro(
         self,
-        stepper: t.Callable[[], Future[t.Any]],
+        stepper: typing.Callable[[], Future[typing.Any]],
     ) -> None:
         if self.done():
             raise StopIteration()
@@ -281,7 +260,9 @@ class Task(Future[_T]):
 
 
 class Handle:
-    def __init__(self, *args: t.Any, task: Task[t.Any], **kwargs: t.Any) -> None:
+    def __init__(
+        self, *args: typing.Any, task: Task[typing.Any], **kwargs: typing.Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self._task = task
 
@@ -300,20 +281,70 @@ class EventLoop:
             signal.CTRL_C_EVENT  # type: ignore[attr-defined]  # pylint: disable=no-member
         )
     )
-    _instance: "EventLoop" | None = None
+    _instance = None  # type: None | EventLoop
 
-    def __init__(self, *args: t.Any, **kwargs: t.Any) -> None:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         assert self._instance is None
         EventLoop._instance = self
-        self._getch_future: Future[int] | None = None
+        self._getch_future = None  # type: None | Future[int]
         self._is_stopping = False
         self._is_waiting = False
         self._pid = os.getpid()
-        self._all_tasks: list[Task[t.Any]] = []
-        self._stdscr: curses.window | None = None
+        self._all_tasks = []  # type: list[Task[typing.Any]]
+        self._stdscr = None  # type: None | curses.window
 
-    def open(self) -> curses.window:
+    def call_soon(
+        self, callback: typing.Callable[..., typing.Any], *args: typing.Any
+    ) -> Handle:
+        def wrapped_callback() -> Coroutine[None]:
+            callback(*args)
+            return
+            # Force function into a zero-step generator.
+            assert False, "Unreachable."  # pylint: disable=unreachable
+            yield from self.create_future()
+
+        task = self.create_task(wrapped_callback())
+        return Handle(task=task)
+
+    def call_soon_threadsafe(
+        self, callback: typing.Callable[..., typing.Any], *args: typing.Any
+    ) -> Handle:
+        handle = self.call_soon(callback, *args)
+        if self._is_waiting:
+            os.kill(self._pid, self.unpause_signal)
+        return handle
+
+    def close(self) -> None:
+        stdscr = self._stdscr
+        if stdscr is None:
+            return
+        stdscr.keypad(False)
+        curses.nocbreak()
+        curses.echo()
+        curses.endwin()
+        self._stdscr = None
+
+    def create_future(self) -> Future[_T]:
+        return Future[_T](loop=self)
+
+    def create_task(self, coro: Coroutine[_T]) -> Task[_T]:
+        task = Task(coro, loop=self)
+        self._all_tasks.append(task)
+        return task
+
+    def getch(self) -> Coroutine[int]:
+        future = self._getch_future
+        if future is None:
+            future = self._getch_future = Future[int](loop=self)
+        # return (yield from future)
+        next_ch = yield from future
+        return next_ch
+
+    def is_closed(self) -> bool:
+        return self._stdscr is None
+
+    def open(self) -> "curses.window":
         stdscr = self._stdscr
         if stdscr is not None:
             return stdscr
@@ -328,7 +359,7 @@ class EventLoop:
     def run_forever(self) -> None:
         self.run_until_complete(self.create_future())
 
-    def run_until_complete(self, future: Future[_T]) -> _T | None:
+    def run_until_complete(self, future: Future[_T]) -> _T:
         all_tasks = self._all_tasks
         try:
             # Always iterate once before exiting.
@@ -355,64 +386,10 @@ class EventLoop:
                     break
         finally:
             self._is_stopping = False
-        return None
+        raise RuntimeError("Event loop stopped before Future completed.")
 
     def stop(self) -> None:
         self._is_stopping = True
-
-    def is_closed(self) -> bool:
-        return self._stdscr is None
-
-    def close(self) -> None:
-        stdscr = self._stdscr
-        if stdscr is None:
-            return
-        stdscr.keypad(False)
-        curses.nocbreak()
-        curses.echo()
-        curses.endwin()
-        self._stdscr = None
-
-    def call_soon(
-        self,
-        callback: t.Callable[..., t.Any],
-        *args: t.Any,
-    ) -> Handle:
-        def wrapped_callback() -> Coroutine[None]:
-            callback(*args)
-            return
-            # Force function into a zero-step generator.
-            assert False, "Unreachable."  # pylint: disable=unreachable
-            yield from self.create_future()
-
-        task = self.create_task(wrapped_callback())
-        return Handle(task=task)
-
-    def create_future(self) -> Future[_T]:
-        return Future[_T](loop=self)
-
-    def create_task(self, coro: Coroutine[_T]) -> Task[_T]:
-        task = Task(coro, loop=self)
-        self._all_tasks.append(task)
-        return task
-
-    def call_soon_threadsafe(
-        self,
-        callback: t.Callable[..., t.Any],
-        *args: t.Any,
-    ) -> Handle:
-        handle = self.call_soon(callback, *args)
-        if self._is_waiting:
-            os.kill(self._pid, self.unpause_signal)
-        return handle
-
-    def getch(self) -> Coroutine[int]:
-        future = self._getch_future
-        if future is None:
-            future = self._getch_future = Future[int](loop=self)
-        # return (yield from future)
-        next_ch = yield from future
-        return next_ch
 
     def _set_getch_result(self) -> None:
         stdscr = self._stdscr
@@ -439,7 +416,7 @@ def get_running_loop() -> EventLoop:
     return loop
 
 
-def run(coro: Coroutine[_T]) -> _T | None:
+def run(coro: Coroutine[_T]) -> _T:
     loop = EventLoop()
     try:
         loop.open()
