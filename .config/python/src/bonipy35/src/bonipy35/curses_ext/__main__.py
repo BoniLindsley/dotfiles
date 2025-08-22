@@ -35,7 +35,7 @@ def run(*, command: str, package: str, remaining_arguments: "list[str]") -> int:
         except AttributeError:
             _logger.error("Command not implemented: %s", command)
             return 1
-    print(command, __package__, submodule)
+
     remaining_arguments.insert(0, command)
     submodule_main(remaining_arguments)
 
