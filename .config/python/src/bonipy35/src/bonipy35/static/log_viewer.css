@@ -1,0 +1,8 @@
+.dimmed {
+  opacity: 0.2;
+}
+
+.log-content {
+  font-family: monospace;
+  white-space: pre-wrap;
+}
