@@ -61,6 +61,7 @@ let g:ale_fixers = {
 \ 'cmake': ['cmakeformat'],
 \ 'c': ['clang-format'],
 \ 'cpp': ['clang-format'],
+\ 'css': ['prettier'],
 \ 'fortran': ['fprettify'],
 \ 'html': ['prettier'],
 \ 'javascript': ['prettier'],
@@ -81,11 +82,11 @@ let g:ale_linters = {
 \   'clangd',
 \   'clangtidy',
 \ ],
+\ 'css': ['stylelint'],
 \ 'fortran': [
 \   'gcc',
 \   'language_server',
 \ ],
-\ 'html': ['htmlhint'],
 \ 'javascript': ['eslint'],
 \ 'python': [
 \   'mypy',
