@@ -119,6 +119,7 @@ class SetupPython:
             "python-lsp-server[Rope]",  # LSP. Rope for completion.
             "tox",  # Continuous integration package.
             "types-six",  # Library type hint.
+            "uv",  # Virtual Python environments.
         ]
 
     @classmethod
