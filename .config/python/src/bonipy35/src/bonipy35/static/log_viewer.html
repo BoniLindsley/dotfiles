@@ -5,17 +5,17 @@
     <link href="static/log_viewer.css" rel="stylesheet" />
   </head>
   <body>
-    <div>
+    <div class="toolbar">
       <input
         id="filepath"
         list="suggestions"
-        placeholder="Enter file path..."
+        placeholder="Log path"
         type="text"
       />
-      <button id="filepath-button">Load File</button>
+      <button id="filepath-button">Open</button>
       <datalist id="suggestions"></datalist>
-      <div id="filepath-error" class="log-content"></div>
     </div>
+    <div id="filepath-error" class="log-content"></div>
     <hr />
     <div>
       <input id="filter-text" placeholder="Filter regex..." type="text" />
