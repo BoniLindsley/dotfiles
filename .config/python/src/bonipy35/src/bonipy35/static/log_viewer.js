@@ -92,6 +92,7 @@ function applyFilter() {
       .join("\n");
   } catch (e) {
     const filterErrorDiv = document.getElementById("filter-error");
+    filterErrorDiv.classList.add("log-content");
     filterErrorDiv.textContent = `Invalid regex: ${e}`;
   }
 }
