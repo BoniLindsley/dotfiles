@@ -39,13 +39,11 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self) -> None:
         # pylint: disable=too-many-branches
         url = urllib.parse.urlparse(self.path)
-        print(url)
         url_path = url.path
         url_query = urllib.parse.parse_qs(url.query)
 
         if url_path == "/":
             self.path = "log_viewer.html"
-            print("static path", self.path)
             super().do_GET()
         elif url_path.startswith("/static/"):
             prefix = "/static/"
@@ -54,7 +52,6 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
                 .resolve()
                 .relative_to(self.static_directory)
             )
-            print("path", file_path)
             if file_path.exists() and file_path.is_file():
                 self.path = str(file_path)
                 super().do_GET()

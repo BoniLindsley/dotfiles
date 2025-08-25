@@ -14,15 +14,21 @@
       />
       <button id="filepath-button">Open</button>
       <datalist id="suggestions"></datalist>
+      <button id="menu-button">=</button>
     </div>
-    <div id="filepath-error" class="log-content"></div>
-    <hr />
-    <div>
-      <input id="filter-text" placeholder="Filter regex..." type="text" />
-      <div id="filter-error" class="log-content"></div>
+    <div id="filepath-error"></div>
+    <main id="content"></main>
+    <div id="sidebar" class="sidebar">
+      <div class="sidebar-header">
+        <h3>Filter Options</h3>
+        <button class="close-button">&times;</button>
+      </div>
+      <div class="sidebar-body">
+        <label for="filter-text">Regex Filter:</label>
+        <input type="text" id="filter-text" placeholder="Enter regex pattern" />
+        <div id="filter-error" class="error"></div>
+      </div>
     </div>
-    <hr />
-    <div id="content" class="log-content"></div>
     <script src="static/log_viewer.js"></script>
   </body>
 </html>

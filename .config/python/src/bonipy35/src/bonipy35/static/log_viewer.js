@@ -36,20 +36,26 @@ function loadFile(path) {
     .then((response) => {
       if (!response.ok) {
         return response.text().then((text) => {
+          filepathErrorDiv.classList.add("log-content");
           filepathErrorDiv.textContent = text;
           return "";
         });
       }
+      filepathErrorDiv.classList.remove("log-content");
       filepathErrorDiv.textContent = "";
       return response.text();
     })
     .then((text) => {
+      contentDiv.classList.add("log-content");
       contentDiv.textContent = text;
       applyFilter();
+      filterErrorDiv.classList.remove("log-content");
       filterErrorDiv.textContent = "";
     })
     .catch((err) => {
+      contentDiv.classList.remove("log-content");
       contentDiv.textContent = "";
+      filterErrorDiv.classList.add("log-content");
       filterErrorDiv.textContent = `Error loading file: ${err}`;
     });
 }
@@ -58,6 +64,17 @@ const filepathButton = document.getElementById("filepath-button");
 filepathButton.addEventListener("click", () => {
   const path = filepath.value;
   loadFile(path);
+});
+
+// Toggle sidebar
+const menuButton = document.getElementById("menu-button");
+menuButton.addEventListener("click", () => {
+  document.body.classList.add("sidebar-open");
+});
+
+const sidebar = document.getElementById("sidebar");
+sidebar.querySelector(".close-button").addEventListener("click", () => {
+  document.body.classList.remove("sidebar-open");
 });
 
 const filterText = document.getElementById("filter-text");
