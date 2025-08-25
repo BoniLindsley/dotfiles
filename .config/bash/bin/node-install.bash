@@ -39,7 +39,7 @@ __main() {
   # Download source if not found.
   : "${XDG_LOCAL_HOME:="${HOME}/.local"}"
   local repository='https://github.com/nodejs/node.git'
-  local version_tag='v22.2.0'
+  local version_tag='v24.6.0'
   local source_name="${repository##*/}"
   local source_name="${source_name%.git}"
   local version_number="${version_tag#v}"
