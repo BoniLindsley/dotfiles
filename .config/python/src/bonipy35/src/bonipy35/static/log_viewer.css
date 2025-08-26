@@ -2,7 +2,11 @@
   flex-grow: 1;
 }
 
-.dimmed {
+.hide-no-match .no-match {
+  display: none;
+}
+
+.no-match {
   opacity: 0.2;
 }
 

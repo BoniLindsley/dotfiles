@@ -87,9 +87,12 @@ function applyFilter() {
     contentDiv.innerHTML = contentDiv.textContent
       .split("\n")
       .map((line) =>
-        regex.test(line) ? line : `<span class="dimmed">${line}</span>`,
+        regex.test(line)
+          ? [line, "\n"]
+          : ['<span class="no-match">', line, "\n</span>"],
       )
-      .join("\n");
+      .flat()
+      .join("");
   } catch (e) {
     const filterErrorDiv = document.getElementById("filter-error");
     filterErrorDiv.classList.add("log-content");
@@ -100,4 +103,14 @@ function applyFilter() {
 filterText.addEventListener("input", (e) => {
   const path = e.target.value;
   debounce(applyFilter)();
+});
+
+const hideNonMatchesCheckbox = document.getElementById("hide-non-matches");
+hideNonMatchesCheckbox.addEventListener("click", (e) => {
+  const contentDiv = document.getElementById("content");
+  if (e.target.checked) {
+    contentDiv.classList.add("hide-no-match");
+  } else {
+    contentDiv.classList.remove("hide-no-match");
+  }
 });
