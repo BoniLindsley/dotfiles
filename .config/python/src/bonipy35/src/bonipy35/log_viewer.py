@@ -4,14 +4,18 @@
 
 # Standard libraries.
 import argparse
+import bz2
 import functools
+import gzip
 import http.server
 import json
+import lzma
 import os
 import pathlib
 import logging
 import socketserver
 import sys
+import tarfile
 import typing
 import urllib.parse
 
@@ -21,6 +25,31 @@ from . import logging_ext
 from . import inspect_ext
 
 _logger = logging.getLogger(__name__)
+
+
+def read_file_contents(file_path: pathlib.Path) -> bytes:
+    """Read file contents with appropriate decompression based on extension."""
+    if file_path.suffixes[-2:] == [".tar", ".gz"]:
+        with tarfile.open(file_path, "r:gz") as tar:
+            members = tar.getmembers()
+            if len(members) != 1:
+                raise ValueError("Tar archive must contain exactly one file")
+            file_obj = tar.extractfile(members[0])
+            if not file_obj:
+                raise ValueError("Could not extract file from tar archive")
+            return file_obj.read()
+    if file_path.suffix == ".gz":
+        with gzip.open(file_path, "rb") as f:
+            return f.read()
+    if file_path.suffix == ".bz2":
+        with bz2.open(file_path, "rb") as f:
+            return f.read()
+    if file_path.suffix == ".xz":
+        with lzma.open(file_path, "rb") as f:
+            return f.read()
+    # Read plain text as binary and let browser handle decoding
+    with file_path.open("rb") as f:
+        return f.read()
 
 
 class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -37,67 +66,90 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
         super().__init__(*args, **kwargs)
 
     def do_GET(self) -> None:
-        # pylint: disable=too-many-branches
         url = urllib.parse.urlparse(self.path)
         url_path = url.path
-        url_query = urllib.parse.parse_qs(url.query)
 
         if url_path == "/":
-            self.path = "log_viewer.html"
-            super().do_GET()
+            self.get_root()
         elif url_path.startswith("/static/"):
-            prefix = "/static/"
-            file_path = (
-                (self.static_directory / url_path[len(prefix) :])
-                .resolve()
-                .relative_to(self.static_directory)
-            )
-            if file_path.exists() and file_path.is_file():
-                self.path = str(file_path)
-                super().do_GET()
-            else:
-                self.send_error(404, "File not found")
+            self.get_static(url)
         elif url_path == "/file":
-            try:
-                file_path = (self.log_directory / url_query["path"][0]).resolve()
-            except FileNotFoundError:
-                self.send_error(404, "File not found")
-                return
-            if (
+            self.get_file(url)
+        elif url_path == "/suggest":
+            self.get_suggest(url)
+        else:
+            self.send_error(404, "File not found")
+
+    def get_file(self, url: urllib.parse.ParseResult) -> None:
+        url_query = urllib.parse.parse_qs(url.query)
+
+        try:
+            file_path = (self.log_directory / url_query["path"][0]).resolve()
+        except FileNotFoundError:
+            file_path = None
+
+        if file_path is not None:
+            if not (
                 str(file_path).startswith(str(self.log_directory))
                 and file_path.exists()
                 and file_path.is_file()
             ):
-                self.send_response(200)
-                self.send_header("Content-type", "text/plain")
-                self.end_headers()
-                with file_path.open("rb") as f:
-                    self.wfile.write(f.read())
-            else:
-                self.send_error(404, "File not found")
-        elif url_path == "/suggest":
-            suggestions = []
+                file_path = None
 
+        content = None
+        if file_path is not None:
             try:
-                query_path = url_query["path"][0]
-            except KeyError:
-                query_path = ""
-            query_path = "./" + query_path
-            current_parent, current_name = query_path.rsplit("/", maxsplit=1)
+                content = read_file_contents(file_path)
+            except ValueError:
+                pass
 
-            parent = self.log_directory / current_parent
-            if str(parent).startswith(str(self.log_directory)) and parent.exists():
-                for entry in parent.iterdir():
-                    entry_name = entry.name
-                    if entry_name.startswith(current_name):
-                        suggestions.append(entry_name + ("/" if entry.is_dir() else ""))
-
+        if content is not None:
             self.send_response(200)
-            self.send_header("Content-type", "application/json")
+            self.send_header("Content-type", "text/plain")
             self.end_headers()
-            self.wfile.write(json.dumps(suggestions).encode())
+            self.wfile.write(content)
         else:
             self.send_error(404, "File not found")
+
+    def get_root(self) -> None:
+        self.path = "log_viewer.html"
+        super().do_GET()
+
+    def get_static(self, url: urllib.parse.ParseResult) -> None:
+        prefix = "/static/"
+        file_path = (
+            (self.static_directory / url.path[len(prefix) :])
+            .resolve()
+            .relative_to(self.static_directory)
+        )
+        if file_path.exists() and file_path.is_file():
+            self.path = str(file_path)
+            super().do_GET()
+        else:
+            self.send_error(404, "File not found")
+
+    def get_suggest(self, url: urllib.parse.ParseResult) -> None:
+        suggestions = []
+
+        url_query = urllib.parse.parse_qs(url.query)
+        try:
+            query_path = url_query["path"][0]
+        except KeyError:
+            query_path = ""
+        query_path = "./" + query_path
+        current_parent, current_name = query_path.rsplit("/", maxsplit=1)
+
+        parent = self.log_directory / current_parent
+        if str(parent).startswith(str(self.log_directory)) and parent.exists():
+            for entry in parent.iterdir():
+                entry_name = entry.name
+                if entry_name.startswith(current_name):
+                    suggestions.append(entry_name + ("/" if entry.is_dir() else ""))
+
+        self.send_response(200)
+        self.send_header("Content-type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(suggestions).encode())
 
 
 def run(*, log_directory: pathlib.Path, port: int) -> int:
