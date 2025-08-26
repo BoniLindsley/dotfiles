@@ -17,20 +17,30 @@
       <button id="menu-button">=</button>
     </div>
     <div id="filepath-error"></div>
-    <main id="content"></main>
-    <div id="sidebar" class="sidebar">
-      <div class="sidebar-header">
-        <h3>Filter Options</h3>
-        <button class="close-button">&times;</button>
-      </div>
-      <div class="sidebar-body">
-        <label for="filter-text">Regex Filter:</label>
-        <input type="text" id="filter-text" placeholder="Enter regex pattern" />
-        <label>
-          <input type="checkbox" id="hide-non-matches" />
-          Hide non-matches
-        </label>
-        <div id="filter-error" class="error"></div>
+    <div class="content-row">
+      <main id="content" class="content"></main>
+      <div id="sidebar" class="sidebar sidebar-hidden">
+        <div class="sidebar-header">
+          <h3>Filter Options</h3>
+          <button class="close-button">&times;</button>
+        </div>
+        <div class="sidebar-body">
+          <div>
+          <label for="filter-text">Regex Filter:</label>
+          <input
+            type="text"
+            id="filter-text"
+            placeholder="Enter regex pattern"
+          />
+          </div>
+          <div>
+          <label>
+            <input type="checkbox" id="hide-non-matches" />
+            Hide non-matches
+          </label>
+          </div>
+          <div id="filter-error" class="error"></div>
+        </div>
       </div>
     </div>
     <script src="static/log_viewer.js"></script>

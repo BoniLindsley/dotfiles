@@ -1,5 +1,5 @@
 #filepath {
-  flex-grow: 1;
+  flex: 1;
 }
 
 .hide-no-match .no-match {
@@ -11,42 +11,45 @@
 }
 
 body {
-  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  height: 100vh;
   margin: 0;
+  height: 100vh;
+}
+
+.content {
+  flex: 1;
+}
+
+.content-row {
+  display: flex;
+  flex: 1;
+  flex-direction: row;
+  overflow: auto;
+}
+
+.log-content {
+  flex: 1;
+  overflow: auto;
 }
 
 .log-content {
   box-sizing: border-box;
-  flex: 1;
   font-family: monospace;
-  overflow: auto;
   padding: 1em;
   white-space: pre;
 }
 
 .sidebar {
-  height: 100%;
-  position: fixed;
-  right: -300px;
-  top: 0;
-  width: 300px;
+  display: block;
+  overflow: auto;
+  padding: 1em;
 }
 
 .sidebar {
   background: white;
   box-shadow: -2px 0 5px rgba(0, 0, 0, 0.2);
-  box-sizing: border-box;
-  padding: 1em;
-  z-index: 1000;
-}
-
-.sidebar-content {
-  display: flex;
-  flex-direction: column;
-  gap: 1em;
+  font-family: monospace;
 }
 
 .sidebar-header {
@@ -55,8 +58,8 @@ body {
   justify-content: space-between;
 }
 
-.sidebar-open .sidebar {
-  right: 0;
+.sidebar-hidden {
+  display: none;
 }
 
 .toolbar {

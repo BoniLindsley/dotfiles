@@ -67,14 +67,14 @@ filepathButton.addEventListener("click", () => {
 });
 
 // Toggle sidebar
-const menuButton = document.getElementById("menu-button");
-menuButton.addEventListener("click", () => {
-  document.body.classList.add("sidebar-open");
-});
-
 const sidebar = document.getElementById("sidebar");
 sidebar.querySelector(".close-button").addEventListener("click", () => {
-  document.body.classList.remove("sidebar-open");
+  sidebar.classList.toggle("sidebar-hidden");
+});
+
+const menuButton = document.getElementById("menu-button");
+menuButton.addEventListener("click", () => {
+  sidebar.classList.toggle("sidebar-hidden");
 });
 
 const filterText = document.getElementById("filter-text");
