@@ -139,6 +139,7 @@ nnoremap <Plug>(Boni.ALE)<F1>
 nnoremap <Plug>(Boni.ALE)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.ALE)")<CR>
 nmap <Plug>(Boni.ALE)<Space> <Plug>(ale_go_to_definition)
+nmap <Plug>(Boni.ALE)C :ALECodeAction<CR>
 nmap <Plug>(Boni.ALE)D <Plug>(ale_documentation)
 nmap <Plug>(Boni.ALE)H <Plug>(ale_hover)
 nmap <Plug>(Boni.ALE)r <Plug>(ale_toggle_buffer)
