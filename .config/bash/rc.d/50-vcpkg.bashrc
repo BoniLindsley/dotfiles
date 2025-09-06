@@ -20,11 +20,24 @@ Usage:
   apt install --no-install-recommends \\
     libltdl-dev libx11-dev libxext-dev libxft-dev
 
+  # {
+  #   "dependencies": [],
+  #   "features": {
+  #     "dev": {
+  #       "description": "For testing.",
+  #       "dependencies": [
+  #         "catch2"
+  #       ]
+  #     }
+  #   }
+  # }
+
   cmake \\
     -B "\${CMAKE_BINARY_DIR}" \\
     -S "\${CMAKE_SOURCE_DIR}" \\
     -DBUILD_TESTING=ON \\
-    -DCMAKE_TOOLCHAIN_FILE='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake'
+    -DCMAKE_TOOLCHAIN_FILE='${VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake' \\
+    -DVCPKG_MANIFEST_FEATURES="dev"
   cmake --build "\${CMAKE_BINARY_DIR}"
 EOF
 }
