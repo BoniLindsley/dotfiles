@@ -1,3 +1,0 @@
-Duration / h | Headline
-        1.00 | Total
-        1.00 | * Feed cat

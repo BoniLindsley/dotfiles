@@ -7,8 +7,8 @@
 
 import platform
 
-required_version = (3, 8)
+required_version = (3, 5)
 if tuple(map(int, platform.python_version_tuple()[:2])) < required_version:
     raise ImportError(__name__ + " requires Python " + str(required_version))
 
-from bonipy38.taskmd import *
+from bonipy35.taskmd import *

@@ -1,3 +1,0 @@
-Duration / h | Headline
-       43.00 | Total
-       43.00 |         * Level 5
