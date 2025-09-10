@@ -9,7 +9,7 @@ import sys
 # Internal modules.
 from . import logging_ext
 
-_logger = logging.getLogger(__name__)
+_logger = logging.getLogger(__name__ if __name__ != "__main__" else __package__)
 
 
 def run(*, command: str, package: str, remaining_arguments: "list[str]") -> int:
