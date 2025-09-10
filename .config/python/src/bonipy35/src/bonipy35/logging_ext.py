@@ -42,6 +42,12 @@ def set_logger_verbosity(
 
 
 def set_up_logging(*, logger: logging.Logger) -> None:
+    if logger.hasHandlers():
+        logger.debug(
+            "Log messages already handled. Not adding handler to logger %s", logger.name
+        )
+        return
+
     formatter = logging.Formatter(
         datefmt="%Y-%m-%d %H:%M:%S",
         fmt="[{asctime}] [python/{name}] [{levelname[0]}] {message}",
