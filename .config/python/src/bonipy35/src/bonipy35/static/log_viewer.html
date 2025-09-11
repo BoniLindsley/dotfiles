@@ -13,12 +13,7 @@
     <div class="app-container">
       <header class="app-header">
         <div class="file-input-container">
-          <input
-            type="text"
-            id="file-path"
-            placeholder="Enter log file path (e.g., sample.log)"
-            value="sample.log"
-          />
+          <input type="text" id="file-path" value="sample.log" />
           <button id="load-file">Load File</button>
         </div>
         <div class="flex-space-horizontal"></div>
@@ -36,16 +31,13 @@
       <div class="app-body">
         <main class="content-area">
           <div class="log-container">
-            <div class="log-viewer" id="log-viewer">
-            </div>
+            <div class="log-viewer" id="log-viewer"></div>
           </div>
         </main>
 
         <aside class="sidebar" id="sidebar">
-          <div class="sidebar-header">
-            <h3>Highlighting Options</h3>
-          </div>
           <div class="highlight-controls">
+            <h3>Highlighting Options</h3>
             <highlight-checkbox type="datetime"></highlight-checkbox>
             <highlight-checkbox type="error"></highlight-checkbox>
             <highlight-checkbox type="warning"></highlight-checkbox>
