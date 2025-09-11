@@ -9,10 +9,11 @@ import functools
 import gzip
 import http.server
 import json
+import logging
 import lzma
 import os
 import pathlib
-import logging
+import re
 import socketserver
 import sys
 import tarfile
@@ -25,6 +26,79 @@ from . import logging_ext
 from . import inspect_ext
 
 _logger = logging.getLogger(__name__)
+
+if typing.TYPE_CHECKING:
+    Highlight = typing.TypedDict(
+        "Highlight",
+        {
+            "end": int,
+            "line": int,
+            "start": int,
+        },
+    )
+else:
+    Highlight = dict
+
+
+def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
+    """Generate highlight patterns for the log content"""
+    lines = content.split(b"\n")
+    highlights = {
+        "datetime": [],
+        "error": [],
+        "warning": [],
+        "info": [],
+        "debug": [],
+        "stderr": [],
+        "fatal": [],
+    }  # type: dict[str, list[Highlight]]
+
+    # Regex patterns
+    datetime_patterns = [
+        rb"\d{4}-\d{2}-\d{2}[\s\T]\d{2}:\d{2}:\d{2}",  # ISO format
+        rb"\d{2}/\d{2}/\d{4}\s\d{2}:\d{2}:\d{2}",  # US format
+        rb"\d{2}-\d{2}-\d{4}\s\d{2}:\d{2}:\d{2}",  # EU format
+        rb"\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}",  # Syslog format
+    ]
+
+    word_patterns = {
+        "error": rb"\b(?i)(error|err)\b",
+        "warning": rb"\b(?i)(warning|warn)\b",
+        "info": rb"\b(?i)(info|information)\b",
+        "debug": rb"\b(?i)(debug|dbg)\b",
+        "stderr": rb"\b(?i)(stderr)\b",
+        "fatal": rb"\b(?i)(fatal|critical|crit)\b",
+    }
+
+    char_offset = 0
+    for line_num, line in enumerate(lines):
+        line_start = char_offset
+
+        # Find datetime patterns
+        for pattern in datetime_patterns:
+            for match in re.finditer(pattern, line):
+                highlights["datetime"].append(
+                    {
+                        "start": line_start + match.start(),
+                        "end": line_start + match.end(),
+                        "line": line_num,
+                    }
+                )
+
+        # Find word patterns
+        for category, pattern in word_patterns.items():
+            for match in re.finditer(pattern, line):
+                highlights[category].append(
+                    {
+                        "start": line_start + match.start(),
+                        "end": line_start + match.end(),
+                        "line": line_num,
+                    }
+                )
+
+        char_offset += len(line) + 1  # +1 for newline character
+
+    return highlights
 
 
 def read_file_contents(file_path: pathlib.Path) -> bytes:
@@ -52,7 +126,13 @@ def read_file_contents(file_path: pathlib.Path) -> bytes:
         return f.read()
 
 
-class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
+class LogRequestHandler(http.server.BaseHTTPRequestHandler):
+    default_extension_map = {
+        ".css": "text/css",
+        ".html": "text/html",
+        ".js": "application/javascript",
+    }
+
     def __init__(
         self,
         *args: typing.Any,
@@ -61,95 +141,122 @@ class LogRequestHandler(http.server.SimpleHTTPRequestHandler):
         **kwargs: typing.Any
     ) -> None:
         self.path = ""
+        self.extension_map = self.default_extension_map.copy()
         self.log_directory = log_directory
         self.static_directory = static_directory
         super().__init__(*args, **kwargs)
 
-    def do_GET(self) -> None:
+    def check_request_path(self, file_path: pathlib.Path) -> "None | pathlib.Path":
+        if file_path is None:
+            return None
+        if ".." in file_path.parts:
+            return None
+        if not file_path.exists():
+            return None
+        if not file_path.is_file():
+            return None
+        return file_path
+
+    def do_GET(self) -> None:  # pylint: disable=invalid-name
         url = urllib.parse.urlparse(self.path)
         url_path = url.path
 
-        if url_path == "/":
-            self.get_root()
-        elif url_path.startswith("/static/"):
-            self.get_static(url)
-        elif url_path == "/file":
-            self.get_file(url)
-        elif url_path == "/suggest":
-            self.get_suggest(url)
-        else:
-            self.send_error(404, "File not found")
+        file_path = None  # type: None | pathlib.Path
+        if url_path.startswith("/api/log"):
+            query = urllib.parse.urlparse(self.path).query
+            params = urllib.parse.parse_qs(query)
+            try:
+                file_path = pathlib.Path(params["path"][0])
+            except (IndexError, KeyError):
+                pass
+            if file_path is not None:
+                file_path = self.check_request_path(file_path)
+            if file_path is not None:
+                self.send_log_response(file_path)
+                return
 
-    def get_file(self, url: urllib.parse.ParseResult) -> None:
-        url_query = urllib.parse.parse_qs(url.query)
+        url_path = url_path.lstrip("/")
+        if url_path == "":
+            url_path = "index.html"
+        if url_path == "index.html":
+            url_path = "log_viewer.html"
 
-        try:
-            file_path = (self.log_directory / url_query["path"][0]).resolve()
-        except FileNotFoundError:
-            file_path = None
+        if url_path in {"log_viewer.html", "log_viewer.js", "log_viewer.css"}:
+            file_path = pathlib.Path(url_path)
 
         if file_path is not None:
-            if not (
-                str(file_path).startswith(str(self.log_directory))
-                and file_path.exists()
-                and file_path.is_file()
-            ):
-                file_path = None
+            file_path = self.check_request_path(file_path)
 
-        content = None
+        content = b""
         if file_path is not None:
             try:
-                content = read_file_contents(file_path)
-            except ValueError:
-                pass
+                content = file_path.read_bytes()
+            except FileNotFoundError:
+                file_path = None
 
-        if content is not None:
-            self.send_response(200)
-            self.send_header("Content-type", "text/plain")
-            self.end_headers()
-            self.wfile.write(content)
-        else:
+        if file_path is None:
             self.send_error(404, "File not found")
+            return
 
-    def get_root(self) -> None:
-        self.path = "log_viewer.html"
-        super().do_GET()
-
-    def get_static(self, url: urllib.parse.ParseResult) -> None:
-        prefix = "/static/"
-        file_path = (
-            (self.static_directory / url.path[len(prefix) :])
-            .resolve()
-            .relative_to(self.static_directory)
-        )
-        if file_path.exists() and file_path.is_file():
-            self.path = str(file_path)
-            super().do_GET()
-        else:
-            self.send_error(404, "File not found")
-
-    def get_suggest(self, url: urllib.parse.ParseResult) -> None:
-        suggestions = []
-
-        url_query = urllib.parse.parse_qs(url.query)
-        try:
-            query_path = url_query["path"][0]
-        except KeyError:
-            query_path = ""
-        query_path = "./" + query_path
-        current_parent, current_name = query_path.rsplit("/", maxsplit=1)
-
-        parent = self.log_directory / current_parent
-        if str(parent).startswith(str(self.log_directory)) and parent.exists():
-            for entry in parent.iterdir():
-                entry_name = entry.name
-                if entry_name.startswith(current_name):
-                    suggestions.append(entry_name + ("/" if entry.is_dir() else ""))
+        content_type = self.extension_map.get(file_path.suffix, "text/plain")
 
         self.send_response(200)
+        self.send_header("Content-type", content_type)
+        self.end_headers()
+        self.wfile.write(content)
+
+    def do_POST(self) -> None:  # pylint: disable=invalid-name
+        if self.path != "/api/log":
+            self.send_error(404, "File not found")
+
+        content_length = int(self.headers["Content-Length"])
+        post_data = self.rfile.read(content_length)
+        try:
+            data = json.loads(post_data.decode("utf-8"))
+        except json.JSONDecodeError:
+            self.send_json_error(400, "Invalid JSON")
+            return
+
+        file_path = None
+        url_path = data.get("path")
+        if url_path is not None:
+            file_path = pathlib.Path(url_path)
+        if file_path is not None:
+            file_path = self.check_request_path(file_path)
+        if file_path is None:
+            self.send_error(404, "File not found")
+            return
+
+        self.send_log_response(file_path)
+
+    def send_log_response(self, file_path: pathlib.Path) -> None:
+        # Read the log file
+        try:
+            content = read_file_contents(file_path)
+        except ValueError:
+            self.send_json_error(500, "Error reading file")
+            return
+
+        # Generate highlighting data
+        highlights = generate_highlights(content)
+
+        response = {
+            "content": content.decode("utf-8"),
+            "highlights": highlights,
+            "file_path": str(file_path),
+        }
+
+        self.send_json_response(200, response)
+
+    def send_json_error(self, code: int, message: str) -> None:
+        self.send_json_response(code, {"error": message})
+
+    def send_json_response(self, code: int, data: "dict[str, typing.Any]") -> None:
+        self.send_response(code)
         self.send_header("Content-type", "application/json")
         self.end_headers()
-        self.wfile.write(json.dumps(suggestions).encode())
+        response = json.dumps(data)
+        self.wfile.write(response.encode("utf-8"))
 
 
 def run(*, log_directory: pathlib.Path, port: int) -> int:

@@ -1,48 +1,72 @@
 <!doctype html>
-<html>
+<html lang="en">
   <head>
-    <title>Log File Viewer</title>
-    <link href="static/log_viewer.css" rel="stylesheet" />
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Log Viewer</title>
+    <link rel="stylesheet" href="log_viewer.css" />
   </head>
   <body>
-    <div class="toolbar">
-      <input
-        id="filepath"
-        list="suggestions"
-        placeholder="Log path"
-        type="text"
-      />
-      <button id="filepath-button">Open</button>
-      <datalist id="suggestions"></datalist>
-      <button id="menu-button">=</button>
-    </div>
-    <div id="filepath-error"></div>
-    <div class="content-row">
-      <main id="content" class="content"></main>
-      <div id="sidebar" class="sidebar sidebar-hidden">
-        <div class="sidebar-header">
-          <h3>Filter Options</h3>
-          <button class="close-button">&times;</button>
-        </div>
-        <div class="sidebar-body">
-          <div>
-          <label for="filter-text">Regex Filter:</label>
+    <div class="app-container">
+      <header class="app-header">
+        <div class="file-input-container">
           <input
             type="text"
-            id="filter-text"
-            placeholder="Enter regex pattern"
+            id="file-path"
+            placeholder="Enter log file path (e.g., sample.log)"
+            value="sample.log"
           />
-          </div>
-          <div>
-          <label>
-            <input type="checkbox" id="hide-non-matches" />
-            Hide non-matches
-          </label>
-          </div>
-          <div id="filter-error" class="error"></div>
+          <button id="load-file">Load File</button>
         </div>
+        <div class="flex-space-horizontal"></div>
+        <button
+          class="hamburger"
+          id="hamburger"
+          aria-label="Toggle sidebar"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </header>
+
+      <div class="app-body">
+        <main class="content-area">
+          <div class="log-container">
+            <div class="log-viewer" id="log-viewer">
+            </div>
+          </div>
+        </main>
+
+        <aside class="sidebar" id="sidebar">
+          <div class="sidebar-header">
+            <h3>Highlighting Options</h3>
+          </div>
+          <div class="highlight-controls">
+            <highlight-checkbox type="datetime"></highlight-checkbox>
+            <highlight-checkbox type="error"></highlight-checkbox>
+            <highlight-checkbox type="warning"></highlight-checkbox>
+            <highlight-checkbox type="info"></highlight-checkbox>
+            <highlight-checkbox type="debug"></highlight-checkbox>
+            <highlight-checkbox type="stderr"></highlight-checkbox>
+            <highlight-checkbox type="fatal"></highlight-checkbox>
+          </div>
+        </aside>
       </div>
     </div>
-    <script src="static/log_viewer.js"></script>
+
+    <div class="status-bar" id="status-bar"></div>
+
+    <template id="template-highlight-checkbox">
+      <label class="checkbox-container">
+        <input type="checkbox" value="Datetime" />
+        <span></span>
+      </label>
+    </template>
+
+    <script src="log_viewer.js"></script>
   </body>
 </html>
