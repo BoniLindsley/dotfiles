@@ -26,16 +26,23 @@ class HighlightCheckbox extends HTMLElement {
 
       const input = this.querySelector("input");
       input.value = highlightType;
+      if (this.hasAttribute("checked")) {
+        input.checked = true;
+      }
 
-      input.addEventListener("change", (e) => {
-        const logViewer = document.getElementById("log-viewer");
-        const value = e.target.Value;
-        if (e.target.checked) {
-          logViewer.classList.add(labelClass);
-        } else {
-          logViewer.classList.remove(labelClass);
-        }
-      });
+      input.addEventListener("change", this.onChange);
+      this.onChange({ target: input });
+    }
+  }
+
+  onChange(e) {
+    const logViewer = document.getElementById("log-viewer");
+    const value = e.target.value;
+    const labelClass = `enable-highlight-${value}`;
+    if (e.target.checked) {
+      logViewer.classList.add(labelClass);
+    } else {
+      logViewer.classList.remove(labelClass);
     }
   }
 }
@@ -51,6 +58,10 @@ class LogViewer {
   createLogStylesheet() {
     const logStylesheet = new CSSStyleSheet();
     const styles = {
+      all: {
+        "background-color": "unset",
+        color: "unset",
+      },
       datetime: {
         "background-color": "rgba(78, 201, 176, 0.2)",
         color: "#4ec9b0",
@@ -188,31 +199,144 @@ class LogViewer {
       });
     });
 
-    // Sort highlights by start position
-    allHighlights.sort((a, b) => a.start - b.start);
+    // Wrap every line with a span with class `highlight-all`.
+    {
+      let currentContent = this.currentContent;
+      let start = 0;
+      for (
+        let end = currentContent.indexOf("\n", start) + 1;
+        end > 0;
+        start = end, end = currentContent.indexOf("\n", start) + 1
+      ) {
+        allHighlights.push({
+          end,
+          start,
+          type: "all",
+        });
+      }
+      let end = currentContent.length;
+      if (start < end) {
+        allHighlights.push({
+          end: currentContent.length,
+          start,
+          type: "all",
+        });
+      }
+    }
 
-    // Apply highlights to content
+    // Sort highlights by start position.
+    // If equal, take the longer span first.
+    allHighlights.sort((a, b) =>
+      a.start - b.start != 0 ? a.start - b.start : b.end - a.end,
+    );
+
+    const indexChanges = {};
+    {
+      const activeClasses = new Set();
+      for (const { start, end, type } of allHighlights) {
+        if (start == end) {
+          continue;
+        }
+
+        if (!indexChanges[start])
+          indexChanges[start] = {
+            start: [],
+            end: [],
+          };
+        indexChanges[start].start.push(type);
+
+        if (!indexChanges[end])
+          indexChanges[end] = {
+            start: [],
+            end: [],
+          };
+        indexChanges[end].end.push(type);
+      }
+    }
+
+    const spanClasses = {};
+    {
+      const currentContent = this.currentContent;
+      const contentLength = currentContent.length;
+
+      const activeClasses = new Set();
+      const lineClasses = new Set();
+      let lineStartIndex = 0;
+      let prevIndex = undefined;
+      for (const [nextIndex, indexChange] of Object.entries(
+        indexChanges,
+      )) {
+        if (
+          nextIndex > 0 &&
+          (nextIndex >= contentLength ||
+            currentContent[nextIndex - 1] == "\n")
+        ) {
+          spanClasses[lineStartIndex].lineClasses =
+            Array.from(lineClasses);
+          lineClasses.clear();
+
+          if (prevIndex !== undefined) {
+            spanClasses[prevIndex].lineEnds = true;
+          }
+
+          lineStartIndex = nextIndex;
+        }
+
+        for (const type of indexChange.end) {
+          activeClasses.delete(type);
+        }
+        for (const type of indexChange.start) {
+          activeClasses.add(type);
+        }
+
+        for (const type of activeClasses) {
+          lineClasses.add(type);
+        }
+
+        spanClasses[nextIndex] = {
+          classes: Array.from(activeClasses),
+        };
+
+        if (prevIndex !== undefined) {
+          spanClasses[prevIndex].end = nextIndex;
+        }
+        prevIndex = nextIndex;
+      }
+    }
+
     let result = "";
-    let lastIndex = 0;
+    {
+      let currentContent = this.currentContent;
+      for (const [nextIndex, thisSpanClasses] of Object.entries(
+        spanClasses,
+      )) {
+        if (
+          thisSpanClasses.lineClasses !== undefined &&
+          thisSpanClasses.lineClasses.length > 0
+        ) {
+          let classString =
+            thisSpanClasses.lineClasses.join(" line-highlight-");
+          result += `<span class="line-highlight-${classString}">`;
+        }
 
-    allHighlights.forEach((highlight) => {
-      // Add content before highlight
-      result += this.escapeHtml(
-        this.currentContent.slice(lastIndex, highlight.start),
-      );
+        if (thisSpanClasses.classes.length > 0) {
+          let classString = thisSpanClasses.classes.join(" highlight-");
+          result += `<span class="highlight-${classString}">`;
+        }
 
-      // Add highlighted content
-      result += `<span class="highlight-${highlight.type}">`;
-      result += this.escapeHtml(
-        this.currentContent.slice(highlight.start, highlight.end),
-      );
-      result += "</span>";
+        result += this.escapeHtml(
+          this.currentContent.slice(nextIndex, thisSpanClasses.end),
+        );
 
-      lastIndex = highlight.end;
-    });
+        if (thisSpanClasses.classes.length > 0) {
+          result += "</span>";
+        }
 
-    // Add remaining content
-    result += this.escapeHtml(this.currentContent.slice(lastIndex));
+        if (thisSpanClasses.lineEnds) {
+          result += "</span>";
+        }
+      }
+    }
 
     this.logViewer.innerHTML = result;
   }

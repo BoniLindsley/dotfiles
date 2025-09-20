@@ -32,7 +32,6 @@ if typing.TYPE_CHECKING:
         "Highlight",
         {
             "end": int,
-            "line": int,
             "start": int,
         },
     )
@@ -44,6 +43,7 @@ def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
     """Generate highlight patterns for the log content"""
     lines = content.split(b"\n")
     highlights = {
+        "all": [],
         "datetime": [],
         "error": [],
         "warning": [],
@@ -71,7 +71,7 @@ def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
     }
 
     char_offset = 0
-    for line_num, line in enumerate(lines):
+    for line in lines:
         line_start = char_offset
 
         # Find datetime patterns
@@ -81,7 +81,6 @@ def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
                     {
                         "start": line_start + match.start(),
                         "end": line_start + match.end(),
-                        "line": line_num,
                     }
                 )
 
@@ -92,7 +91,6 @@ def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
                     {
                         "start": line_start + match.start(),
                         "end": line_start + match.end(),
-                        "line": line_num,
                     }
                 )
 
