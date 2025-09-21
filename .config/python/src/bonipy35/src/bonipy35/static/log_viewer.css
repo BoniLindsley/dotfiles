@@ -90,60 +90,37 @@ body {
   word-wrap: break-word;
 }
 
-.line-highlight-all {
-  display: none;
-}
-.enable-highlight-all .line-highlight-all {
-  display: unset;
-}
 .enable-highlight-datetime .highlight-datetime {
   background-color: rgba(78, 201, 176, 0.2);
   /*  color: #4ec9b0; */
-}
-.enable-highlight-datetime .line-highlight-datetime {
-  display: unset;
 }
 .enable-highlight-error .highlight-error {
   background-color: rgba(244, 71, 71, 0.2);
   /*  color: #f44747; */
 }
-.enable-highlight-error .line-highlight-error {
-  display: unset;
-}
 .enable-highlight-warning .highlight-warning {
   background-color: rgba(255, 204, 2, 0.2);
   /*  color: #ffcc02; */
-}
-.enable-highlight-warning .line-highlight-warning {
-  display: unset;
 }
 .enable-highlight-info .highlight-info {
   background-color: rgba(55, 148, 255, 0.2);
   /*  color: #3794ff; */
 }
-.enable-highlight-info .line-highlight-info {
-  display: unset;
-}
 .enable-highlight-debug .highlight-debug {
   background-color: rgba(181, 206, 168, 0.2);
   /*  color: #b5cea8; */
-}
-.enable-highlight-debug .line-highlight-debug {
-  display: unset;
 }
 .enable-highlight-stderr .highlight-stderr {
   background-color: rgba(255, 107, 107, 0.2);
   /*  color: #ff6b6b; */
 }
-.enable-highlight-stderr .line-highlight-stderr {
-  display: unset;
-}
 .enable-highlight-fatal .highlight-fatal {
   background-color: rgba(255, 0, 102, 0.2);
   /*  color: #ff0066; */
 }
-.enable-highlight-fatal .line-highlight-fatal {
-  display: unset;
+
+.line-highlight-all {
+  display: none;
 }
 
 .status-bar {

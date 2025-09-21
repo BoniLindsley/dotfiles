@@ -53,57 +53,39 @@ class LogViewer {
     this.currentHighlights = {};
     this.initializeElements();
     this.bindEvents();
+    this.logStylesheet = new CSSStyleSheet();
+    this.updateLogStylesheet([
+      "all",
+      "datetime",
+      "error",
+      "warning",
+      "info",
+      "debug",
+      "stderr",
+      "fatal",
+    ]);
+    document.adoptedStyleSheets.push(this.logStylesheet);
   }
 
-  createLogStylesheet() {
-    const logStylesheet = new CSSStyleSheet();
-    const styles = {
-      all: {
-        "background-color": "unset",
-        color: "unset",
-      },
-      datetime: {
-        "background-color": "rgba(78, 201, 176, 0.2)",
-        color: "#4ec9b0",
-      },
-      error: {
-        "background-color": "rgba(244, 71, 71, 0.2)",
-        color: "#f44747",
-      },
-      warning: {
-        "background-color": "rgba(255, 204, 2, 0.2)",
-        color: "#ffcc02",
-      },
-      info: {
-        "background-color": "rgba(55, 148, 255, 0.2)",
-        color: "#3794ff",
-      },
-      debug: {
-        "background-color": "rgba(181, 206, 168, 0.2)",
-        color: "#b5cea8",
-      },
-      stderr: {
-        "background-color": "rgba(255, 107, 107, 0.2)",
-        color: "#ff6b6b",
-      },
-      fatal: {
-        "background-color": "rgba(255, 0, 102, 0.2)",
-        color: "#ff0066",
-      },
-    };
-    for (const [highlightType, ruleProperties] of Object.entries(
-      styles,
-    )) {
-      const spanClass = `highlight-${highlightType}`;
-      let styleString = `.enable-${spanClass} .${spanClass} {`;
-      for (const [name, value] of Object.entries(ruleProperties)) {
-        styleString += ` ${name}: ${value};`;
+  updateLogStylesheet(styleNames) {
+    const myStyleNames = styleNames.slice();
+    {
+      const item = "all";
+      const index = myStyleNames.indexOf(item);
+      if (index > -1) {
+        myStyleNames.splice(index, 1);
       }
-      styleString += " }";
-      console.log(styleString);
+      myStyleNames.splice(0, 0, item);
+    }
+
+    const logStylesheet = this.logStylesheet;
+    for (const highlightType of myStyleNames) {
+      const spanClass = `highlight-${highlightType}`;
+      let styleString = `.enable-${spanClass} .line-${spanClass} {`;
+      styleString += " display: unset";
+      styleString += " }\n";
       logStylesheet.insertRule(styleString);
     }
-    document.adoptedStyleSheets.push(this.createLogStylesheet());
   }
 
   initializeElements() {
@@ -116,6 +98,28 @@ class LogViewer {
     this.statusBar = document.getElementById("status-bar");
 
     this.sidebar.classList.toggle("hidden");
+
+    const highlightControls = document.getElementById(
+      "highlight-controls",
+    );
+    const types = [
+      "all",
+      "datetime",
+      "error",
+      "warning",
+      "info",
+      "debug",
+      "stderr",
+      "fatal",
+    ];
+    for (let type of types) {
+      const checkbox = document.createElement("highlight-checkbox");
+      checkbox.setAttribute("type", type);
+      if (type == "all") {
+        checkbox.setAttribute("checked", true);
+      }
+      highlightControls.appendChild(checkbox);
+    }
   }
 
   bindEvents() {
