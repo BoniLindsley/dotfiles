@@ -55,19 +55,19 @@ def generate_highlights(content: bytes) -> "dict[str, list[Highlight]]":
 
     # Regex patterns
     datetime_patterns = [
-        rb"\d{4}-\d{2}-\d{2}[\s\T]\d{2}:\d{2}:\d{2}",  # ISO format
+        rb"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}",  # ISO format
         rb"\d{2}/\d{2}/\d{4}\s\d{2}:\d{2}:\d{2}",  # US format
         rb"\d{2}-\d{2}-\d{4}\s\d{2}:\d{2}:\d{2}",  # EU format
         rb"\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}",  # Syslog format
     ]
 
     word_patterns = {
-        "error": rb"\b(?i)(error|err)\b",
-        "warning": rb"\b(?i)(warning|warn)\b",
-        "info": rb"\b(?i)(info|information)\b",
-        "debug": rb"\b(?i)(debug|dbg)\b",
-        "stderr": rb"\b(?i)(stderr)\b",
-        "fatal": rb"\b(?i)(fatal|critical|crit)\b",
+        "error": rb"(?i)\b(error|err)\b",
+        "warning": rb"(?i)\b(warning|warn)\b",
+        "info": rb"(?i)\b(info|information)\b",
+        "debug": rb"(?i)\b(debug|dbg)\b",
+        "stderr": rb"(?i)\b(stderr)\b",
+        "fatal": rb"(?i)\b(fatal|critical|crit)\b",
     }
 
     char_offset = 0
