@@ -12,17 +12,18 @@ import datetime
 import logging
 import typing
 
+# External dependencies.
+import vim  # pylint: disable=import-error
+
 # Internal modules.
-import bonipy.logging_ext
-import bonipy.taskmd
-import vim
+from . import data
 
 _logger = logging.getLogger(__name__)
 
 
 def end_clock() -> None:
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     new_parsed_line = parsed_document.end_first_clock()
     if not new_parsed_line:
         print("No clock has been started.")
@@ -33,7 +34,7 @@ def end_clock() -> None:
 
 def fix_clocks() -> None:
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     fixes = parsed_document.get_fix_clocks_diff()
     for line_number, new_clock_line in fixes:
         buffer[line_number - 1] = new_clock_line
@@ -41,7 +42,7 @@ def fix_clocks() -> None:
 
 def jump_to_started_clock() -> None:
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     started_clocks = list(parsed_document.get_started_clocks())
 
     if not started_clocks:
@@ -56,14 +57,14 @@ def jump_to_started_clock() -> None:
 
 def set_timezone() -> None:
     timezone_as_string = typing.cast(str, vim.eval("input('Timezone: ')"))
-    bonipy.taskmd.config.set_timezone(timezone_as_string)
+    data.config.set_timezone(timezone_as_string)
 
 
 def start_clock() -> None:
     buffer = vim.current.buffer
-    now = bonipy.taskmd.get_now()
+    now = data.get_now()
 
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     new_parsed_line = parsed_document.end_first_clock(now=now)
     if new_parsed_line:
         new_line_number = new_parsed_line.line_number
@@ -91,7 +92,7 @@ class TimesheetArgument(typing.TypedDict):
 timesheet_argument = {
     "date": datetime.date.today(),
     "days": 1,
-    "start": bonipy.taskmd.get_now(),
+    "start": data.get_now(),
 }  # type: TimesheetArgument
 
 
@@ -111,13 +112,11 @@ def write_agenda_to_qlist() -> None:
     end = start + datetime.timedelta(days=1)
 
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     parsed_document.bound_time_range(start=start, end=end)
     parsed_lines = parsed_document.parsed_lines
 
-    timestamp_lines = (
-        []
-    )  # type: list[tuple[datetime.datetime, bonipy.taskmd.ParsedLine]]
+    timestamp_lines = []  # type: list[tuple[datetime.datetime, data.ParsedLine]]
     total_duration = datetime.timedelta()
     for parsed_line in parsed_lines:
         clock = parsed_line.clock
@@ -176,10 +175,10 @@ def write_day_report_to_qlist() -> None:
     end = start + datetime.timedelta(days=1)
 
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     parsed_document.bound_time_range(start=start, end=end)
     parsed_document.refresh_durations()
-    summary_quicklist = bonipy.taskmd.get_summary_quicklist(parsed_document)
+    summary_quicklist = data.get_summary_quicklist(parsed_document)
 
     bufnr = vim.current.buffer.number
     quicklist_rows = [
@@ -211,10 +210,10 @@ def write_month_report_to_qlist() -> None:
     end = datetime.datetime(year=date.year, month=date.month + 1, day=1).astimezone()
 
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     parsed_document.bound_time_range(start=start, end=end)
     parsed_document.refresh_durations()
-    summary_quicklist = bonipy.taskmd.get_summary_quicklist(parsed_document)
+    summary_quicklist = data.get_summary_quicklist(parsed_document)
 
     bufnr = vim.current.buffer.number
     quicklist_rows = [
@@ -234,9 +233,9 @@ def write_month_report_to_qlist() -> None:
 
 def write_summary_to_qlist() -> None:
     buffer = vim.current.buffer
-    parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    parsed_document = data.ParsedDocument.parse(buffer)
     parsed_document.refresh_durations()
-    summary_quicklist = bonipy.taskmd.get_summary_quicklist(parsed_document)
+    summary_quicklist = data.get_summary_quicklist(parsed_document)
 
     bufnr = vim.current.buffer.number
     quicklist_rows = [
@@ -268,7 +267,7 @@ def write_timesheet_to_qlist() -> None:
     end = datetime.datetime(year=date.year, month=date.month + 1, day=1).astimezone()
 
     buffer = vim.current.buffer
-    buffer_parsed_document = bonipy.taskmd.ParsedDocument.parse(buffer)
+    buffer_parsed_document = data.ParsedDocument.parse(buffer)
 
     quicklist_rows = []  # type: list[QuicklistRow]
     bufnr = vim.current.buffer.number
@@ -279,7 +278,7 @@ def write_timesheet_to_qlist() -> None:
         parsed_document = copy.deepcopy(buffer_parsed_document)
         parsed_document.bound_time_range(start=day_start, end=day_end)
         parsed_document.refresh_durations()
-        summary_quicklist = bonipy.taskmd.get_summary_quicklist(parsed_document)
+        summary_quicklist = data.get_summary_quicklist(parsed_document)
 
         quicklist_rows.append(
             {

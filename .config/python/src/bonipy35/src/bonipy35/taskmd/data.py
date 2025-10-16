@@ -5,16 +5,14 @@
 # Need Python 3.5 support.
 # pylint: disable=too-many-arguments
 
-import argparse
+# Standard libraries.
 import datetime
 import logging
+import pathlib
 import re
-import sys
 import typing
-from typing import Generator, Iterator, List, Tuple, Union
 
-# Internal modules.
-from . import logging_ext
+from typing import Iterator, List, Tuple, Union
 
 _logger = logging.getLogger(__name__)
 
@@ -322,7 +320,7 @@ class ParsedDocument:
         for parsed_line in self.parsed_lines:
             clock = parsed_line.clock
             if clock is None:
-                return
+                continue
 
             clock.bound_time_range(start=start, end=end)
 
@@ -390,7 +388,7 @@ class ParsedDocument:
             yield parsed_line
 
     @classmethod
-    def parse(cls, lines: List[str]) -> "typing.Self":
+    def parse(cls, lines: Iterator[str]) -> "typing.Self":
         self = cls()
 
         is_inside_code_block = False
@@ -519,62 +517,20 @@ def get_summary_quicklist(
     return quicklist
 
 
-def read_lines(
-    *, buffer_size: Union[None, int] = None, source: typing.TextIO
-) -> Generator[str, None, None]:
+class ParsedProject:
+    def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.duration = datetime.timedelta()
+        self.parsed_documents = {}  # type: dict[pathlib.Path, ParsedDocument]
 
-    default_buffer_size = 4096
+    @classmethod
+    def parse(cls, paths: List[pathlib.Path]) -> "typing.Self":
+        self = cls()
 
-    if buffer_size is None:
-        buffer_size = default_buffer_size
-    if buffer_size <= 0:
-        return
+        parsed_documents = self.parsed_documents
+        for path in paths:
+            file_text = path.read_text(encoding="utf-8")
+            parsed_document = ParsedDocument.parse(file_text.splitlines())
+            parsed_documents[path] = parsed_document
 
-    newlines = source.newlines or "\n"
-    newlines_len_end = -len(newlines)
-    while True:
-        line = source.readline(buffer_size)
-        # Empty line if at EOF.
-        if not line:
-            return
-        if len(line) >= buffer_size:
-            raise BufferError(
-                "Line too long to fit in buffer of size {buffer_size}".format(
-                    buffer_size=buffer_size
-                )
-            )
-        # Line always has a trailing new line unless ending in EOF.
-        # Check line ending of source. Strip line ending before yielding line.
-        if line.endswith(newlines):
-            line = line[:newlines_len_end]
-        yield line
-
-
-def run(stdin: typing.TextIO, stdout: typing.TextIO) -> int:
-    parsed_document = ParsedDocument.parse(list(read_lines(source=stdin)))
-    parsed_document.refresh_durations()
-    quicklist_items = get_summary_quicklist(parsed_document)
-    for quicklist_item in quicklist_items:
-        print(quicklist_item.text, file=stdout)
-    return 0
-
-
-def main(argv: Union[None, List[str]] = None) -> int:
-    """Parse command line arguments and run corresponding functions."""
-
-    if argv is None:
-        argv = sys.argv
-
-    logging_ext.set_up_logging(logger=_logger)
-
-    parser = argparse.ArgumentParser()
-    logging_ext.add_verbose_flag(parser)
-    arguments = parser.parse_args(argv[1:])
-
-    logging_ext.set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
-
-    return run(stdin=sys.stdin, stdout=sys.stdout)
-
-
-if __name__ == "__main__":
-    sys.exit(main())
+        return self

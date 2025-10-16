@@ -8,4 +8,4 @@ if !has('python3')
   finish
 endif
 
-nmap <Plug>(Boni.Calendar) :call g:bonivim#taskmd#remap()<CR>
+nmap <Plug>(Boni.Calendar) :call g:bonipy35#taskmd#remap()<CR>

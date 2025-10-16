@@ -21,7 +21,7 @@ source = [
 ]
 
 [tool.mypy]
-mypy_path = "src:tests"
+mypy_path = "src:stubs:tests"
 show_error_codes = true
 strict = true
 
