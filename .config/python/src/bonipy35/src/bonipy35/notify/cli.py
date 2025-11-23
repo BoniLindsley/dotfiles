@@ -29,7 +29,7 @@ def gdbus_notify(  # pylint: disable=too-many-arguments
     body: Union[None, str] = None,
     actions: Union[None, str] = None,
     hints: Union[None, str] = None,
-    expire_timeout: Union[None, int] = None,
+    expire_timeout: Union[None, int] = None
 ) -> int:
     if replaces_id is None:
         replaces_id = 0  # New notification.
@@ -45,35 +45,30 @@ def gdbus_notify(  # pylint: disable=too-many-arguments
         expire_timeout = -1  # Use server settings.
 
     # Requires Debian package `libglib2.0-bin`.
-    try:
-        # Writes `(type, id}` to stdout. For example, `(uint32,6)`.
-        subprocess.run(
-            [
-                "gdbus",
-                "call",
-                "--session",
-                "--dest",
-                "org.freedesktop.Notifications",
-                "--object-path",
-                "/org/freedesktop/Notifications",
-                "--method",
-                "org.freedesktop.Notifications.Notify",
-                app_name,
-                str(replaces_id),
-                app_icon,
-                summary,
-                body,
-                actions,
-                hints,
-                str(expire_timeout),
-            ],
-            check=True,
-        )
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        raise
-    else:
-        return True
-    return False
+    # Writes `(type, id}` to stdout. For example, `(uint32,6)`.
+    subprocess.run(
+        [
+            "gdbus",
+            "call",
+            "--session",
+            "--dest",
+            "org.freedesktop.Notifications",
+            "--object-path",
+            "/org/freedesktop/Notifications",
+            "--method",
+            "org.freedesktop.Notifications.Notify",
+            app_name,
+            str(replaces_id),
+            app_icon,
+            summary,
+            body,
+            actions,
+            hints,
+            str(expire_timeout),
+        ],
+        check=True,
+    )
+    return True
 
 
 def send_freedesktop_notification(title: str, message: str) -> bool:
@@ -86,7 +81,7 @@ def send_freedesktop_notification(title: str, message: str) -> bool:
             expire_timeout=5000,
         )
     except (subprocess.CalledProcessError, FileNotFoundError):
-        raise
+        pass
     else:
         return True
     return False
