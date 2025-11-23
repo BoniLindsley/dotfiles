@@ -15,6 +15,7 @@ from typing import List
 from typing import Union
 
 # Internal modules.
+from .. import inspect_ext
 from .. import logging_ext
 
 _logger = logging.getLogger(__name__)
@@ -90,27 +91,9 @@ def send_freedesktop_notification(title: str, message: str) -> bool:
 def send_toast_notification(title: str, message: str) -> bool:
     _logger.log(5, "Using toast.")
     # Use PowerShell to create a Windows toast notification
-    ps_script = f"""
-    [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
-    [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null
-
-    $template = @"
-    <toast>
-        <visual>
-            <binding template="ToastText02">
-                <text id="1">{title}</text>
-                <text id="2">{message}</text>
-            </binding>
-        </visual>
-    </toast>
-"@
-
-    $xml = New-Object Windows.Data.Xml.Dom.XmlDocument
-    $xml.LoadXml($template)
-    $toast = [Windows.UI.Notifications.ToastNotification]::new($xml)
-    $notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier("Python")
-    $notifier.Show($toast)
-    """
+    module_directory = inspect_ext.get_module_directory(lambda: None)
+    ps_script = (module_directory / "toast.ps.fstring").read_text()
+    ps_script = ps_script.format(message=message, title=title)
     try:
         subprocess.run(
             ["powershell", "-ExecutionPolicy", "Bypass", "-Command", ps_script],
