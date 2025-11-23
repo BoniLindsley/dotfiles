@@ -37,9 +37,7 @@ def run(*, command: str, package: str, remaining_arguments: "list[str]") -> int:
             return 1
 
     remaining_arguments.insert(0, command)
-    submodule_main(remaining_arguments)
-
-    return 0
+    return submodule_main(remaining_arguments)  # type: ignore[no-any-return]
 
 
 def main(argv: "None | list[str]" = None) -> int:
@@ -50,7 +48,7 @@ def main(argv: "None | list[str]" = None) -> int:
 
     logging_ext.set_up_logging(logger=_logger)
 
-    parser = argparse.ArgumentParser(description="Entry point for speech commands.")
+    parser = argparse.ArgumentParser(description="Entry point for subcommands.")
     logging_ext.add_verbose_flag(parser)
     parser.add_argument("command", choices=("curses_ext", "logging_ext", "notify"))
     arguments, remaining_arguments = parser.parse_known_args(argv[1:])
