@@ -137,6 +137,10 @@ parse_arguments() {
       ((++kwargs[verbose]))
       argparse__remove_single_option || return
       ;;
+    --)
+      args+=("$@")
+      break
+      ;;
     --*)
       log_error "Unexpected option '${current_argument}'" || return
       return 1
@@ -169,7 +173,6 @@ main() {
   script_directory="$(dirname "${script_path}")" || return
 
   local LOGGING__LOG_NAME="${script_name}"
-  source "${script_directory}/logging.bash" || return
 
   declare -A kwargs
   declare -a args
