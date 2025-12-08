@@ -1,12 +1,14 @@
-# This is a wrapper package.
-# pylint: disable=unused-wildcard-import
-# pylint: disable=wildcard-import
-# pylint: disable=wrong-import-position
+#!/usr/bin/env python3
 
-import platform
+# Standard libraries.
+import importlib
+import re
+import sys
 
-required_version = (3, 5)
-if tuple(map(int, platform.python_version_tuple()[:2])) < required_version:
-    raise ImportError(__name__ + " requires Python " + str(required_version))
+sys.modules[__name__] = importlib.import_module(
+    re.sub("^bonipy.", "bonipy35.", __name__)
+)
 
-from bonipy35.result import *
+del importlib
+del re
+del sys
