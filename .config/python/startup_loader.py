@@ -18,6 +18,8 @@ _logger.debug("Using packages in %s", site_path)
 sys.path.insert(0, str(site_path))
 
 for package_path in sorted((startup_path.parent / "src").iterdir()):
+    if package_path.name.startswith("."):
+        continue
     for sys_path in (package_path / "src", package_path):
         if sys_path.is_dir():
             _logger.debug("Using packages in %s", sys_path)
