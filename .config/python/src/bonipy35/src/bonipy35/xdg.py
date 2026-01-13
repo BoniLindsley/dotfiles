@@ -3,11 +3,12 @@
 # Standard libraries.
 import functools
 import logging
-import os
 import pathlib
 import typing
 
-from typing import Union
+# Internal modules.
+from . import os_ext
+
 
 _T = typing.TypeVar("_T")
 
@@ -18,13 +19,6 @@ def ensure_directory_exists(directory: pathlib.Path) -> None:
     if directory.is_dir():
         return
     directory.mkdir(parents=True, exist_ok=True)
-
-
-def get_environ_path(name: str) -> Union[None, pathlib.Path]:
-    source = os.environ.get(name)
-    if source is None:
-        return source
-    return pathlib.Path(source)
 
 
 def nullary_cache(function: typing.Callable[[], _T]) -> typing.Callable[[], _T]:
@@ -44,7 +38,7 @@ def nullary_cache(function: typing.Callable[[], _T]) -> typing.Callable[[], _T]:
 
 @nullary_cache
 def home() -> pathlib.Path:
-    path = get_environ_path("HOME")
+    path = os_ext.get_environ_path("HOME")
     if path is None:
         path = pathlib.Path()
     return path
@@ -52,7 +46,7 @@ def home() -> pathlib.Path:
 
 @nullary_cache
 def config_home() -> pathlib.Path:
-    path = get_environ_path("XDG_CONFIG_HOME")
+    path = os_ext.get_environ_path("XDG_CONFIG_HOME")
     if path is None:
         path = home() / ".config"
     return path
@@ -60,7 +54,7 @@ def config_home() -> pathlib.Path:
 
 @nullary_cache
 def data_home() -> pathlib.Path:
-    path = get_environ_path("XDG_DATA_HOME")
+    path = os_ext.get_environ_path("XDG_DATA_HOME")
     if path is None:
         path = home() / ".local" / "share"
     return path
@@ -68,7 +62,7 @@ def data_home() -> pathlib.Path:
 
 @nullary_cache
 def state_home() -> pathlib.Path:
-    path = get_environ_path("XDG_STATE_HOME")
+    path = os_ext.get_environ_path("XDG_STATE_HOME")
     if path is None:
         path = home() / ".local" / "state"
     return path
