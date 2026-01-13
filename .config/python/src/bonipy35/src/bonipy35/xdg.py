@@ -7,6 +7,7 @@ import pathlib
 import typing
 
 # Internal modules.
+from . import functools_ext
 from . import os_ext
 
 
@@ -21,22 +22,8 @@ def ensure_directory_exists(directory: pathlib.Path) -> None:
     directory.mkdir(parents=True, exist_ok=True)
 
 
-def nullary_cache(function: typing.Callable[[], _T]) -> typing.Callable[[], _T]:
-    lookup = {}  # type: dict[None, _T]
 
-    @functools.wraps(function)
-    def wrapper() -> _T:
-        try:
-            return lookup[None]
-        except KeyError:
-            pass
-        result = lookup[None] = function()
-        return result
-
-    return wrapper
-
-
-@nullary_cache
+@functools_ext.nullary_cache
 def home() -> pathlib.Path:
     path = os_ext.get_environ_path("HOME")
     if path is None:
@@ -44,7 +31,7 @@ def home() -> pathlib.Path:
     return path
 
 
-@nullary_cache
+@functools_ext.nullary_cache
 def config_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_CONFIG_HOME")
     if path is None:
@@ -52,7 +39,7 @@ def config_home() -> pathlib.Path:
     return path
 
 
-@nullary_cache
+@functools_ext.nullary_cache
 def data_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_DATA_HOME")
     if path is None:
@@ -60,7 +47,7 @@ def data_home() -> pathlib.Path:
     return path
 
 
-@nullary_cache
+@functools_ext.nullary_cache
 def state_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_STATE_HOME")
     if path is None:
