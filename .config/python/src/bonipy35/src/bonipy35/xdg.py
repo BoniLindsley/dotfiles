@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
-import functools
 import logging
 import pathlib
 import typing
@@ -10,8 +9,6 @@ import typing
 from . import functools_ext
 from . import os_ext
 
-
-_T = typing.TypeVar("_T")
 
 _logger = logging.getLogger(__name__)
 
@@ -60,19 +57,19 @@ class AppDirectories:
         super().__init__(*args, **kwargs)
         self.app_name = app_name
 
-    @property
+    @functools_ext.cached_property
     def config_home(self) -> pathlib.Path:
         path = config_home() / self.app_name
         ensure_directory_exists(path)
         return path
 
-    @property
+    @functools_ext.cached_property
     def data_home(self) -> pathlib.Path:
         path = data_home() / self.app_name
         ensure_directory_exists(path)
         return path
 
-    @property
+    @functools_ext.cached_property
     def state_home(self) -> pathlib.Path:
         path = state_home() / self.app_name
         ensure_directory_exists(path)
