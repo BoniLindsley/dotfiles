@@ -64,8 +64,8 @@ def set_up_logging(*, logger: logging.Logger) -> None:
     logger.addHandler(handler)
 
 
-def add_verbose_flag(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
+def add_verbose_flag(argument_parser: argparse.ArgumentParser) -> None:
+    argument_parser.add_argument(
         "--verbose",
         "-v",
         action="count",
@@ -98,10 +98,10 @@ def main(argv: "None | list[str]" = None) -> int:
 
     set_up_logging(logger=_logger)
 
-    parser = argparse.ArgumentParser()
-    add_verbose_flag(parser)
-    parser.add_argument("message")
-    arguments = parser.parse_args(argv[1:])
+    argument_parser = argparse.ArgumentParser()
+    add_verbose_flag(argument_parser)
+    argument_parser.add_argument("message")
+    arguments = argument_parser.parse_args(argv[1:])
 
     set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
 
