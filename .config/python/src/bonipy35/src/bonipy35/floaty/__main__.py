@@ -7,7 +7,7 @@ import logging
 import sys
 
 # Internal modules.
-from . import logging_ext
+from .. import logging_ext
 
 _logger = logging.getLogger(__name__ if __name__ != "__main__" else __package__)
 
@@ -37,7 +37,9 @@ def run(*, command: str, package: str, remaining_arguments: "list[str]") -> int:
             return 1
 
     remaining_arguments.insert(0, command)
-    return submodule_main(remaining_arguments)  # type: ignore[no-any-return]
+    submodule_main(remaining_arguments)
+
+    return 0
 
 
 def main(argv: "None | list[str]" = None) -> int:
@@ -50,9 +52,7 @@ def main(argv: "None | list[str]" = None) -> int:
 
     parser = argparse.ArgumentParser(description="Entry point for subcommands.")
     logging_ext.add_verbose_flag(parser)
-    parser.add_argument(
-        "command", choices=("curses_ext", "floaty", "logging_ext", "notify")
-    )
+    parser.add_argument("command", choices=("gui",))
     arguments, remaining_arguments = parser.parse_known_args(argv[1:])
 
     logging_ext.set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)

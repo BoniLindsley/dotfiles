@@ -5,7 +5,6 @@ import argparse
 import logging
 import sys
 
-
 _logger = logging.getLogger(__name__)
 ALL = 1
 TRACE = 5
@@ -37,8 +36,15 @@ def set_logger_verbosity(
     verbosity = min(maximum_verbosity, verbosity)
     verbosity = max(minimum_verbosity, verbosity)
     logging_level = verbosity_map.get(verbosity, logging.WARNING)
-    logger.debug("Setting logging level to %d", logging_level)
+
+    effective_level = logger.getEffectiveLevel()
+    if effective_level < logging_level:
+        logger.debug("Logging level not set to %d.", logging_level)
+        logger.debug("Logging level already at %d.", effective_level)
+        return
+
     logger.setLevel(logging_level)
+    logger.debug("Logging level set to %d", logging_level)
 
 
 def set_up_logging(*, logger: logging.Logger) -> None:
