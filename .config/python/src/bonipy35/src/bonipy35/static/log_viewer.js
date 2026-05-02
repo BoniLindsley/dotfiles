@@ -168,7 +168,8 @@ class LogViewer {
       }
 
       this.currentContent = data.content;
-      this.currentHighlights = data.highlights;
+      // this.currentHighlights = data.highlights;
+      this.updateHighlights();
 
       this.displayLogContent();
 
@@ -359,6 +360,43 @@ class LogViewer {
     setTimeout(() => {
       this.statusBar.classList.remove("show");
     }, 3000);
+  }
+
+  updateHighlights() {
+    let regexMap = new Map([
+      ["error", new RegExp("\\b(?:error|err)\\b", "gi")],
+      [
+        "datetime",
+        new RegExp(
+          "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}" +
+            "|\\d{2}/\\d{2}/\\d{4}\\s\\d{2}:\\d{2}:\\d{2}" +
+            "|\\d{2}-\\d{2}-\\d{4}\\s\\d{2}:\\d{2}:\\d{2}" +
+            "|\\w{3}\\s+\\d{1,2}\\s+\\d{2}:\\d{2}:\\d{2}",
+          "gi",
+        ),
+      ],
+      ["warning", new RegExp("\\b(?:warning|warn)\\b", "gi")],
+      ["info", new RegExp("\\b(?:info|information)\\b", "gi")],
+      ["debug", new RegExp("\\b(?:debug|dbg)\\b", "gi")],
+      ["stderr", new RegExp("\\b(?:stderr)\\b", "gi")],
+      ["fatal", new RegExp("\\b(?:fatal|critical|crit)\\b", "gi")],
+    ]);
+    let highlights = { all: [] };
+    const content = this.currentContent;
+    for (const [name, regex] of regexMap) {
+      let highlight_set = [];
+      regex.lastIndex = 0;
+      let match;
+      while ((match = regex.exec(content)) !== null) {
+        highlight_set.push({
+          start: match.index,
+          end: match.index + match[0].length,
+        });
+        if (match[0].length === 0) regex.lastIndex++;
+      }
+      highlights[name] = highlight_set;
+    }
+    this.currentHighlights = highlights;
   }
 }
 
