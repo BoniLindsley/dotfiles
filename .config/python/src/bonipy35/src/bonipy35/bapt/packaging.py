@@ -147,14 +147,12 @@ class Configuration:
         build_directory: Union[None, pathlib.Path] = None,
         prefix: Union[None, pathlib.Path] = None,
         repository: Union[None, pathlib.Path] = None,
-        var: Union[None, pathlib.Path] = None,
         **kwargs: typing.Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self._build_directory = build_directory
         self._prefix = prefix
         self._repository = repository
-        self._var = var
 
     @property
     def build_directory(self) -> pathlib.Path:
