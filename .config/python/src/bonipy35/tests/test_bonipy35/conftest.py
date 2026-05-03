@@ -49,4 +49,8 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         subdirectory_name = ".".join(node.nodeid.split("::")[1:])
         input_directory = module_directory.parent / module_name / subdirectory_name
         assert input_directory.is_dir()
-        metafunc.parametrize(param_name, input_directory.iterdir())
+
+        def ids(path: pathlib.Path) -> str:
+            return path.name
+
+        metafunc.parametrize(param_name, input_directory.iterdir(), ids=ids)
