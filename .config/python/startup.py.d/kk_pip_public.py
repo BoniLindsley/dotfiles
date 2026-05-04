@@ -34,7 +34,9 @@ class SetupPython:
     @classmethod
     def get_app_list(cls) -> "list[str]":
         return [
-            "beancount < 3",  # Account bookkeeping.
+            "beancount",  # Account bookkeeping.
+            "beanquery",  # CLI interface for beancount.
+            "fava",  # Web interface for beancount.
             "mintotp",  # OTP CLI.
             "pelican[markdown]",  # Static website generator
             "pip",  # Python package manager
