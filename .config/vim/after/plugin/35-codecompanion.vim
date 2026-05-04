@@ -1,8 +1,3 @@
-" orgmode
-"
-" Upstream: https://github.com/nvim-orgmode/orgmode
-"
-
 if !has('nvim')
   finish
 endif
@@ -14,5 +9,9 @@ catch /^Vim\%((\a\+)\)\=:E5108:/
 endtry
 
 lua << EOF
-
-require('codecompanion').setup()
+codecompanion_setup = {
+  opts = {
+    log_level = "DEBUG", -- or "TRACE"
+  }
+}
+EOF

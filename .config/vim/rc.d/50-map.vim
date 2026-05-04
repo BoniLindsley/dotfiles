@@ -20,12 +20,14 @@ nnoremap <Plug>(Boni)<Tab> :call BoniMapWait("\<Plug>(Boni)")<CR>
 nmap <Plug>(Boni)A <Plug>(Boni.Application)
 nmap <Plug>(Boni)a <Plug>(Boni.Application)
 nnoremap <Plug>(Boni.Application)<F1> :echo
- \ 'application: (c)alendar (g)it (s)peech (t)erminal'<CR>
+ \ 'application: (a)i (c)alendar (g)it (s)peech (t)erminal'<CR>
 nnoremap <Plug>(Boni.Application)<Tab>
   \ :call BoniMapWait("\<Plug>(Boni.Application)")<CR>
+nmap <Plug>(Boni.Application)A <Plug>(Boni.CodeCompanion)
 nmap <Plug>(Boni.Application)C <Plug>(Boni.Calendar)
 nmap <Plug>(Boni.Application)G <Plug>(Boni.Fugitive)
 nmap <Plug>(Boni.Application)T <Plug>(Boni.Terminal)
+nmap <Plug>(Boni.Application)a <Plug>(Boni.Application)A<Space>
 nmap <Plug>(Boni.Application)c <Plug>(Boni.Application)C<Space>
 nmap <Plug>(Boni.Application)g <Plug>(Boni.Application)G<Space>
 nmap <Plug>(Boni.Application)s :call g:boni#speech#init()<CR>
