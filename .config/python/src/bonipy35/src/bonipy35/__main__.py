@@ -51,7 +51,8 @@ def main(argv: "None | list[str]" = None) -> int:
     parser = argparse.ArgumentParser(description="Entry point for subcommands.")
     logging_ext.add_verbose_flag(parser)
     parser.add_argument(
-        "command", choices=("curses_ext", "floaty", "logging_ext", "notify")
+        "command",
+        choices=("curses_ext", "floaty", "log_viewer", "logging_ext", "notify"),
     )
     arguments, remaining_arguments = parser.parse_known_args(argv[1:])
 
