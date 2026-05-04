@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 
+# Python 3.5 does not have f-strings.
+# pylint: disable=consider-using-f-string
+
 # Standard libraries.
 import argparse
 import datetime
 import logging
+import math
 import sys
 import tkinter
 import tkinter.font
@@ -13,18 +17,21 @@ from typing import Dict, List, Union
 
 # Internal libraries.
 from .. import logging_ext
+from ..logging_ext import TRACE
 
 _logger = logging.getLogger(__name__)
 
 
-def get_font_height(size: int, *, size_to_height_cache: Dict[int, int]) -> int:
+def get_font_height(
+    size: int, *, size_to_height_cache: Dict[int, int]
+) -> int:
     height = size_to_height_cache.get(size)
     if height is not None:
-        _logger.log(5, "Font size %s has height %s.", size, height)
+        _logger.log(TRACE, "Font size %s has height %s.", size, height)
         return height
     height = tkinter.font.Font(size=size).metrics()["linespace"]
     size_to_height_cache[size] = height
-    _logger.log(5, "Font size %s has height %s. (New.)", size, height)
+    _logger.log(TRACE, "Font size %s has height %s. (New.)", size, height)
     return height
 
 
@@ -98,7 +105,11 @@ class ClockLabel(tkinter.Label):
         self.after_idle(self.update_clock)
 
     def resize(
-        self, *, font_size_to_height_cache: Dict[int, int], height: int, width: int
+        self,
+        *,
+        font_size_to_height_cache: Dict[int, int],
+        height: int,
+        width: int
     ) -> None:
         # Try to ensure the whole label fits inside the frame.
         label_font = tkinter.font.Font(font=self["font"])
@@ -115,28 +126,32 @@ class ClockLabel(tkinter.Label):
             old_height,
         )
 
+        # Do not change font if the current height is close enough.
         max_height = old_height * width // old_width
         new_height = max(1, min(max_height, height))
-        if not new_height - 8 < old_height < new_height:
-            new_font_size = get_maximum_font_size(
-                new_height,
-                size_to_height_cache=font_size_to_height_cache,
-            )
-            label_font.config(size=new_font_size)
-            self.config(font=label_font)
-            _logger.log(
-                5,
-                "Resizing clock to font size %s for height %s.",
-                new_font_size,
-                font_size_to_height_cache[new_font_size],
-            )
+        resize_threshold = 8
+        if new_height - resize_threshold < old_height < new_height:
+            return
+
+        new_font_size = get_maximum_font_size(
+            new_height,
+            size_to_height_cache=font_size_to_height_cache,
+        )
+        label_font.config(size=new_font_size)
+        self.config(font=label_font)
+        _logger.log(
+            5,
+            "Resizing clock to font size %s for height %s.",
+            new_font_size,
+            font_size_to_height_cache[new_font_size],
+        )
 
     def update_clock(self) -> None:
-        _logger.log(5, "Updating clock.")
+        _logger.log(TRACE, "Updating clock.")
         now = datetime.datetime.now()
         new_text = now.time().strftime("%H:%M")
         self.config(text=new_text)
-        _logger.log(5, "Updating clock to %s.", new_text)
+        _logger.log(TRACE, "Updating clock to %s.", new_text)
 
         next_minute = now.replace(second=0) + datetime.timedelta(minutes=1)
         new_update = next_minute - now
@@ -157,8 +172,7 @@ class WrappingFrame(tkinter.Frame):
         clock_label = self.clock_label = ClockLabel(self)
         clock_label.pack(expand=True)
 
-        self.font_size_to_height_cache = {1: 2}
-        self.font_size_to_height_cache.clear()
+        self.font_size_to_height_cache = {}  # type: Dict[int, int]
 
         self.bind("<Configure>", self.on_configure)
 
@@ -179,6 +193,137 @@ class WrappingFrame(tkinter.Frame):
         )
 
 
+class Timer:
+    def __init__(
+        self,
+        *args: typing.Any,
+        duration: datetime.timedelta,
+        **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.duration = duration
+        self.last_active_update_time = (
+            None
+        )  # type: Union[None, datetime.datetime]
+        self.remaining = self.duration
+
+    def is_active(self) -> bool:
+        return self.last_active_update_time is not None
+
+    def pause(self) -> None:
+        self.update()
+        self.last_active_update_time = None
+
+    def reset(self, *, now: Union[None, datetime.datetime] = None) -> None:
+        if now is None:
+            now = datetime.datetime.now()
+
+        self.remaining = self.duration
+
+    def resume(self, *, now: Union[None, datetime.datetime] = None) -> None:
+        if now is None:
+            now = datetime.datetime.now()
+
+        self.last_active_update_time = now
+        self.update(now=now)
+
+    def update(self, *, now: Union[None, datetime.datetime] = None) -> None:
+        last_active_update_time = self.last_active_update_time
+        if last_active_update_time is None:
+            return
+
+        if now is None:
+            now = datetime.datetime.now()
+
+        step_duration = now - last_active_update_time
+        zero_duration = datetime.timedelta()
+        self.remaining = max(self.remaining - step_duration, zero_duration)
+
+        if self.remaining > zero_duration:
+            self.last_active_update_time = now
+        else:
+            self.last_active_update_time = None
+
+
+class TimerFrame(tkinter.Frame):
+    def __init__(
+        self,
+        *args: typing.Any,
+        duration: datetime.timedelta,
+        **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self.timer = Timer(duration=duration)
+
+        # display label
+        self.time_label = tkinter.Label(self, font=("Helvetica", 24))
+        self.time_label.pack(pady=10)
+
+        # control buttons
+        btn_frame = tkinter.Frame(self)
+        btn_frame.pack()
+
+        self.pause_btn = tkinter.Button(
+            btn_frame, text="Resume", command=self.toggle_pause
+        )
+        self.pause_btn.grid(row=0, column=1, padx=2)
+
+        self.reset_btn = tkinter.Button(
+            btn_frame, text="Reset", command=self.reset
+        )
+        self.reset_btn.grid(row=0, column=2, padx=2)
+
+        self.after_idle(self.update_display)
+
+    def pause(self) -> None:
+        self.timer.pause()
+        self.update_display()
+
+    def reset(self) -> None:
+        self.timer.reset()
+        self.update_display()
+
+    def resume(self) -> None:
+        now = datetime.datetime.now()
+        self.timer.resume(now=now)
+        self.step(now=now, repeat=True)
+
+    def step(
+        self,
+        *,
+        now: Union[None, datetime.datetime] = None,
+        repeat: Union[None, bool] = None
+    ) -> None:
+        timer = self.timer
+        timer.update(now=now)
+        self.update_display()
+
+        if repeat is None:
+            repeat = timer.is_active()
+
+        if repeat:
+            wait_seconds = timer.remaining % datetime.timedelta(seconds=1)
+            wait_time_ms = int(wait_seconds.total_seconds() * 1000)
+            self.after(wait_time_ms, self.step)
+
+    def toggle_pause(self) -> None:
+        if self.timer.is_active():
+            self.pause()
+        else:
+            self.resume()
+
+    def update_display(self) -> None:
+        timer = self.timer
+        seconds = math.ceil(timer.remaining.total_seconds())
+        text = "{:02d}".format(seconds)
+        self.time_label.config(text=text)
+
+        if timer.is_active():
+            self.pause_btn.config(text="Pause")
+        else:
+            self.pause_btn.config(text="Resume")
+
+
 def run() -> int:
     root = tkinter.Tk()
     root.attributes("-topmost", "1")
@@ -187,8 +332,10 @@ def run() -> int:
 
     wrapping_frame = WrappingFrame(root)
     wrapping_frame.pack(expand=True, fill=tkinter.BOTH)
+    timer_frame = TimerFrame(duration=datetime.timedelta(seconds=30))
+    timer_frame.pack(expand=True, fill=tkinter.BOTH)
 
-    _logger.log(5, "Starting tkinter main loop.")
+    _logger.log(TRACE, "Starting tkinter main loop.")
     root.tk.mainloop()
 
     return 0
@@ -206,7 +353,9 @@ def main(argv: Union[None, List[str]] = None) -> int:
     logging_ext.add_verbose_flag(argument_parser)
     arguments = argument_parser.parse_args(argv[1:])
 
-    logging_ext.set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
+    logging_ext.set_logger_verbosity(
+        logger=_logger, verbosity=arguments.verbosity
+    )
 
     return run()
 
