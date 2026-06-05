@@ -41,7 +41,11 @@ RUN \
 
 # ################################################################
 # ### Set up directories to be mounted into.
-RUN mkdir -p '/home/dev/.cache' '/home/dev/.local' workspace
+RUN mkdir -p \
+  '/home/dev/.cache' \
+  '/home/dev/.config/kilo' \
+  '/home/dev/.local/share/kilo' \
+  workspace
 WORKDIR workspace
 ENTRYPOINT ["kilo"]
 CMD []

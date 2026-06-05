@@ -8,8 +8,8 @@ __help() {
 Usage: "${script_name}" [--docker-options ... --] [--kilo-options]
 Launch Kilo inside Docker.
 
-If no arguments are given, defaults to `--tty --`.
-If arguments are given, `--tty` is excluded by default.
+If no arguments are given, defaults to '--tty --'.
+If arguments are given, '--tty' is excluded by default.
 
 Example:
   "${script_name}"                               # Start TUI.
@@ -31,21 +31,29 @@ main() {
 
   declare docker_home='/home/dev'
   declare gid
-  gid="$(id -g)"
+  gid="$(id -g)" || return
+
+  declare kilo_auth='.local/share/kilo'
+  mkdir -p "${HOME}/${kilo_auth}" || return
+
+  declare kilo_config='.config/kilo'
+  mkdir -p "${HOME}/${kilo_config}" || return
 
   declare -a docker_command=(
     docker
     run
     --env TERM
     --interactive
-    --mount "type=bind,src=${HOME}/.config/kilo/kilo.json,dst=${docker_home}/.config/kilo/kilo.json"
-    --mount "type=bind,src=${PWD},dst=${docker_home}/workspace"
+    --mount "type=bind,src=${HOME}/${kilo_auth},dst=${docker_home}/${kilo_auth}"
+    --mount "type=bind,src=${HOME}/${kilo_config},dst=${docker_home}/${kilo_config}"
+    --mount "type=bind,src=${PWD},dst=${PWD}"
     --mount "type=volume,src=${script_directory_name}--cache,dst=${docker_home}/.cache"
     --mount "type=volume,src=${script_directory_name}--local,dst=${docker_home}/.local"
     --name "${script_directory_name}"
     --network host
     --rm
     --user "${UID}:${gid}"
+    --workdir "${PWD}"
   )
 
   declare -a argv=("$@")
