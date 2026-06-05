@@ -1,0 +1,87 @@
+# aider
+.aider.chat.history.md
+.aider.input.history
+.aider.tags.cache.v4/
+
+# Build and install prefix-es
+.build-*-debug/
+.build-*-release/
+.build-base-*-debug/
+.build-base-*-release/
+.cmake-build/
+.install-*-debug/
+.install-*-release/
+build
+build-boni-pdflatex/
+build-latexmk/
+cmake-build-Release
+install
+
+# Clangd language server for code completion.
+.clangd/
+
+# git-issue data directory
+.issues/
+
+# Godot cache directory
+.import/
+
+# ImGui user data
+imgui.ini
+imgui.log
+
+# PyDitz files - data is stored in `.ditz-issues` directory.
+.ditz-cache
+# Config file is per-user and should not commited.
+.ditz-config
+
+# Python
+__pycache__
+# Python Sphinx build directory.
+/docs/_build
+*.egg-info/
+.coverage
+.mypy_cache/
+.tox/
+build/
+dist/
+
+# Taskwarrior and Timewarrior files.
+.task/
+.taskrc
+.timewarrior/
+
+# Vim swap file
+*.swp
+
+# Visual Studio Code data.
+.vscode/
+
+# YouCompleteMe config file.
+compile_commands.json
+
+# LaTeX
+*.aux
+*-blx.bib
+*.bbl
+*.blg
+*.glsdefs
+*.fdb_latexmk
+*.fls
+*.idx
+*.ilg
+*.ind
+*.ist
+*.loc
+*.log
+*.out
+*.pdf
+*.run.xml
+*.sbl
+*.soc
+*.synctex.gz
+*.symbols-glo
+*.toc
+
+# vcpkg defaults
+vcpkg_installed/
