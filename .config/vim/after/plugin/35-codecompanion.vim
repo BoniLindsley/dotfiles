@@ -12,6 +12,10 @@ lua << EOF
 codecompanion_setup = {
   adapters = {
     acp = {
+      ["kilocode"] = function()
+        return require("codecompanion.adapters").extend("kilocode", {
+        })
+      end,
       opts = {
         show_presets = false,
       },
@@ -40,6 +44,9 @@ codecompanion_setup = {
   },
   interactions = {
     chat = {
+      adapter = "kilocode",
+    },
+    inline = {
       adapter = "openrouter_xxxx",
     },
   },
