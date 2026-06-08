@@ -33,6 +33,9 @@ main() {
   declare gid
   gid="$(id -g)" || return
 
+  declare agents_dir='.agents'
+  mkdir -p "${HOME}/${agents_dir}" || return
+
   declare kilo_auth='.local/share/kilo'
   mkdir -p "${HOME}/${kilo_auth}" || return
 
@@ -44,6 +47,7 @@ main() {
     run
     --env TERM
     --interactive
+    --mount "type=bind,src=${HOME}/${agents_dir},dst=${docker_home}/${agents_dir}"
     --mount "type=bind,src=${HOME}/${kilo_auth},dst=${docker_home}/${kilo_auth}"
     --mount "type=bind,src=${HOME}/${kilo_config},dst=${docker_home}/${kilo_config}"
     --mount "type=bind,src=${PWD},dst=${PWD}"

@@ -42,6 +42,7 @@ RUN \
 # ################################################################
 # ### Set up directories to be mounted into.
 RUN mkdir -p \
+  '/home/dev/.agents' \
   '/home/dev/.cache' \
   '/home/dev/.config/kilo' \
   '/home/dev/.local/share/kilo' \
