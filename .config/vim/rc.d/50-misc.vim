@@ -70,7 +70,7 @@ set nofoldenable
 if !has('win32')
   "set grepprg='grep -n '
   let &grepprg = 'grep '
-  let &grepprg .= '--color=auto '
+  let &grepprg .= '--color=never '
   let &grepprg .= '--exclude-dir=.git '
   let &grepprg .= '--exclude-dir=.mypy_cache '
   let &grepprg .= '--exclude-dir=.pytest_cache '
@@ -82,6 +82,10 @@ if !has('win32')
   let &grepprg .= '--line-number '
   let &grepprg .= '--recursive '
   let &grepprg .= '-I '
+
+  if index(split(&grepformat, ','), '%f:%l:%m') == -1
+    let &grepformat .= ',%f:%l:%m'
+  endif
 endif
 
 " Allow unsaved buffers to be hidden.
