@@ -121,3 +121,7 @@ Plug 'jamessan/vim-gnupg'
 
 " New color theme. Better terminal / GUI dual support.
 Plug 'https://github.com/junegunn/seoul256.vim.git'
+
+" Mark command for highlighting multiple searches.
+Plug 'https://github.com/inkarkat/vim-ingo-library.git'
+Plug 'https://github.com/inkarkat/vim-mark.git'
