@@ -13,6 +13,9 @@ set nobeep
 #set ding
 set noding
 
+set histdup='erase'
+set history=1000
+
 # Provide more information in shell prompt.
 #
 # ```
@@ -24,3 +27,7 @@ set prompt='[%Y-%W-%D %P] [$?=%?] [%N@%M:%/]\n%# '
 # Make bell visible (possibly instead of audible if nobeep).
 #set novisiblebell
 set visiblebell
+
+# If freezing on logout,
+# try removing `${HOME}/.history.lock` if it exists.
+set savehist=(1000 merge lock)
