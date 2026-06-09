@@ -1,6 +1,8 @@
 ---
 name: python-style-guide
-description: General rules for coding Python
+description: >
+  Applies personal preferred Python coding standards to all
+  Python code generation, modification and review tasks.
 ---
 
 # Compatibility with Older Python Versions
