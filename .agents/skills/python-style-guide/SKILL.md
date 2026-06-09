@@ -1,9 +1,12 @@
 ---
 name: python-style-guide
 description: >
-  Applies personal preferred Python coding standards to all
-  Python code generation, modification and review tasks.
+  Describes personal preferred Python coding style
+  for Python code generation, modification and review tasks.
 ---
+
+This skill is passive, to be applied in future requests,
+and no immeidate action is expected from loaded.
 
 # Compatibility with Older Python Versions
 
