@@ -6,7 +6,7 @@ description: >
 ---
 
 This skill is passive, to be applied in future requests,
-and no immeidate action is expected from loaded.
+and no immediate action is expected from loaded.
 
 # Compatibility with Older Python Versions
 
