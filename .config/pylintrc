@@ -24,7 +24,7 @@ good-names =
   showEvent,
 
 [FORMAT]
-max-line-length = 88
+max-line-length = 78
 
 [MESSAGES CONTROL]
 disable =
