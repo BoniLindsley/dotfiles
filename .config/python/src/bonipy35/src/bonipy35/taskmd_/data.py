@@ -2,7 +2,6 @@
 
 # Need Python 3.5 support.
 # pylint: disable=consider-using-f-string
-# Need Python 3.5 support.
 # pylint: disable=too-many-arguments
 
 # Standard libraries.
@@ -12,7 +11,7 @@ import pathlib
 import re
 import typing
 
-from typing import Iterator, List, Tuple, Union
+from typing import Iterable, List, Tuple, Union
 
 _logger = logging.getLogger(__name__)
 
@@ -70,9 +69,9 @@ class Headline:
         r"(\s+(?P<keyword>DONE|TODO))?"
         r"(\s+(\[#(?P<priority>.)\]))?"
         r"(\s+(?P<comment>COMMENT))?"
-        r"(\s+(?P<title>.+?))?"
-        r"(\s+(?P<tags>:[\w@:]+:))?"
-        r"\s*$"
+        r"(\s+(?P<title>.*?))?"
+        r"(\s+(?P<tags>:([\w@]+:)+))?"
+        r"$"
     )
 
     def __init__(
@@ -120,30 +119,35 @@ class Headline:
         return self
 
     def to_string(self) -> str:
-        tags_as_string = None
         tags = self.tags
+        # Implementation decision.
+        # 1. tags should either be None or a non-empty list.
+        #    Empty list would mean `::` as tag list,
+        #    but that is not parsed as a tag.
+        # 2. If list is indeed empty, assume it should instead be None.
+        if tags is not None:
+            tags = list(filter(None, tags))
+        if not tags:
+            tags = None
         if tags:
-            tags_as_string = ":".join(filter(None, tags))
-        if tags_as_string:
-            tags_as_string = ":" + tags_as_string + ":"
+            tags.insert(0, "")
+            tags.append("")
+        tags_as_string = ":".join(tags) if tags else None
+        del tags
 
         priority = self.priority
         line_parts = list(
-            filter(
-                None,
-                (
-                    "#" * self.level,
-                    self.keyword,
-                    "[#" + priority + "]" if priority else None,
-                    "COMMENT" if self.comment else None,
-                    self.title,
-                    tags_as_string,
-                ),
+            part
+            for part in (
+                "#" * self.level,
+                self.keyword,
+                "[#" + priority + "]" if priority else None,
+                "COMMENT" if self.comment else None,
+                self.title,
+                tags_as_string,
             )
+            if part is not None
         )
-
-        if len(line_parts) == 1:
-            line_parts.append("")
 
         line = " ".join(line_parts)
         return line
@@ -172,6 +176,7 @@ class Clock:
     def bound_time_range(
         self, *, start: datetime.datetime, end: datetime.datetime
     ) -> None:
+        assert start <= end
         clock_start = self.start
         if clock_start <= start:
             self.start = start
@@ -364,7 +369,7 @@ class ParsedDocument:
 
         return fixes
 
-    def get_started_clocks(self) -> Iterator[ParsedLine]:
+    def get_started_clocks(self) -> Iterable[ParsedLine]:
         for parsed_line in self.parsed_lines:
             clock = parsed_line.clock
             if clock is None:
@@ -375,7 +380,7 @@ class ParsedDocument:
 
             yield parsed_line
 
-    def get_stopped_clocks(self) -> Iterator[ParsedLine]:
+    def get_stopped_clocks(self) -> Iterable[ParsedLine]:
         for parsed_line in self.parsed_lines:
             clock = parsed_line.clock
             if clock is None:
@@ -388,7 +393,7 @@ class ParsedDocument:
             yield parsed_line
 
     @classmethod
-    def parse(cls, lines: Iterator[str]) -> "typing.Self":
+    def parse(cls, lines: Iterable[str]) -> "typing.Self":
         self = cls()
 
         is_inside_code_block = False
@@ -517,7 +522,8 @@ def get_summary_quicklist(
     return quicklist
 
 
-class ParsedProject:
+# TODO: Design and implement this properly as a directory of documents.
+class Project:
     def __init__(self, *args: typing.Any, **kwargs: typing.Any) -> None:
         super().__init__(*args, **kwargs)
         self.duration = datetime.timedelta()
