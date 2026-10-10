@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0"
+    />
+    <title>Log Viewer</title>
+    <link rel="stylesheet" href="log_viewer.css" />
+  </head>
+  <body>
+    <div class="app-container">
+      <header class="app-header">
+        <div class="file-input-container">
+          <input type="text" id="file-path" value="sample.log" />
+          <button id="load-file">Load File</button>
+        </div>
+        <div class="flex-space-horizontal"></div>
+        <button
+          class="hamburger"
+          id="hamburger"
+          aria-label="Toggle sidebar"
+        >
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </header>
+
+      <div class="app-body">
+        <main class="content-area">
+          <div class="log-container">
+            <div class="log-viewer" id="log-viewer"></div>
+          </div>
+        </main>
+
+        <aside class="sidebar" id="sidebar">
+          <div id="highlight-controls" class="highlight-controls">
+            <h3>Highlighting Options</h3>
+          </div>
+        </aside>
+      </div>
+    </div>
+
+    <div class="status-bar" id="status-bar"></div>
+
+    <template id="template-highlight-checkbox">
+      <label class="checkbox-container">
+        <input type="checkbox" value="Datetime" />
+        <span></span>
+      </label>
+    </template>
+
+    <script src="log_viewer.js"></script>
+  </body>
+</html>
