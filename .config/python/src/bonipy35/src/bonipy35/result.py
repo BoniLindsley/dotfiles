@@ -3,6 +3,8 @@
 # Standard libraries.
 import typing
 
+from typing import Union
+
 _T = typing.TypeVar("_T")
 _U = typing.TypeVar("_U")
 
@@ -43,5 +45,4 @@ class Ok(typing.Generic[_T]):
         raise RuntimeError("Unable to unwrap ok result as an error.")
 
 
-# TODO(Python 3.9): Use pipe instead of typing.Union.
-Result = typing.Union[Ok[_T], Err[_U]]
+Result = Union[Ok[_T], Err[_U]]

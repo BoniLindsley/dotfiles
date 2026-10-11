@@ -1,71 +1,21 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
-import argparse
-import importlib
-import logging
 import sys
 
+from typing import List, Union
+
 # Internal modules.
-from .. import logging_ext
-
-_logger = logging.getLogger(__name__ if __name__ != "__main__" else __package__)
+from .. import runpy_ext
 
 
-def run(*, command: str, package: str, remaining_arguments: "list[str]") -> int:
-    """Forward request to argument parser in submodules."""
-
-    try:
-        submodule = importlib.import_module(package + "." + command)
-    except ImportError:
-        _logger.error("Command is not known: %s", command)
-        return 1
-
-    try:
-        submodule_main = submodule.main
-    except AttributeError:
-        try:
-            submodule = importlib.import_module(package + "." + command + ".__main__")
-        except ImportError:
-            _logger.error("Command has no entry point: %s", command)
-            return 1
-
-        try:
-            submodule_main = submodule.main
-        except AttributeError:
-            _logger.error("Command not implemented: %s", command)
-            return 1
-
-    remaining_arguments.insert(0, command)
-    submodule_main(remaining_arguments)
-
-    return 0
-
-
-def main(argv: "None | list[str]" = None) -> int:
-    """CLI entry point.
-
-    The `argv` argument follows the `sys.argv` convention.
-    That is, element `0` is the dispatch name.
-    (This is an intentional decision for this package.)
-    """
-
-    if argv is None:
-        argv = sys.argv
-
-    logging_ext.set_up_logging(logger=_logger)
-
-    parser = argparse.ArgumentParser(description="Entry point for subcommands.")
-    logging_ext.add_verbose_flag(parser)
-    parser.add_argument("command", choices=("cli",))
-    arguments, remaining_arguments = parser.parse_known_args(argv[1:])
-
-    logging_ext.set_logger_verbosity(logger=_logger, verbosity=arguments.verbosity)
-
-    return run(
-        command=arguments.command,
+def main(argv: Union[None, List[str]] = None) -> int:
+    """Forward command arguments to the corresponding taskmd module."""
+    return runpy_ext.subcommand_main(
+        argv=argv,
+        choices=("clock", "report", "schedule"),
         package=__package__,
-        remaining_arguments=remaining_arguments,
+        description="Markdown-based hierarchical task and time-tracking tool.",
     )
 
 

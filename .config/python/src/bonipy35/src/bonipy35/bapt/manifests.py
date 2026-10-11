@@ -14,7 +14,9 @@ from . import packaging
 _logger = logging.getLogger(__name__)
 
 
-def run_subprocess(cmd: List[str], *, cwd: Union[None, pathlib.Path] = None) -> None:
+def run_subprocess(
+    cmd: List[str], *, cwd: Union[None, pathlib.Path] = None
+) -> None:
     _logger.info("Running: %s", " ".join(cmd))
     subprocess.run(cmd, check=True, cwd=str(cwd) if cwd is not None else None)
 
@@ -24,7 +26,10 @@ class LlvmProject(packaging.Package):
     name = "llvm-project"
 
     def __init__(
-        self, *args: typing.Any, version: Union[None, str] = None, **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        version: Union[None, str] = None,
+        **kwargs: typing.Any
     ) -> None:
         if version is None:
             version = self.default_version
@@ -39,12 +44,18 @@ class LlvmProject(packaging.Package):
                 "-B",
                 "build",
                 "-DCMAKE_BUILD_TYPE=Release",
+                "-DCMAKE_INSTALL_PREFIX=" + str(self.destdir),
                 "-DLLVM_ENABLE_PROJECTS=clang;clang-tools-extra",
                 "-DLLVM_ENABLE_RUNTIMES=compiler-rt;libc;libcxx;libcxxabi;libunwind;openmp",
             ],
             cwd=self.build_directory,
         )
-        run_subprocess(["cmake", "--build", "build"], cwd=self.build_directory)
+        run_subprocess(
+            ["cmake", "--build", "build"], cwd=self.build_directory
+        )
+        run_subprocess(
+            ["cmake", "--install", "build"], cwd=self.build_directory
+        )
 
     @property
     def orig_url(self) -> str:
@@ -63,7 +74,10 @@ class Neovim(packaging.Package):
     name = "neovim"
 
     def __init__(
-        self, *args: typing.Any, version: Union[None, str] = None, **kwargs: typing.Any
+        self,
+        *args: typing.Any,
+        version: Union[None, str] = None,
+        **kwargs: typing.Any
     ) -> None:
         if version is None:
             version = self.default_version
@@ -95,10 +109,63 @@ class Neovim(packaging.Package):
         return orig_url
 
 
-PACKAGES = {package.name: package for package in (LlvmProject, Neovim)}
+class NeovimQt(packaging.Package):
+    default_version = "0.2.20"
+    name = "neovim-qt"
+    # "0.2.19" uses Qt5
+    # "0.2.20" uses Qt6
+
+    # Might require Debian packages
+    # - libqt5svg5-dev
+    # - qtbase5-gles-dev
+
+    def __init__(
+        self,
+        *args: typing.Any,
+        version: Union[None, str] = None,
+        **kwargs: typing.Any
+    ) -> None:
+        if version is None:
+            version = self.default_version
+        super().__init__(*args, package=self.name, tag=version, **kwargs)
+
+    def build(self) -> None:
+        destdir = self.destdir
+        run_subprocess(
+            [
+                "cmake",
+                "-B",
+                "build",
+                "-DCMAKE_BUILD_TYPE=RelWithDebInfo",
+                "-DCMAKE_INSTALL_PREFIX=" + str(destdir),
+            ],
+            cwd=self.build_directory,
+        )
+        run_subprocess(
+            ["cmake", "--build", "build"], cwd=self.build_directory
+        )
+        run_subprocess(
+            ["cmake", "--install", "build"], cwd=self.build_directory
+        )
+
+    @property
+    def orig_url(self) -> str:
+        git_tag = "v" + self.control.tag
+        orig_url = (
+            "https://github.com/equalsraf/neovim-qt/archive/refs/tags/"
+            + git_tag
+            + self.orig_suffix
+        )
+        return orig_url
+
+
+PACKAGES = {
+    package.name: package for package in (LlvmProject, Neovim, NeovimQt)
+}
 
 
 def run() -> int:
+    """Example build steps."""
     neovim = Neovim()
     neovim.download_orig()
     neovim.push_orig()

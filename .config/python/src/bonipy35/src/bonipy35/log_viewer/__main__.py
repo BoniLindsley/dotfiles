@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+
+# Standard libraries.
+import sys
+
+# Internal modules.
+from . import main
+
+if __name__ == "__main__":
+    sys.exit(main())

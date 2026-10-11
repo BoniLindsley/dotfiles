@@ -1,15 +1,17 @@
-# /usr/bin/env python3
+#!/usr/bin/env python3
 
 # Standard libraries.
-import collections.abc as cabc
 import contextlib
 import curses
+
+from typing import Callable, Iterator, Union
 
 
 @contextlib.contextmanager
 def initialise(
-    initscr: "None | cabc.Callable[[], curses.window]" = None,
-) -> "cabc.Iterator[curses.window]":
+    initscr: Union[None, Callable[[], "curses.window"]] = None,
+) -> Iterator["curses.window"]:
+    """Restore terminal modes even if setup or the application fails."""
     with contextlib.ExitStack() as stack:
         if initscr is None:
             initscr = curses.initscr
@@ -25,7 +27,7 @@ def initialise(
 
         stdscr.keypad(True)
         stack.callback(stdscr.keypad, False)
-
-        curses.start_color()
+        if curses.has_colors():
+            curses.start_color()
 
         yield stdscr

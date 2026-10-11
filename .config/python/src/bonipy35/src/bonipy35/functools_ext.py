@@ -4,7 +4,7 @@
 import functools
 import typing
 
-from typing import Union
+from typing import Type, Union
 
 _T = typing.TypeVar("_T")
 _U = typing.TypeVar("_U")
@@ -14,7 +14,9 @@ class cached_property(typing.Generic[_T, _U]):  # pylint: disable=invalid-name
     def __init__(self, function: typing.Callable[[_T], _U]) -> None:
         self.__function = function
 
-    def __get__(self, instance: _T, owner: Union[None, typing.Type[_T]] = None) -> _U:
+    def __get__(
+        self, instance: _T, owner: Union[None, Type[_T]] = None
+    ) -> _U:
         del owner
         function = self.__function
         value = function(instance)
@@ -22,7 +24,9 @@ class cached_property(typing.Generic[_T, _U]):  # pylint: disable=invalid-name
         return value
 
 
-def nullary_cache(function: typing.Callable[[], _T]) -> typing.Callable[[], _T]:
+def nullary_cache(
+    function: typing.Callable[[], _T],
+) -> typing.Callable[[], _T]:
     lookup = {}  # type: dict[None, _T]
 
     @functools.wraps(function)

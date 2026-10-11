@@ -5,6 +5,8 @@ import argparse
 import logging
 import sys
 
+from typing import Dict, List, Union
+
 _logger = logging.getLogger(__name__)
 ALL = 1
 TRACE = 5
@@ -25,7 +27,7 @@ def set_logger_verbosity(
     *,
     logger: logging.Logger,
     verbosity: int,
-    verbosity_map: "None | dict[int, int]" = None
+    verbosity_map: Union[None, Dict[int, int]] = None
 ) -> None:
     if not verbosity_map:
         verbosity_map = _VERBOSITY_MAP
@@ -50,7 +52,8 @@ def set_logger_verbosity(
 def set_up_logging(*, logger: logging.Logger) -> None:
     if logger.hasHandlers():
         logger.debug(
-            "Log messages already handled. Not adding handler to logger %s", logger.name
+            "Log messages already handled. Not adding handler to logger %s",
+            logger.name,
         )
         return
 
@@ -90,7 +93,7 @@ def run(message: str) -> int:
     return 0
 
 
-def main(argv: "None | list[str]" = None) -> int:
+def main(argv: Union[None, List[str]] = None) -> int:
     """Parse command line arguments and call `run`."""
 
     if argv is None:

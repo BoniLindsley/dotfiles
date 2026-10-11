@@ -1,8 +1,14 @@
 [tool.black]
 line-length = 78
 
+[tool.pytest.ini_options]
+markers = [
+  "integration: tests that exercise external applications such as Neovim",
+]
+
 [tool.coverage.report]
 exclude_lines = [
+  "if typing\\.TYPE_CHECKING:",  # Ignore blocks used only by type checkers.
   "@typing.overload",  # Type hints do not need to be ran.
   "def main\\(",  # Main function typically requires full set up to run.
   "if __name__ == \"__main__\"",  # Ignore main script.
@@ -18,6 +24,10 @@ command_line = "-m pytest"
 omit = [
   # Usually requires full-fletched set up to use.
   "*/__main__.py",
+  # Build recipes require external source trees and toolchains.
+  "src/bonipy35/bapt/manifests.py",
+  # Temporarily disable coverage until refactoring is done.
+  "src/bonipy35/alarm/*",
 ]
 source = [
   "src",
@@ -62,6 +72,9 @@ disable = [
 
   # Temporary control to before moving to 88 columns.
   "line-too-long",
+
+  # For Python 3.5 support.
+  "consider-using-f-string",
 ]
 enable = [
   # Disabled by default.

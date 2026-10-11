@@ -9,29 +9,32 @@ import typing
 from . import functools_ext
 from . import os_ext
 
-
 _logger = logging.getLogger(__name__)
 
 
 def ensure_directory_exists(directory: pathlib.Path) -> None:
     if directory.is_dir():
         return
-    directory.mkdir(parents=True, exist_ok=True)
-
+    # Create each missing ancestor explicitly: parents=True uses default modes.
+    try:
+        directory.mkdir(mode=0o700, exist_ok=True)
+    except FileNotFoundError:
+        ensure_directory_exists(directory.parent)
+        directory.mkdir(mode=0o700, exist_ok=True)
 
 
 @functools_ext.nullary_cache
 def home() -> pathlib.Path:
     path = os_ext.get_environ_path("HOME")
     if path is None:
-        path = pathlib.Path()
+        path = pathlib.Path("~").expanduser()
     return path
 
 
 @functools_ext.nullary_cache
 def config_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_CONFIG_HOME")
-    if path is None:
+    if path is None or not path.is_absolute():
         path = home() / ".config"
     return path
 
@@ -39,7 +42,7 @@ def config_home() -> pathlib.Path:
 @functools_ext.nullary_cache
 def data_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_DATA_HOME")
-    if path is None:
+    if path is None or not path.is_absolute():
         path = home() / ".local" / "share"
     return path
 
@@ -47,13 +50,15 @@ def data_home() -> pathlib.Path:
 @functools_ext.nullary_cache
 def state_home() -> pathlib.Path:
     path = os_ext.get_environ_path("XDG_STATE_HOME")
-    if path is None:
+    if path is None or not path.is_absolute():
         path = home() / ".local" / "state"
     return path
 
 
 class AppDirectories:
-    def __init__(self, *args: typing.Any, app_name: str, **kwargs: typing.Any) -> None:
+    def __init__(
+        self, *args: typing.Any, app_name: str, **kwargs: typing.Any
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.app_name = app_name
 

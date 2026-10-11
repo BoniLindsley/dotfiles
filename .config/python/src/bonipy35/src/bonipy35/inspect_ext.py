@@ -6,7 +6,9 @@ import pathlib
 import typing
 
 
-def get_module_directory(source: typing.Callable[..., typing.Any]) -> pathlib.Path:
+def get_module_directory(
+    source: typing.Callable[..., typing.Any],
+) -> pathlib.Path:
     """
     Usage: `get_module_directory(lambda: None)`
     """

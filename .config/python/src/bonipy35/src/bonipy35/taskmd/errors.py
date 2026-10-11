@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-# Need Python 3.5 support.
-# pylint: disable=consider-using-f-string
-
 # Standard libraries.
 from typing import Union
 

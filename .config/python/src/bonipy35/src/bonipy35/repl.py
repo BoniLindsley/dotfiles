@@ -1,5 +1,15 @@
 #!/usr/bin/env python3
 
+"""Command helpers for ``from bonipy35.repl import *`` in a Python REPL.
+
+``Command("git")["status"]`` builds reusable commands; ``U(command)`` runs
+one synchronously and returns its completed Popen object. ``Command()`` uses
+Python's last displayed result (``builtins._``), when available. ``oops`` keeps
+processes accessible by name for inspection, and ``pip.install.user`` builds
+a pip command for the current interpreter. Strings use shell-style quoting,
+but execution never invokes a shell.
+"""
+
 # Standard libraries.
 import builtins
 import datetime
@@ -12,13 +22,17 @@ import typing
 
 from typing import List, Union
 
+__all__ = ["Command", "ProcessMap", "U", "oops", "pip"]
 
 _logger = logging.getLogger(__name__)
 
 
 class Command:
     def __init__(
-        self, *nested_arguments: Union[typing.Iterable[str], "subprocess.Popen[str]"]
+        self,
+        *nested_arguments: Union[
+            str, typing.Iterable[str], "subprocess.Popen[str]"
+        ]
     ) -> None:
         """Store arguments that form a command. Lazy expansion at runtime."""
         self._nested_arguments = []  # type: list[typing.Iterable[str]]
@@ -31,17 +45,21 @@ class Command:
             if isinstance(arguments, str):
                 self._nested_arguments.append(shlex.split(arguments))
             elif isinstance(arguments, subprocess.Popen):
-                # Unsure when non-list and bytesargs may occur,
-                # or how to special case it.
-                arguments = arguments.args  # type: ignore[assignment]
-                assert isinstance(arguments, list)
-                self._nested_arguments.append(arguments)
+                process_args = arguments.args
+                if isinstance(process_args, str):
+                    self._nested_arguments.append(shlex.split(process_args))
+                else:
+                    if not isinstance(process_args, (list, tuple)):
+                        raise TypeError("Command arguments must be text")
+                    self._nested_arguments.append(
+                        [str(argument) for argument in process_args]
+                    )
             else:
                 self._nested_arguments.append(arguments)
         self._subcommands = {}  # type: dict[str, "Command"]
 
-    def __add__(self, value: typing.Iterable[str]) -> "Command":
-        return Command(*self._nested_arguments, value)
+    def __add__(self, value: typing.Iterable[str]) -> "typing.Self":
+        return type(self)(*self._nested_arguments, value)
 
     def __delitem__(self, key: str) -> None:
         del self._subcommands[key]
@@ -50,7 +68,10 @@ class Command:
         return self._subcommands.keys()
 
     def __getattr__(self, key: str) -> "Command":
-        return self._subcommands[key]
+        try:
+            return self._subcommands[key]
+        except KeyError:
+            raise AttributeError(key) from None
 
     def __getitem__(self, key: str) -> "Command":
         return self._subcommands[key]
@@ -81,14 +102,17 @@ class ProcessMap:
         return self._mapping.keys()
 
     def __getattr__(self, key: str) -> "subprocess.Popen[str]":
-        return self._mapping[key]
+        try:
+            return self._mapping[key]
+        except KeyError:
+            raise AttributeError(key) from None
 
     def __setitem__(self, key: str, value: "subprocess.Popen[str]") -> None:
         self._mapping[key] = value
 
     def execute(
         self,
-        *args: typing.Iterable[str],
+        *args: Union[str, typing.Iterable[str], "subprocess.Popen[str]"],
         stdin: Union[None, int, typing.IO[str]] = None,
         stdout: Union[None, int, typing.IO[str]] = None
     ) -> "subprocess.Popen[str]":
@@ -103,7 +127,9 @@ class ProcessMap:
         with subprocess.Popen(
             full_args, stdin=stdin, stdout=stdout, universal_newlines=True
         ) as process:
-            now_string = datetime.datetime.now().strftime("D%Y_%m_%d_T%H_%M_%S")
+            now_string = datetime.datetime.now().strftime(
+                "D%Y_%m_%d_T%H_%M_%S"
+            )
             self._mapping[str(now_string) + "_P" + str(process.pid)] = process
             return process
 
@@ -113,7 +139,7 @@ U = oops.execute
 
 
 def _pip_break_system_packages() -> List[str]:
-    python_version = tuple(map(int, platform.python_version_tuple()[:2]))
+    python_version = tuple(map(int, platform.python_version_tuple()))
     if python_version >= (3, 11, 2):
         if platform.system() == "Linux":
             try:

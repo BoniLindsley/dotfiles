@@ -84,7 +84,9 @@ class Control:
             component = "main"
 
         package = self.package
-        package_directory = pathlib.Path("pool") / component / package[0] / package
+        package_directory = (
+            pathlib.Path("pool") / component / package[0] / package
+        )
         return package_directory
 
     @classmethod
@@ -113,7 +115,10 @@ class Control:
             tag, revision = tag_revision
 
         return cls(
-            architecture=architecture, package=package, revision=revision, tag=tag
+            architecture=architecture,
+            package=package,
+            revision=revision,
+            tag=tag,
         )
 
     @property
@@ -122,7 +127,9 @@ class Control:
         return stem
 
     def to_dict(self) -> "collections.OrderedDict[str, str]":
-        as_dict = collections.OrderedDict()  # type: collections.OrderedDict[str, str]
+        as_dict = (
+            collections.OrderedDict()
+        )  # type: collections.OrderedDict[str, str]
         as_dict["Package"] = self.package
         as_dict["Version"] = self.version
         as_dict["Architecture"] = self.architecture
@@ -180,7 +187,9 @@ class Configuration:
             component = "main"
 
         package = control.package
-        package_directory = self.repository / "pool" / component / package[0] / package
+        package_directory = (
+            self.repository / "pool" / component / package[0] / package
+        )
         return package_directory
 
     @property
@@ -248,7 +257,9 @@ class Package:
     @property
     def local_path(self) -> pathlib.Path:
         local_path = (
-            self.configuration.build_directory / self.control.stem / "data.tar.gz"
+            self.configuration.build_directory
+            / self.control.stem
+            / "data.tar.gz"
         )
         return local_path
 
@@ -259,12 +270,16 @@ class Package:
 
     @property
     def orig_local_path(self) -> pathlib.Path:
-        orig_local_path = self.configuration.build_directory / self.orig_filename
+        orig_local_path = (
+            self.configuration.build_directory / self.orig_filename
+        )
         return orig_local_path
 
     @property
     def orig_package_path(self) -> pathlib.Path:
-        package_directory = self.configuration.get_package_directory(self.control)
+        package_directory = self.configuration.get_package_directory(
+            self.control
+        )
         orig_package_path = package_directory / self.orig_filename
         return orig_package_path
 
@@ -285,29 +300,31 @@ class Package:
 
     @property
     def package_path(self) -> pathlib.Path:
-        package_directory = self.configuration.get_package_directory(self.control)
+        package_directory = self.configuration.get_package_directory(
+            self.control
+        )
         package_path = package_directory / self.control.stem / "data.tar.gz"
         return package_path
 
     def pull(self) -> None:
         local_path = self.local_path
         pathlib_ext.ensure_is_dir(local_path.parent)
-        shutil.copyfile(self.package_path, local_path)
+        shutil.copyfile(str(self.package_path), str(local_path))
 
     def pull_orig(self) -> None:
         orig_local_path = self.orig_local_path
         pathlib_ext.ensure_is_dir(orig_local_path.parent)
-        shutil.copyfile(self.orig_package_path, orig_local_path)
+        shutil.copyfile(str(self.orig_package_path), str(orig_local_path))
 
     def push(self) -> None:
         package_path = self.package_path
         pathlib_ext.ensure_is_dir(package_path.parent)
-        shutil.copyfile(self.local_path, package_path)
+        shutil.copyfile(str(self.local_path), str(package_path))
 
     def push_orig(self) -> None:
         orig_package_path = self.orig_package_path
         pathlib_ext.ensure_is_dir(orig_package_path.parent)
-        shutil.copyfile(self.orig_local_path, orig_package_path)
+        shutil.copyfile(str(self.orig_local_path), str(orig_package_path))
 
     def status(self) -> None:
         print("Package", self.control.package)

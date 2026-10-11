@@ -11,6 +11,8 @@ from typing import List, Union
 # Internal modules.
 from . import errors
 
+from .recur import RecurRule
+
 
 class ClockEntry:
     def __init__(
@@ -134,7 +136,8 @@ class Task:
             total += clock.duration()
 
         for event in self.events:
-            total += event.actual_duration()
+            for nested_event in event.walk():
+                total += nested_event.actual_duration()
 
         if recursive:
             for subtask in self.tasks:
@@ -155,6 +158,7 @@ class TaskFile:
         events: Union[None, List["Event"]] = None,
         path: Union[None, pathlib.Path],
         tasks: Union[None, List[Task]] = None,
+        total_lines: Union[None, int] = None,
         warnings: Union[None, List[errors.ParseWarning]] = None,
         **kwargs: typing.Any
     ) -> None:
@@ -163,37 +167,29 @@ class TaskFile:
             events = []
         if tasks is None:
             tasks = []
+        if total_lines is None:
+            total_lines = 0
         if warnings is None:
             warnings = []
         self.events = events
         self.path = path
         self.tasks = tasks
+        self.total_lines = total_lines
         self.warnings = warnings
 
     def walk(self) -> typing.Iterator[Task]:
         for task in self.tasks:
             yield from task.walk()
 
-
-class RecurRule:
-    def __init__(  # pylint: disable=too-many-arguments
-        self,
-        *args: typing.Any,
-        interval: int,
-        prefix: 'typing.Literal["+", "++", ".+"]',
-        raw: str,
-        unit: 'typing.Literal["d", "w", "m", "y"]',
-        until: Union[None, object] = None,
-        weekdays: Union[None, List[str]] = None,
-        **kwargs: typing.Any
-    ) -> None:
-        super().__init__(*args, **kwargs)
-        self.interval = interval
-        self.prefix = prefix
-        self.raw = raw
-        self.unit = unit
-        self.until = until
-        self.weekdays = weekdays
+    def walk_events(self) -> typing.Iterator["Event"]:
+        """Every `Event` reachable from this file: top-level events,
+        events nested under any task (at any depth), and their
+        `sub_events`, recursively."""
+        for event in self.events:
+            yield from event.walk()
+        for task in self.walk():
+            for event in task.events:
+                yield from event.walk()
 
 
 class Event:
@@ -252,7 +248,25 @@ class Event:
     def occurrences(
         self, from_date: datetime.datetime, to_date: datetime.datetime
     ) -> List[datetime.datetime]:
-        raise NotImplementedError
+        """Expand `self.recur` into concrete start datetimes within
+        `[from_date, to_date]`. If there is no recurrence rule, this
+        is just `[self.scheduled_start]` when it falls in range."""
+        if self.recur is None:
+            if from_date <= self.scheduled_start <= to_date:
+                return [self.scheduled_start]
+            return []
+        # Imported lazily to avoid a module-level cycle: `recur.py`
+        # imports `model` for `RecurRule`/`Event` type references.
+        from . import recur  # pylint: disable=import-outside-toplevel
+
+        return recur.expand(
+            self.recur, self.scheduled_start, from_date, to_date
+        )
 
     def scheduled_duration(self) -> datetime.timedelta:
         return self.scheduled_end - self.scheduled_start
+
+    def walk(self) -> typing.Iterator["Event"]:
+        yield self
+        for sub_event in self.sub_events:
+            yield from sub_event.walk()

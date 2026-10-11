@@ -5,6 +5,6 @@
 # https://setuptools.pypa.io/en/latest/setuptools.html#setup-cfg-only-projects
 
 # Standard libraries.
-import setuptools  # type: ignore
+import setuptools  # type: ignore[import-untyped] # pylint: disable=import-error
 
 setuptools.setup()
