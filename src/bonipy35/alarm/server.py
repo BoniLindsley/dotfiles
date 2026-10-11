@@ -8,6 +8,7 @@ import datetime
 import errno
 import fcntl
 import logging
+import math
 import os
 import pathlib
 import selectors
@@ -15,6 +16,7 @@ import signal
 import socket
 import sys
 import tempfile
+import time
 import typing
 
 from typing import Dict, List, Union
@@ -33,7 +35,20 @@ class Connection:
 
 
 class Server:
-    def __init__(self, *, directory: pathlib.Path) -> None:
+    def __init__(
+        self,
+        *,
+        directory: pathlib.Path,
+        idle_timeout: Union[None, float] = None
+    ) -> None:
+        if idle_timeout is not None and (
+            not math.isfinite(idle_timeout) or idle_timeout <= 0
+        ):
+            raise ValueError("Idle timeout must be finite and positive")
+        self.idle_timeout = idle_timeout
+        self._idle_deadline = (
+            None if idle_timeout is None else time.monotonic() + idle_timeout
+        )
         self.directory = paths.prepare_directory(directory)
         self._resources = contextlib.ExitStack()
         self.connections = []  # type: List[Connection]
@@ -52,8 +67,7 @@ class Server:
             except FileNotFoundError:
                 self.user_data = data.UserData()
             self.check_capacity()
-            # Missed deadlines retain their persisted lifecycle status.
-            if self.user_data.update(data.utc_now(), missed=True):
+            if self.user_data.update(data.utc_now()):
                 self.save()
             self.selector = self._resources.enter_context(
                 selectors.DefaultSelector()
@@ -118,7 +132,7 @@ class Server:
                 "id_": item.id_,
                 "name": item.name,
                 "occurred_at": data.Datetime.model_dump(item.end_time),
-                "missed": True,
+                "notification_state": "triggered",
             }
             for item in self.user_data.alarms
         ]
@@ -179,7 +193,7 @@ class Server:
             item.reschedule(
                 data.Datetime.model_validate_datetime(request["end_time"])
             )
-            item.update(now, missed=True)
+            item.update(now)
         else:
             raise ValueError("Unknown command: {}".format(command))
 
@@ -200,7 +214,7 @@ class Server:
                 ),
                 name=name,
             )
-            item.update(now, missed=True)
+            item.update(now)
         elif command == "timer":
             self.user_data.add_timer(
                 duration=datetime.timedelta(
@@ -252,6 +266,8 @@ class Server:
             self.connections.remove(connection)
             self.selector.unregister(connection.sock)
             connection.sock.close()
+            if not self.connections and self.idle_timeout is not None:
+                self._idle_deadline = time.monotonic() + self.idle_timeout
 
     def service(self, connection: Connection, mask: int) -> None:
         try:
@@ -276,18 +292,47 @@ class Server:
         except (OSError, ValueError):
             self.drop(connection)
 
+    def accept_connections(self) -> None:
+        # Drain the backlog before deciding the service is still clientless.
+        while True:
+            try:
+                sock, _address = self.listener.accept()
+            except BlockingIOError:
+                return
+            sock.setblocking(False)
+            connection = Connection(sock)
+            self.connections.append(connection)
+            self._idle_deadline = None
+            self.selector.register(sock, selectors.EVENT_READ, connection)
+
+    def finish_idle(self) -> None:
+        if (
+            self._idle_deadline is None
+            or time.monotonic() < self._idle_deadline
+        ):
+            return
+        # Clients release this lock after connecting, before their handshake.
+        # Holding it through cleanup prevents startup against a closing listener.
+        with (self.directory / "startup.lock").open("a+") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            self.accept_connections()
+            if self.connections:
+                return
+            self.save()
+            self.stopping = True
+            self.close()
+
     def run(self) -> None:
         try:
             while not self.stopping:
-                for key, mask in self.selector.select():
+                timeout = (
+                    None
+                    if self._idle_deadline is None
+                    else max(0.0, self._idle_deadline - time.monotonic())
+                )
+                for key, mask in self.selector.select(timeout):
                     if key.data == "accept":
-                        sock, _address = self.listener.accept()
-                        sock.setblocking(False)
-                        connection = Connection(sock)
-                        self.connections.append(connection)
-                        self.selector.register(
-                            sock, selectors.EVENT_READ, connection
-                        )
+                        self.accept_connections()
                     elif key.data == "deadline":
                         self.deadline_clock.consume()
                         self.expire()
@@ -299,6 +344,8 @@ class Server:
                     connection.output for connection in self.connections
                 ):
                     self.stopping = True
+                if not self.stopping:
+                    self.finish_idle()
         finally:
             self.close()
 
@@ -322,6 +369,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     paths.add_directory_argument(parser)
     parser.add_argument("--ready-fd", type=int)
+    parser.add_argument("--idle-timeout", type=float)
     arguments = parser.parse_args(argv[1:])
     ready = (
         socket.socket(fileno=arguments.ready_fd)
@@ -329,7 +377,9 @@ def main(argv: Union[None, List[str]] = None) -> int:
         else None
     )
     try:
-        server = Server(directory=arguments.directory)
+        server = Server(
+            directory=arguments.directory, idle_timeout=arguments.idle_timeout
+        )
     except (OSError, ValueError, KeyError, TypeError) as error:
         if ready is not None:
             ready.sendall(protocol.encode({"error": str(error)}))

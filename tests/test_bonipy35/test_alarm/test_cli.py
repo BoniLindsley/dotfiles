@@ -117,22 +117,23 @@ class TestDisplay:
             "items": [
                 {
                     "id_": 0,
-                    "name": "Tea",
-                    "state": "active",
+                    "name": "Coffee",
+                    "state": "running",
+                    "notification_state": "pending",
                     "remaining": 5,
                     "end_time": "deadline",
                 }
             ],
             "notifications": [
-                {"id_": 0, "name": "Tea", "missed": True},
-                {"id_": 1, "name": "Wake", "missed": False},
+                {"id_": 0, "name": "Tea", "notification_state": "triggered"},
+                {"id_": 1, "name": "Wake", "notification_state": "triggered"},
             ],
         }
         lines = format_snapshot(snapshot)
         assert "remaining 5s" in lines[0]
         assert lines[1:] == [
-            "Notification 0: Tea (missed)",
-            "Notification 1: Wake (expired)",
+            "Notification 0: Tea (triggered)",
+            "Notification 1: Wake (triggered)",
         ]
         display(snapshot)
         assert capsys.readouterr().out == "\n".join(lines) + "\n"

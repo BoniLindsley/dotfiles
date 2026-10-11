@@ -27,12 +27,15 @@ def fixture_ui_connection() -> Mock:
             {
                 "id_": 0,
                 "name": "Tea",
-                "state": "active",
+                "state": "running",
+                "notification_state": "pending",
                 "end_time": "deadline",
                 "remaining": 60,
             }
         ],
-        "notifications": [{"id_": 0, "name": "Tea", "missed": True}],
+        "notifications": [
+            {"id_": 0, "name": "Tea", "notification_state": "triggered"}
+        ],
     }
     connection.buffered = False
     return connection
@@ -61,7 +64,7 @@ class TestGUIRender:
             ui_connection.sock, gui.tk.READABLE, gui.on_readable
         )
         gui.notifications.config.assert_called_with(
-            text="Notification 0: Tea (missed)"
+            text="Notification 0: Tea (triggered)"
         )
         ui_connection.snapshot["notifications"] = []
         gui.on_readable(None, 0)

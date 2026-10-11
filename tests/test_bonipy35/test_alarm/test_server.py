@@ -29,12 +29,191 @@ from bonipy35.alarm.paths import default_directory, prepare_directory
 from bonipy35.alarm.protocol import Decoder, MAX_FRAME, encode
 from bonipy35.alarm.server import Server
 
+from .conftest import running_server
+
 
 def next_event(connection: Client) -> Dict[str, Any]:
     while True:
         message = connection.receive()
         if message.get("event") == "snapshot":
             return cast(Dict[str, Any], message["snapshot"])
+
+
+class TestIdleShutdown:
+    @pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+    def test_invalid_timeout_rejected(
+        self, tmp_path: pathlib.Path, timeout: float
+    ) -> None:
+        with pytest.raises(ValueError, match="finite and positive"):
+            Server(directory=tmp_path, idle_timeout=timeout)
+        assert not (tmp_path / "socket").exists()
+
+    def test_new_server_without_client_exits(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        with running_server(tmp_path, idle_timeout=0.1) as (service, worker):
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+            assert not (tmp_path / "socket").exists()
+            assert (
+                UserData.model_validate_json(
+                    service.state_path.read_text(encoding="utf-8")
+                ).alarms
+                == []
+            )
+
+    def test_connected_client_cancels_timeout_and_last_disconnect_rearms(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        with running_server(tmp_path, idle_timeout=0.1) as (service, worker):
+            with Client(directory=tmp_path) as first:
+                with Client(directory=tmp_path) as second:
+                    assert len(service.connections) == 2
+                    first.close()
+                    # Waiting beyond the configured timeout proves that one
+                    # connected client keeps the server available.
+                    worker.join(timeout=0.2)
+                    assert worker.is_alive()
+                    assert second.request("status")["items"] == []
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+
+    def test_pending_deadlines_and_retained_notifications_do_not_prevent_exit(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        with running_server(tmp_path, idle_timeout=0.1) as (service, worker):
+            with Client(directory=tmp_path) as connection:
+                connection.request(
+                    "alarm", end_time=Datetime.model_dump(utc_now())
+                )
+                connection.request("timer", duration=60)
+                assert connection.snapshot["notifications"]
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+            persisted = UserData.model_validate_json(
+                service.state_path.read_text(encoding="utf-8")
+            )
+            assert persisted.get(0).notification_active
+            assert persisted.next_deadline() is not None
+        with Client(directory=tmp_path) as restarted:
+            try:
+                assert restarted.snapshot["notifications"][0]["id_"] == 0
+                assert len(restarted.snapshot["items"]) == 2
+            finally:
+                restarted.request("shutdown")
+
+    def test_overdue_timer_is_discovered_after_idle_restart(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        with running_server(tmp_path, idle_timeout=0.03) as (
+            _service,
+            worker,
+        ):
+            with Client(directory=tmp_path) as connection:
+                snapshot = connection.request("timer", duration=0.2)
+                deadline = Datetime.model_validate_datetime(
+                    snapshot["items"][0]["end_time"]
+                )
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+        timer = DeadlineClock()
+        try:
+            with selectors.DefaultSelector() as selector:
+                selector.register(timer.fd, selectors.EVENT_READ)
+                timer.arm(deadline)
+                assert selector.select(timeout=5)
+                timer.consume()
+        finally:
+            timer.close()
+        with Client(directory=tmp_path) as restarted:
+            try:
+                assert restarted.snapshot["items"][0]["state"] == "running"
+                assert (
+                    restarted.snapshot["items"][0]["notification_state"]
+                    == "triggered"
+                )
+                assert restarted.snapshot["notifications"][0]["id_"] == 0
+                restarted.request("dismiss", id_=0)
+                assert restarted.request("status")["notifications"] == []
+            finally:
+                restarted.request("shutdown")
+
+    def test_server_command_accepts_idle_timeout(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "bonipy35.alarm.server",
+                "--directory",
+                str(tmp_path),
+                "--idle-timeout",
+                "0.01",
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            universal_newlines=True,
+            timeout=5,
+            check=False,
+        )
+        assert result.returncode == 0, result.stderr
+        assert (tmp_path / "state.json").exists()
+        assert not (tmp_path / "socket").exists()
+
+    def test_client_waiting_in_backlog_cancels_idle_exit(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        service = Server(directory=tmp_path, idle_timeout=1)
+        try:
+            with connect_socket(tmp_path) as sock:
+                monkeypatch.setattr(
+                    "bonipy35.alarm.server.time.monotonic",
+                    lambda: float("inf"),
+                )
+                service.finish_idle()
+                assert not service.stopping
+                assert len(service.connections) == 1
+                assert service.connections[0].sock.fileno() >= 0
+                assert sock.fileno() >= 0
+        finally:
+            service.close()
+
+    def test_client_arriving_during_cleanup_waits_then_restarts(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        entered = threading.Event()
+        release = threading.Event()
+        original = Server.save
+
+        def save(service: Server) -> None:
+            entered.set()
+            assert release.wait(timeout=5)
+            original(service)
+
+        monkeypatch.setattr(Server, "save", save)
+        with running_server(tmp_path, idle_timeout=0.1) as (_service, worker):
+            assert entered.wait(timeout=5)
+            with concurrent.futures.ThreadPoolExecutor(
+                max_workers=1
+            ) as executor:
+                future = executor.submit(Client, directory=tmp_path)
+                try:
+                    assert not future.done()
+                finally:
+                    release.set()
+                with future.result(timeout=5) as connection:
+                    try:
+                        assert (
+                            connection.request("timer", duration=60)["items"][
+                                0
+                            ]["id_"]
+                            == 0
+                        )
+                    finally:
+                        connection.request("shutdown")
+            worker.join(timeout=5)
+            assert not worker.is_alive()
 
 
 class TestServerLifecycle:
@@ -96,7 +275,7 @@ class TestServerCommands:
         )
         assert (
             connection.request("resume", id_=0)["items"][0]["state"]
-            == "active"
+            == "running"
         )
         assert (
             connection.request("stop", id_=0)["items"][0]["state"]
@@ -206,7 +385,7 @@ class TestNotifications:
             created = next_event(other)
             assert created["notifications"] == []
             expired = next_event(other)
-            assert expired["items"][0]["state"] == "triggered"
+            assert expired["items"][0]["state"] == "running"
             assert expired["notifications"][0]["name"] == "Tea"
             first = connection.request("notifications")["notifications"]
             assert connection.request("status")["notifications"] == first
@@ -214,8 +393,7 @@ class TestNotifications:
             assert next_event(other)["notifications"] == []
             assert other.request("status")["notifications"] == []
             assert (
-                connection.request("status")["items"][0]["state"]
-                == "triggered"
+                connection.request("status")["items"][0]["state"] == "running"
             )
             with Client(directory=service.directory) as late:
                 assert late.snapshot["notifications"] == []
@@ -230,7 +408,10 @@ class TestNotifications:
             if not observer.snapshot["notifications"]:
                 next_event(observer)
         with Client(directory=service.directory) as late:
-            assert late.snapshot["notifications"][0]["missed"] is False
+            assert (
+                late.snapshot["notifications"][0]["notification_state"]
+                == "triggered"
+            )
 
     def test_creating_and_rescheduling_past_alarm_keeps_active_status(
         self, connection: Client
@@ -239,14 +420,18 @@ class TestNotifications:
         snapshot = connection.request(
             "alarm", end_time=Datetime.model_dump(past)
         )
-        assert snapshot["items"][0]["state"] == "active"
-        assert snapshot["notifications"][0]["missed"]
+        assert snapshot["items"][0]["state"] == "running"
+        assert (
+            snapshot["notifications"][0]["notification_state"] == "triggered"
+        )
         connection.request("dismiss", id_=0)
         snapshot = connection.request(
             "reschedule", id_=0, end_time=Datetime.model_dump(past)
         )
-        assert snapshot["items"][0]["state"] == "active"
-        assert snapshot["notifications"][0]["missed"]
+        assert snapshot["items"][0]["state"] == "running"
+        assert (
+            snapshot["notifications"][0]["notification_state"] == "triggered"
+        )
 
     def test_restart_notifies_after_dismissal(
         self, connection: Client
@@ -259,20 +444,23 @@ class TestNotifications:
 
 
 class TestServerRecovery:
-    def test_missed_deadline_preserves_status_and_dismissal_survives_restart(
+    def test_overdue_deadline_triggers_and_dismissal_survives_restart(
         self, tmp_path: pathlib.Path, now: datetime.datetime
     ) -> None:
         state = UserData()
         state.add_alarm(
-            end_time=now - datetime.timedelta(days=1000), name="Missed"
+            end_time=now - datetime.timedelta(days=1000), name="Overdue"
         )
         path = tmp_path / "state.json"
         path.write_text(state.model_dump_json(), encoding="utf-8")
         first = Server(directory=tmp_path)
         try:
-            assert first.user_data.get(0).state == State.ACTIVE
+            assert first.user_data.get(0).state == State.RUNNING
             snapshot = first.snapshot()
-            assert snapshot["notifications"][0]["missed"]
+            assert (
+                snapshot["notifications"][0]["notification_state"]
+                == "triggered"
+            )
             first.user_data.get(0).dismiss(utc_now())
             first.save()
         finally:
@@ -280,7 +468,7 @@ class TestServerRecovery:
         second = Server(directory=tmp_path)
         try:
             assert second.snapshot()["notifications"] == []
-            assert second.user_data.get(0).state == State.ACTIVE
+            assert second.user_data.get(0).state == State.RUNNING
         finally:
             second.close()
 
@@ -301,8 +489,11 @@ class TestServerRecovery:
             with Client(directory=tmp_path) as connection:
                 assert connection.snapshot["notifications"] == []
                 snapshot = connection.request("resume", id_=0)
-                assert snapshot["items"][0]["state"] == "active"
-                assert snapshot["notifications"][0]["missed"]
+                assert snapshot["items"][0]["state"] == "running"
+                assert (
+                    snapshot["notifications"][0]["notification_state"]
+                    == "triggered"
+                )
         finally:
             service.stop()
             worker.join(timeout=5)

@@ -103,15 +103,14 @@ def format_snapshot(snapshot: client.Snapshot) -> List[str]:
     lines = []
     for item in snapshot["items"]:
         lines.append(
-            "{id_}: {name} | {state} | remaining {remaining:g}s | {end_time}".format(
+            "{id_}: {name} | {state} | {notification_state} | remaining {remaining:g}s | {end_time}".format(
                 **item
             )
         )
     for notification in snapshot["notifications"]:
         lines.append(
             "Notification {id_}: {name} ({kind})".format(
-                kind="missed" if notification["missed"] else "expired",
-                **notification
+                kind=notification["notification_state"], **notification
             )
         )
     return lines

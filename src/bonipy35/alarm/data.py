@@ -11,10 +11,15 @@ from typing import Dict, List, Union
 
 
 class State(enum.Enum):
-    ACTIVE = "active"
+    RUNNING = "running"
     PAUSED = "paused"
     STOPPED = "stopped"
+
+
+class NotificationState(enum.Enum):
+    PENDING = "pending"
     TRIGGERED = "triggered"
+    DISMISSED = "dismissed"
 
 
 def utc_now() -> datetime.datetime:
@@ -44,7 +49,7 @@ class Alarm:
         end_time: datetime.datetime,
         id_: int,
         name: str,
-        state: State = State.ACTIVE
+        state: State = State.RUNNING
     ) -> None:
         Datetime.model_dump(end_time)
         self.end_time = end_time
@@ -54,39 +59,42 @@ class Alarm:
         self.paused_at = None  # type: Union[None, datetime.datetime]
         self.occurred_at = None  # type: Union[None, datetime.datetime]
         self.last_dismissed_at = None  # type: Union[None, datetime.datetime]
-        self.missed = False
 
     def remaining(self, now: datetime.datetime) -> datetime.timedelta:
         reference = self.paused_at if self.paused_at is not None else now
         return max(datetime.timedelta(), self.end_time - reference)
 
     @property
+    def notification_state(self) -> NotificationState:
+        if self.occurred_at is not None and (
+            self.last_dismissed_at is not None
+            and self.occurred_at <= self.last_dismissed_at
+        ):
+            return NotificationState.DISMISSED
+        if self.occurred_at is not None:
+            return NotificationState.TRIGGERED
+        return NotificationState.PENDING
+
+    @property
     def notification_active(self) -> bool:
         return (
-            self.occurred_at is not None
-            and self.state not in (State.PAUSED, State.STOPPED)
-            and (
-                self.last_dismissed_at is None
-                or self.occurred_at > self.last_dismissed_at
-            )
+            self.notification_state == NotificationState.TRIGGERED
+            and self.state == State.RUNNING
         )
 
-    def update(self, now: datetime.datetime, *, missed: bool = False) -> bool:
+    def update(self, now: datetime.datetime) -> bool:
         if (
-            self.state != State.ACTIVE
+            self.state != State.RUNNING
             or self.occurred_at is not None
             or self.end_time > now
         ):
             return False
         self.occurred_at = self.end_time
-        self.missed = missed
-        if not missed:
-            self.state = State.TRIGGERED
         return True
 
     def pause(self, now: datetime.datetime) -> None:
-        if self.state != State.ACTIVE:
-            raise ValueError("Only an active item can be paused")
+        if self.state != State.RUNNING:
+            raise ValueError("Only a running item can be paused")
         self.paused_at = now
         self.state = State.PAUSED
 
@@ -96,23 +104,21 @@ class Alarm:
         if isinstance(self, Timer):
             self.end_time += max(datetime.timedelta(), now - self.paused_at)
         self.paused_at = None
-        self.state = State.ACTIVE
-        self.update(now, missed=True)
+        self.state = State.RUNNING
+        self.update(now)
 
     def stop(self) -> None:
         self.state = State.STOPPED
         self.paused_at = None
-        self.occurred_at = None
 
     def reschedule(self, end_time: datetime.datetime) -> None:
         Datetime.model_dump(end_time)
         self.end_time = end_time
-        self.state = State.ACTIVE
+        self.state = State.RUNNING
         self.paused_at = None
         self.occurred_at = None
         # Dismissal belongs to an occurrence, not permanently to the item.
         self.last_dismissed_at = None
-        self.missed = False
 
     def dismiss(self, now: datetime.datetime) -> None:
         if self.occurred_at is None:
@@ -126,7 +132,6 @@ class Alarm:
             "name": self.name,
             "state": self.state.value,
             "end_time": Datetime.model_dump(self.end_time),
-            "missed": self.missed,
         }
         for key in ("paused_at", "occurred_at", "last_dismissed_at"):
             value = getattr(self, key)
@@ -138,7 +143,13 @@ class Alarm:
         end_time = Datetime.model_validate_datetime(obj["end_time"])
         id_ = int(obj["id_"])
         name = str(obj["name"])
-        state = State(obj["state"])
+        # Migrate the previous service format without reviving dismissals.
+        stored_state = obj["state"]
+        state = State(
+            "running"
+            if stored_state in ("active", "triggered")
+            else stored_state
+        )
         if "duration" in obj:
             item = Timer(
                 duration=datetime.timedelta(seconds=obj["duration"]),
@@ -160,7 +171,6 @@ class Alarm:
                     else Datetime.model_validate_datetime(value)
                 ),
             )
-        item.missed = bool(obj.get("missed", False))
         if (item.state == State.PAUSED) != (item.paused_at is not None):
             raise ValueError("Paused state requires paused_at")
         if item.id_ < 0:
@@ -229,17 +239,17 @@ class UserData:
     def delete(self, id_: int) -> None:
         self.alarms.remove(self.get(id_))
 
-    def update(self, now: datetime.datetime, *, missed: bool = False) -> bool:
+    def update(self, now: datetime.datetime) -> bool:
         changed = False
         for item in self.alarms:
-            changed = item.update(now, missed=missed) or changed
+            changed = item.update(now) or changed
         return changed
 
     def next_deadline(self) -> Union[None, datetime.datetime]:
         deadlines = [
             item.end_time
             for item in self.alarms
-            if item.state == State.ACTIVE and item.occurred_at is None
+            if item.state == State.RUNNING and item.occurred_at is None
         ]
         return min(deadlines) if deadlines else None
 
@@ -272,6 +282,7 @@ class UserData:
         for item in self.alarms:
             obj = item.model_dump()
             obj["remaining"] = item.remaining(now).total_seconds()
+            obj["notification_state"] = item.notification_state.value
             items.append(obj)
             if item.notification_active:
                 notifications.append(
@@ -279,7 +290,7 @@ class UserData:
                         "id_": item.id_,
                         "name": item.name,
                         "occurred_at": obj["occurred_at"],
-                        "missed": item.missed,
+                        "notification_state": NotificationState.TRIGGERED.value,
                     }
                 )
         return {"items": items, "notifications": notifications}

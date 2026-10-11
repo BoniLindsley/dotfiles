@@ -3,7 +3,8 @@
 `bonipy35.alarm` is a local, persistent alarm/timer service. The server owns
 items, scheduling, notifications and the JSON state file. Clients submit
 commands and display snapshots or events. Clients start the server when needed;
-the server keeps running after clients disconnect.
+the server keeps running after clients disconnect unless an idle timeout is
+configured.
 
 This replaces the prototype in `bonipy35.alarm_`. Its data and wire formats are
 not supported. Repeating alarms are outside the current specification.
@@ -11,9 +12,14 @@ not supported. Repeating alarms are outside the current specification.
 ## Items and time
 
 An alarm has a unique integer ID, name, wall-clock deadline and lifecycle state:
-`active`, `paused`, `stopped` or `triggered`. A timer additionally has a positive
+`running`, `paused` or `stopped`. Notification state is independent:
+`pending`, `triggered` or `dismissed`. A timer additionally has a positive
 duration. Starting or restarting a timer sets its deadline to now plus duration.
 IDs are shared by alarms and timers and are not reused after deletion/restart.
+Snapshots expose scheduling as `state` and notification classification as
+`notification_state`. Earlier service records with `active`/`triggered` scheduling
+are read as `running`, preserving occurrences and dismissals; the obsolete missed
+flag is ignored and omitted on subsequent writes.
 
 Alarm creation accepts `HH:MM` or `YYYY-MM-DD HH:MM`. A time that has already
 passed means its next occurrence, normally tomorrow. An exact match means now.
@@ -27,22 +33,22 @@ from the deadline, never maintained by decrementing a counter.
 Pausing records `paused_at`. A paused timer freezes its remaining time; resuming
 shifts its deadline by the paused interval, including across server restarts.
 A paused alarm keeps its original deadline and suspends notifications. Resuming
-an overdue alarm activates a missed-deadline notification. Stopping disables
-expiry and clears an active notification. Restarting a timer starts its original
+an overdue alarm triggers normally. Pausing or stopping suppresses notifications
+without acknowledging them. Restarting a timer starts its original
 duration anew. Alarms may be rescheduled with a new deadline.
 
 ## Notifications
 
-An ordinary expiry changes an active item to `triggered` and activates a
-notification. Deadlines missed while the server was down, or while an alarm was
-paused, or supplied as an already-past explicit deadline, activate a notification
-without changing the item's stored status.
-Connection absence does not make an otherwise observed expiry a missed deadline.
+An eligible deadline starts `pending`, becomes `triggered` when reached, and
+becomes `dismissed` only through explicit user acknowledgement. Expiry and
+dismissal leave scheduling state unchanged. Overdue deadlines discovered after
+downtime, on resume, or supplied explicitly trigger normally. Client presence,
+receipt and server uptime do not change notification classification.
 
 Notifications are persistent occurrences independent of lifecycle state. Each
-records its occurrence time (the deadline), whether it was missed, and the last
-dismissal time. It remains active until globally dismissed. Repeated snapshots
-may deliver the same notification; clients identify it by item ID and occurrence
+records its occurrence time (the deadline) and the last dismissal time. It remains
+triggered until globally dismissed; scheduling controls can suppress its delivery
+without acknowledging it. Repeated snapshots may deliver the same notification; clients identify it by item ID and occurrence
 and replace their displayed list rather than accumulating duplicates.
 
 The server broadcasts changes immediately to connected clients. With no clients,
@@ -102,6 +108,7 @@ python -m bonipy35.alarm cmd
 python -m bonipy35.alarm gui
 python -m bonipy35.alarm tui
 python -m bonipy35.alarm server
+python -m bonipy35.alarm server --idle-timeout 60
 ```
 
 Place `--directory PATH` before the client command, e.g.
@@ -109,7 +116,17 @@ Place `--directory PATH` before the client command, e.g.
 `cmd` accepts the same commands interactively and shows server events while
 waiting for input. `watch` waits for events until interrupted. GUI and TUI provide
 item creation, pause/resume, stop, timer restart, deletion and notification
-dismissal. Closing an interface leaves the service running.
+dismissal. Closing an interface disconnects that client.
+
+Optionally start the server with `--idle-timeout SECONDS` (a positive duration).
+The default is disabled. A one-shot monotonic timeout starts whenever there are
+zero connected clients, including immediately after startup, and is cancelled
+when a client connects. Pending deadlines and retained notifications do not keep
+the server alive. State is persisted before idle exit; the next client starts a
+new server and retrieves any outstanding or overdue triggers. Startup and idle
+shutdown share the startup lock so clients at the shutdown boundary recover
+before submitting commands. Automatically started servers use the default;
+start a configured server explicitly to enable idle shutdown for that instance.
 
 `python -m bonipy35.alarm cli shutdown` stops the selected service without
 removing persisted state. SIGINT/SIGTERM also shut it down cleanly.

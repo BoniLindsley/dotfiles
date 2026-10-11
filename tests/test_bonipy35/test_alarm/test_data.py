@@ -11,6 +11,7 @@ from bonipy35.alarm.data import (
     Alarm,
     Datetime,
     State,
+    NotificationState,
     Timer,
     UserData,
     utc_now,
@@ -38,19 +39,15 @@ class TestDatetime:
 
 
 class TestAlarmUpdate:
-    @pytest.mark.parametrize("missed", [False, True])
-    def test_expiry_notifies_once_and_preserves_missed_status(
-        self, now: datetime.datetime, missed: bool
+    def test_expiry_notifies_once_without_changing_scheduling(
+        self, now: datetime.datetime
     ) -> None:
         item = Alarm(end_time=now, id_=0, name="Wake")
-        assert (
-            item.update(now - datetime.timedelta(seconds=1), missed=missed)
-            is False
-        )
-        assert item.update(now, missed=missed) is True
-        assert item.state == (State.ACTIVE if missed else State.TRIGGERED)
+        assert item.update(now - datetime.timedelta(seconds=1)) is False
+        assert item.update(now) is True
+        assert item.state == State.RUNNING
+        assert item.notification_state == NotificationState.TRIGGERED
         assert item.notification_active
-        assert item.missed == missed
         assert item.update(now + datetime.timedelta(days=1)) is False
         item.dismiss(now)
         assert not item.notification_active
@@ -63,6 +60,42 @@ class TestAlarmUpdate:
         item.stop()
         assert not item.update(now)
         assert not item.notification_active
+
+
+class TestNotificationState:
+    def test_schedule_controls_suppress_without_acknowledging(
+        self, now: datetime.datetime
+    ) -> None:
+        item = Alarm(end_time=now, id_=0, name="Wake")
+        assert item.notification_state.value == "pending"
+        item.update(now)
+        item.pause(now)
+        assert item.notification_state == NotificationState.TRIGGERED
+        assert not item.notification_active
+        item.resume(now + datetime.timedelta(minutes=1))
+        assert item.notification_active
+        item.stop()
+        assert item.notification_state == NotificationState.TRIGGERED
+        assert not item.notification_active
+        restored = Alarm.model_validate(item.model_dump())
+        restored.dismiss(now)
+        assert restored.notification_state == NotificationState.DISMISSED
+        assert restored.state == State.STOPPED
+
+    @pytest.mark.parametrize("stored_state", ["active", "triggered"])
+    def test_previous_format_migrates_without_losing_acknowledgement(
+        self, now: datetime.datetime, stored_state: str
+    ) -> None:
+        item = Alarm(end_time=now, id_=0, name="Wake")
+        item.update(now)
+        item.dismiss(now)
+        obj = item.model_dump()
+        obj["state"] = stored_state
+        obj["missed"] = True
+        restored = Alarm.model_validate(obj)
+        assert restored.state == State.RUNNING
+        assert restored.notification_state == NotificationState.DISMISSED
+        assert "missed" not in restored.model_dump()
 
 
 class TestAlarmPauseResume:
@@ -82,8 +115,8 @@ class TestAlarmPauseResume:
         item.resume(now + datetime.timedelta(hours=1))
         assert item.end_time == now + datetime.timedelta(minutes=5)
         assert item.paused_at is None
-        assert item.state == State.ACTIVE
-        assert item.notification_active and item.missed
+        assert item.state == State.RUNNING
+        assert item.notification_active
 
     def test_resume_future_alarm(self, now: datetime.datetime) -> None:
         item = Alarm(
@@ -91,7 +124,7 @@ class TestAlarmPauseResume:
         )
         item.pause(now)
         item.resume(now + datetime.timedelta(minutes=1))
-        assert item.state == State.ACTIVE
+        assert item.state == State.RUNNING
         assert not item.notification_active
 
     @pytest.mark.parametrize("operation", ["pause", "resume"])
@@ -178,7 +211,7 @@ class TestTimerStart:
         item.dismiss(now)
         item.start(now)
         assert item.end_time == now + datetime.timedelta(minutes=1)
-        assert item.state == State.ACTIVE
+        assert item.state == State.RUNNING
         assert item.occurred_at is None and item.last_dismissed_at is None
 
     @pytest.mark.parametrize("seconds", [0, -1])
@@ -219,7 +252,7 @@ class TestUserData:
         )
         timer.pause(now)
         assert state.next_deadline() == now
-        assert state.update(now, missed=True)
+        assert state.update(now)
         assert state.next_deadline() is None
         snapshot = state.snapshot(now)
         assert snapshot["notifications"] == [
@@ -227,7 +260,7 @@ class TestUserData:
                 "id_": alarm.id_,
                 "name": "Wake",
                 "occurred_at": Datetime.model_dump(now),
-                "missed": True,
+                "notification_state": "triggered",
             }
         ]
         alarm.dismiss(now)

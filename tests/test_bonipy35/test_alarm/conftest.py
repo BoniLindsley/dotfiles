@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
+import contextlib
 import datetime
 import pathlib
 import threading
 
-from typing import Iterator, List
+from typing import Iterator, List, Tuple, Union
 
 # External dependencies.
 import pytest
@@ -20,15 +21,17 @@ def fixture_now() -> datetime.datetime:
     return datetime.datetime(2026, 10, 11, 12, tzinfo=datetime.timezone.utc)
 
 
-@pytest.fixture(name="service")
-def fixture_service(tmp_path: pathlib.Path) -> Iterator[Server]:
-    service = Server(directory=tmp_path)
+@contextlib.contextmanager
+def running_server(
+    directory: pathlib.Path, *, idle_timeout: Union[None, float] = None
+) -> Iterator[Tuple[Server, threading.Thread]]:
+    service = Server(directory=directory, idle_timeout=idle_timeout)
     failures = []  # type: List[BaseException]
 
     def run() -> None:
         try:
             service.run()
-        # Propagate worker failures into the test instead of losing them in a thread.
+        # Worker failures must fail the test, including persistence failures.
         # pylint: disable-next=broad-exception-caught
         except BaseException as error:
             failures.append(error)
@@ -36,13 +39,19 @@ def fixture_service(tmp_path: pathlib.Path) -> Iterator[Server]:
     worker = threading.Thread(target=run)
     worker.start()
     try:
-        yield service
+        yield service, worker
     finally:
         if worker.is_alive():
             service.stop()
         worker.join(timeout=5)
         assert not worker.is_alive()
         assert not failures
+
+
+@pytest.fixture(name="service")
+def fixture_service(tmp_path: pathlib.Path) -> Iterator[Server]:
+    with running_server(tmp_path) as (service, _worker):
+        yield service
 
 
 @pytest.fixture(name="connection")

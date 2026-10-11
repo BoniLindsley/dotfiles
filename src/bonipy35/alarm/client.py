@@ -40,6 +40,10 @@ def ensure_server(directory: pathlib.Path) -> socket.socket:
         except OSError as error:
             if error.errno not in (errno.ENOENT, errno.ECONNREFUSED):
                 raise
+        # A shutdown may have closed its endpoint before releasing ownership.
+        # Wait for cleanup before spawning a replacement, without polling.
+        with (directory / "server.lock").open("a+") as lifetime_lock:
+            fcntl.flock(lifetime_lock, fcntl.LOCK_EX)
         parent, child = socket.socketpair()
         with parent, child:
             parent.settimeout(10)
@@ -86,17 +90,25 @@ def ensure_server(directory: pathlib.Path) -> socket.socket:
 
 class Client:
     def __init__(self, *, directory: pathlib.Path) -> None:
-        self.sock = ensure_server(directory)
-        self.decoder = protocol.Decoder()
-        self._pending = []  # type: List[Dict[str, typing.Any]]
         self._request_id = 0
         self.snapshot = {"items": [], "notifications": []}  # type: Snapshot
-        try:
-            # Explicitly fetch outstanding notifications on every connection.
-            self.request("status")
-        except BaseException:
-            self.close()
-            raise
+        self._pending = []  # type: List[Dict[str, typing.Any]]
+        for attempt in range(2):
+            self.sock = ensure_server(directory)
+            self.decoder = protocol.Decoder()
+            self._pending.clear()
+            try:
+                # Only this read-only handshake can be retried safely. A lost
+                # mutation response never implies that its command was not applied.
+                self.request("status")
+                break
+            except (EOFError, ConnectionError):
+                self.close()
+                if attempt:
+                    raise
+            except BaseException:
+                self.close()
+                raise
 
     def __enter__(self) -> "typing.Self":
         return self
