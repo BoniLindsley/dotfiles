@@ -18,3 +18,17 @@ augroup taskmd_filetype
   autocmd BufRead,BufNewFile *.md
     \ if getline(1) =~# '^<!-- taskmd -->' | set filetype=taskmd | endif
 augroup END
+
+if has('nvim')
+lua << EOF
+vim.filetype.add({
+  pattern = {
+    ['.*%.task%.md'] = { 'taskmd', { priority = 0 } },
+  },
+})
+local ok, language = pcall(require, 'vim.treesitter.language')
+if ok and type(language.register) == 'function' then
+  language.register('markdown', 'taskmd')
+end
+EOF
+endif
