@@ -33,6 +33,12 @@ EOF
   let s:shim_loaded = 1
 endfunction
 
+" Open the default task document from any buffer.
+function! taskmd#Open() abort
+  call s:EnsureShimLoaded()
+  python3 taskmd_vim.vim_open()
+endfunction
+
 " Start a clock session for the task at the cursor line in the
 " current buffer.
 function! taskmd#ClockStart() abort

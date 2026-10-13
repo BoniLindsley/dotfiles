@@ -18,12 +18,12 @@ from typing import Dict, List, Union
 # Internal modules.
 from .. import datetime_ext
 from .. import logging_ext
-from .. import xdg
 
 from . import cli_args
 from . import errors
 from . import model
 from . import parser
+from . import paths as task_paths
 
 _logger = logging.getLogger(__name__)
 
@@ -114,7 +114,7 @@ def discover_paths(
     depth: Union[None, int] = None,
 ) -> List[pathlib.Path]:
     if not files and directory is None:
-        directory = str(xdg.data_home() / "bonipy35" / "taskmd")
+        directory = str(task_paths.default_directory())
     paths = []
     seen = set()
 

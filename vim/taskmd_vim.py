@@ -10,6 +10,7 @@ import vim
 
 # Internal modules.
 import bonipy35.taskmd.vim
+import bonipy35.taskmd.paths
 
 STOP_STATUS_OK = "ok"
 STOP_STATUS_NONE_OPEN = "none_open"
@@ -51,6 +52,13 @@ def _open_scratch_buffer(name: str, lines: "Sequence[str]") -> None:
     vim.command("setlocal filetype=taskmd-report")
     vim.command("silent file {0}".format(name))
     vim.current.buffer[:] = list(lines) or [""]
+
+
+def vim_open() -> None:
+    path = bonipy35.taskmd.paths.default_document().absolute()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    quoted = str(path).replace("'", "''")
+    vim.command("execute 'edit ' . fnameescape('{0}')".format(quoted))
 
 
 def vim_clock_start(*, note: Union[None, str] = None) -> None:

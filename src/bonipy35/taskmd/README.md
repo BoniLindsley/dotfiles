@@ -145,6 +145,8 @@ vim/
 │   └── taskmd.vim       # *.task.md, or .md w/ <!-- taskmd --> on line 1
 ├── ftplugin/
 │   └── taskmd.vim       # :Taskmd* commands + default keybindings
+├── plugin/
+│   └── taskmd.vim       # global :TaskmdOpen command
 ├── syntax/
 │   └── taskmd.vim       # inherits Markdown highlighting
 ├── autoload/
@@ -168,6 +170,7 @@ Requires Vim (or Neovim) compiled with `+python3`.
 
 | Command | Action |
 |---|---|
+| `:TaskmdOpen` | Open `main.task.md` in the default directory (available from any buffer) |
 | `:TaskmdClockStart` | Start a clock for the task at the cursor line |
 | `:TaskmdClockStop` | Stop the open clock for the task at the cursor (prompts via `inputlist()` if more than one session is open in the file) |
 | `:TaskmdClockStatus` | Echo whether the task at the cursor has an open session |
@@ -187,7 +190,7 @@ the plugin loads to skip them and define your own.
 **Manual:**
 copy (or symlink) the contents of `vim/` into your `~/.vim`
 (or `~/.config/nvim` on Neovim),
-preserving the `ftdetect/`, `ftplugin/`, `syntax/`
+preserving the `plugin/`, `ftdetect/`, `ftplugin/`, `syntax/`
 and `autoload/` subdirectories.
 For example,
 
@@ -248,5 +251,10 @@ when Neovim is available.
 It has no runtime behavior.
 
 When report or schedule receives no files or `--dir`, it recursively scans
+`$TASKMD_DIR` when nonempty, otherwise
 `$XDG_DATA_HOME/bonipy35/taskmd` (default: `~/.local/share/bonipy35/taskmd`).
 Explicit inputs override this default. Reading does not create the directory.
+`TASKMD_DIR` accepts relative paths and expands a leading `~`.
+`:TaskmdOpen` uses the same directory and creates it if missing;
+the new document is written only when you save the buffer.
+For example, set `export TASKMD_DIR="$HOME/tasks"` before starting Vim.

@@ -37,6 +37,25 @@ _REPO_ROOT = pathlib.Path(__file__).parents[3]
 _SHIM_PATH = _REPO_ROOT / "vim" / "taskmd_vim.py"
 
 
+class TestVimOpen:
+    def test_opens_default_document(
+        self,
+        shim: "types.ModuleType",
+        fake_vim: "FakeVim",
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        directory = tmp_path / "tasks with 'quotes'"
+        monkeypatch.setenv("TASKMD_DIR", str(directory))
+        shim.vim_open()
+        assert directory.is_dir()
+        assert not (directory / "main.task.md").exists()
+        quoted = str(directory / "main.task.md").replace("'", "''")
+        assert fake_vim.commands == [
+            "execute 'edit ' . fnameescape('{0}')".format(quoted)
+        ]
+
+
 class _FakeBuffer:
     def __init__(self) -> None:
         self.lines = []  # type: List[str]

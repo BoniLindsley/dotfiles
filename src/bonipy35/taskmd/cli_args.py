@@ -39,7 +39,7 @@ def add_input_flags(subparser: argparse.ArgumentParser) -> None:
         metavar="DIR",
         help=(
             "recursively scan DIR (with no input, scan "
-            "$XDG_DATA_HOME/bonipy35/taskmd; "
+            "$TASKMD_DIR or $XDG_DATA_HOME/bonipy35/taskmd; "
             "XDG_DATA_HOME defaults to ~/.local/share)"
         ),
     )
