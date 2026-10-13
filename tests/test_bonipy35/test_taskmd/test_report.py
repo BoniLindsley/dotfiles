@@ -14,10 +14,12 @@ from typing import List, Union
 import pytest
 
 # Internal modules.
-from bonipy35.taskmd.__main__ import main
+from bonipy35 import xdg
 from bonipy35.taskmd import model
 from bonipy35.taskmd import parser
 from bonipy35.taskmd import report
+from bonipy35.taskmd.__main__ import main
+from bonipy35.taskmd.report import discover_paths
 
 _FIXTURES_DIR = pathlib.Path(__file__).parent / "fixtures"
 
@@ -594,8 +596,26 @@ class TestDiscoverPaths:
         paths = report.discover_paths(files=[path_str, path_str])
         assert len(paths) == 1
 
-    def test_no_files_or_dir_returns_empty(self) -> None:
-        assert not report.discover_paths()
+    def test_no_files_or_dir_returns_empty(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(xdg, "data_home", lambda: tmp_path)
+        assert not discover_paths()
+        assert not (tmp_path / "bonipy35" / "taskmd").exists()
+
+    def test_default_directory_is_scanned(
+        self, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(xdg, "data_home", lambda: tmp_path)
+        directory = tmp_path / "bonipy35" / "taskmd"
+        directory.mkdir(parents=True)
+        task = directory / "notes.task.md"
+        task.write_text("# TODO default task\n")
+        assert discover_paths(files=[]) == [task]
+        assert discover_paths(files=["explicit.task.md"]) == [
+            pathlib.Path("explicit.task.md")
+        ]
+        assert not discover_paths(directory=str(tmp_path / "elsewhere"))
 
     def test_non_md_file_in_scanned_dir_is_ignored(
         self, tmp_path: pathlib.Path
@@ -760,8 +780,12 @@ class TestCliReport:
         assert "Write the parser" not in captured.out
 
     def test_no_input_files_is_an_error(
-        self, capsys: pytest.CaptureFixture[str]
+        self,
+        capsys: pytest.CaptureFixture[str],
+        tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(xdg, "data_home", lambda: tmp_path)
         exit_code = main(["taskmd", "report"])
         captured = capsys.readouterr()
         assert exit_code == 1

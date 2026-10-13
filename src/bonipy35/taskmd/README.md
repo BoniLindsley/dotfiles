@@ -246,3 +246,7 @@ while `test_vim_integration.py` drives the real plugin
 when Neovim is available.
 `stubs/vim.pyi` supplies type declarations for development tools.
 It has no runtime behavior.
+
+When report or schedule receives no files or `--dir`, it recursively scans
+`$XDG_DATA_HOME/bonipy35/taskmd` (default: `~/.local/share/bonipy35/taskmd`).
+Explicit inputs override this default. Reading does not create the directory.
