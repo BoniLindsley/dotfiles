@@ -74,6 +74,7 @@ if !has('win32')
   let &grepprg .= '--exclude-dir=.git '
   let &grepprg .= '--exclude-dir=.mypy_cache '
   let &grepprg .= '--exclude-dir=.pytest_cache '
+  let &grepprg .= '--exclude-dir=.tox '
   let &grepprg .= '--exclude-dir=.vscode '
   let &grepprg .= '--exclude-dir=\*.egg-info '
   let &grepprg .= '--exclude-dir=__pycache__ '
