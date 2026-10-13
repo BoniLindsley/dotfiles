@@ -38,9 +38,13 @@ if !exists('g:taskmd_no_mappings') || !g:taskmd_no_mappings
   nnoremap <buffer> <silent> <LocalLeader>tau :TaskmdScheduleSummary<CR>
 endif
 
-let b:undo_ftplugin = 'setlocal filetype< | '
-  \ . 'delcommand TaskmdClockStart | delcommand TaskmdClockStop | '
-  \ . 'delcommand TaskmdClockStatus | delcommand TaskmdReport | '
-  \ . 'delcommand TaskmdReportDir | delcommand TaskmdListOpen | '
-  \ . 'delcommand TaskmdScheduleShow | delcommand TaskmdScheduleConflicts | '
-  \ . 'delcommand TaskmdScheduleSummary'
+let b:undo_ftplugin = ''
+  \ . 'silent! delcommand TaskmdClockStart | '
+  \ . 'silent! delcommand TaskmdClockStop | '
+  \ . 'silent! delcommand TaskmdClockStatus | '
+  \ . 'silent! delcommand TaskmdReport | '
+  \ . 'silent! delcommand TaskmdReportDir | '
+  \ . 'silent! delcommand TaskmdListOpen | '
+  \ . 'silent! delcommand TaskmdScheduleShow | '
+  \ . 'silent! delcommand TaskmdScheduleConflicts | '
+  \ . 'silent! delcommand TaskmdScheduleSummary'

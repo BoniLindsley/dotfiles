@@ -34,7 +34,14 @@ def add_input_flags(subparser: argparse.ArgumentParser) -> None:
         help="an explicit file to read (repeatable)",
     )
     subparser.add_argument(
-        "--dir", dest="dir", metavar="DIR", help="recursively scan DIR"
+        "--dir",
+        dest="dir",
+        metavar="DIR",
+        help=(
+            "recursively scan DIR (with no input, scan "
+            "$XDG_DATA_HOME/bonipy35/taskmd; "
+            "XDG_DATA_HOME defaults to ~/.local/share)"
+        ),
     )
     subparser.add_argument(
         "--depth",

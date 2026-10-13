@@ -18,6 +18,7 @@ from typing import Dict, List, Union
 # Internal modules.
 from .. import datetime_ext
 from .. import logging_ext
+from .. import xdg
 
 from . import cli_args
 from . import errors
@@ -112,6 +113,8 @@ def discover_paths(
     directory: Union[None, str] = None,
     depth: Union[None, int] = None,
 ) -> List[pathlib.Path]:
+    if not files and directory is None:
+        directory = str(xdg.data_home() / "bonipy35" / "taskmd")
     paths = []
     seen = set()
 
