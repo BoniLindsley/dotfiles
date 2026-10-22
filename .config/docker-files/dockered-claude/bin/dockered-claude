@@ -1,0 +1,233 @@
+#!/usr/bin/env bash
+
+__help() {
+  cat <<HELP
+Usage: ${script_name} [--help] [--build] [--] [claude arguments...]
+
+Run Claude Code in an isolated Docker container.
+
+  -h, --help    Show this help
+  -b, --build   Rebuild the Docker image (also how Claude Code gets updated)
+  --            Pass remaining arguments directly to Claude Code
+
+Environment:
+  DOCKERED_CLAUDE_IMAGE   Image name (default: dockered-claude:latest)
+  DOCKERED_CLAUDE_HOME    Host state directory (default: \$XDG_STATE_HOME/dockered-claude
+                          or \$HOME/.local/state/dockered-claude)
+
+  Passed through when set: ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN,
+  ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
+
+Skills:
+  ~/.agents is mounted read-only. Claude Code does not read ~/.agents/skills,
+  so each skill there is symlinked into the container's ~/.claude/skills,
+  which stays writable for skills synced from claude.ai.
+
+Examples:
+  ${script_name}
+  ${script_name} --build
+  ${script_name} -- --help
+  ${script_name} -p 'run the tests'
+HELP
+}
+
+warn() {
+  printf '%s: %s\n' "${script_name}" "$*" >&2
+}
+
+parse_arguments() {
+  declare argument
+  while (($#)); do
+    argument="$1"
+    shift
+    case "${argument}" in
+    -h | --help) kwargs[help]=1 ;;
+    -b | --build) kwargs[build]=1 ;;
+    --)
+      args+=("$@")
+      break
+      ;;
+    *)
+      args+=("${argument}" "$@")
+      break
+      ;;
+    esac
+  done
+}
+
+resolve_paths() {
+  workdir="$(pwd -P)" || return
+  image="${DOCKERED_CLAUDE_IMAGE:-dockered-claude:latest}"
+  uid_host="$(id -u)" || return
+  gid_host="$(id -g)" || return
+  username="$(id -un)" || return
+  groupname="$(id -gn)" || return
+
+  # The container home lives under the mounted /home tree, so the
+  # username-specific directory does not need to exist in the read-only image.
+  home="/home/${username}"
+  state_dir="${DOCKERED_CLAUDE_HOME:-${XDG_STATE_HOME:-${HOME:?}/.local/state}/dockered-claude}"
+  state_home="${state_dir}/home/${username}"
+  passwd_file="${state_dir}/passwd"
+  group_file="${state_dir}/group"
+  agents_dir="${HOME:?}/.agents"
+}
+
+prepare_state_directory() {
+  # Claude Code keeps its state in ~/.claude/ and ~/.claude.json; both end
+  # up inside the persisted home directory.
+  mkdir -p -- "${state_home}/.claude/skills" || return
+  chmod 700 -- "${state_dir}" "${state_dir}/home" \
+    "${state_home}" "${state_home}/.claude" || return
+}
+
+prepare_user_identity() {
+  printf 'root:x:0:0:root:/root:/bin/bash\n%s:x:%s:%s:%s:%s:/bin/bash\n' \
+    "${username}" "${uid_host}" "${gid_host}" "${username}" "${home}" \
+    >"${passwd_file}" || return
+  printf 'root:x:0:\n%s:x:%s:\n' "${groupname}" "${gid_host}" \
+    >"${group_file}" || return
+  chmod 600 -- "${passwd_file}" "${group_file}" || return
+}
+
+# Symlink each skill in ~/.agents/skills
+# into the persisted ~/.claude/skills,
+# using relative path ../../.agents/skills/<name>.
+link_agent_skills() {
+  declare skills_source="${agents_dir}/skills"
+  declare skills_target="${state_home}/.claude/skills"
+  declare link_prefix='../../.agents/skills/'
+  declare entry name link target
+
+  # Drop links from earlier runs whose skill has since been removed.
+  for link in "${skills_target}"/*; do
+    [[ -L "${link}" ]] || continue
+    target="$(readlink -- "${link}")" || return
+    [[ "${target}" == "${link_prefix}"* ]] || continue
+    name="${link##*/}"
+    if [[ ! -f "${skills_source}/${name}/SKILL.md" ]]; then
+      rm -f -- "${link}" || return
+    fi
+  done
+
+  [[ -d "${skills_source}" ]] || return 0
+
+  for entry in "${skills_source}"/*/; do
+    [[ -f "${entry}SKILL.md" ]] || continue
+    entry="${entry%/}"
+    name="${entry##*/}"
+    link="${skills_target}/${name}"
+
+    # Claude Code reserves "synced" (any case) for skills from claude.ai.
+    if [[ "${name,,}" == synced ]]; then
+      warn "skipping skill '${name}': the name is reserved by Claude Code"
+      continue
+    fi
+    if [[ -L "${link}" ]]; then
+      target="$(readlink -- "${link}")" || return
+      [[ "${target}" == "${link_prefix}${name}" ]] && continue
+      warn "skipping skill '${name}': ${link} already links to ${target}"
+      continue
+    fi
+    if [[ -e "${link}" ]]; then
+      warn "skipping skill '${name}': ${link} already exists"
+      continue
+    fi
+    ln -s -- "${link_prefix}${name}" "${link}" || return
+  done
+}
+
+image_exists() {
+  docker image inspect "${image}" >/dev/null 2>&1
+}
+
+build_image() {
+  docker build \
+    --pull \
+    --tag "${image}" \
+    "${project_directory}" || return
+}
+
+ensure_image() {
+  if [[ -n "${kwargs[build]+defined}" ]] || ! image_exists; then
+    build_image || return
+  fi
+}
+
+run_container() {
+  declare -a docker_args=(
+    run
+    --cap-drop ALL
+    --env "HOME=${home}"
+    --env "TERM=${TERM:-xterm-256color}"
+    --init
+    --interactive
+    --mount "type=bind,src=${group_file},dst=/etc/group,readonly"
+    --mount "type=bind,src=${passwd_file},dst=/etc/passwd,readonly"
+    --mount "type=bind,src=${state_dir}/home,dst=/home"
+    --mount "type=bind,src=${workdir},dst=${workdir}"
+    --read-only
+    --rm
+    --security-opt no-new-privileges:true
+    --security-opt seccomp=unconfined
+    --tmpfs '/tmp:rw,nosuid,nodev,mode=1777'
+    --user "${uid_host}:${gid_host}"
+    --workdir "${workdir}"
+  )
+
+  # Allocate a TTY only when attached to one, so piping works
+  # (e.g. `git diff | dockered-claude -p 'review this'`).
+  if [[ -t 0 && -t 1 ]]; then
+    docker_args+=(--tty)
+  fi
+
+  declare variable
+  for variable in ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
+    ANTHROPIC_BASE_URL ANTHROPIC_MODEL; do
+    if [[ -n "${!variable:-}" ]]; then
+      docker_args+=(--env "${variable}")
+    fi
+  done
+
+  if [[ -d "${agents_dir}" ]]; then
+    docker_args+=(
+      --mount "type=bind,src=${agents_dir},dst=${home}/.agents,readonly"
+    )
+  fi
+
+  exec docker "${docker_args[@]}" "${image}" "$@"
+}
+
+main() {
+  declare script_path
+  script_path="$(realpath -- "${BASH_SOURCE[0]}")" || return
+  declare script_name
+  script_name="$(basename -- "${script_path}")" || return
+  declare script_directory
+  script_directory="$(dirname -- "${script_path}")" || return
+  declare project_directory
+  project_directory="$(dirname -- "${script_directory}")" || return
+
+  declare image workdir state_dir state_home uid_host gid_host username groupname
+  declare home passwd_file group_file agents_dir
+  declare -A kwargs=()
+  declare -a args=()
+
+  parse_arguments "$@" || return
+  if [[ -n "${kwargs[help]+defined}" ]]; then
+    __help
+    return
+  fi
+
+  resolve_paths || return
+  prepare_state_directory || return
+  prepare_user_identity || return
+  link_agent_skills || return
+  ensure_image || return
+  run_container "${args[@]}" || return
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  main "$@"
+fi
