@@ -81,6 +81,39 @@ prepare_state_directory() {
     "${state_home}" "${state_home}/.claude" || return
 }
 
+# Docker creates missing mount points as root. Under /home, which is the
+# persisted state directory, that would leave root-owned directories on the
+# host (e.g. ~/src for a workdir ~/src/project) that the user can neither
+# write to nor remove, so create the mount point and its parents as the user.
+prepare_home_mount_point() {
+  declare destination="$1"
+  [[ "${destination}" == /home/?* ]] || return 0
+
+  declare directory="${state_dir}/home"
+  declare component
+  declare -a components
+  IFS=/ read -r -a components <<<"${destination#/home/}"
+  for component in "${components[@]}"; do
+    directory+="/${component}"
+    [[ -e "${directory}" ]] || break
+    if [[ ! -O "${directory}" ]]; then
+      warn "${directory} is not owned by ${username}" \
+        "(probably created by Docker in an earlier run);" \
+        "fix it with: sudo chown -R ${uid_host}:${gid_host} '${directory}'"
+      return 0
+    fi
+  done
+
+  mkdir -p -- "${state_dir}${destination}"
+}
+
+prepare_mount_points() {
+  prepare_home_mount_point "${workdir}" || return
+  if [[ -d "${agents_dir}" ]]; then
+    prepare_home_mount_point "${home}/.agents" || return
+  fi
+}
+
 prepare_user_identity() {
   printf 'root:x:0:0:root:/root:/bin/bash\n%s:x:%s:%s:%s:%s:/bin/bash\n' \
     "${username}" "${uid_host}" "${gid_host}" "${username}" "${home}" \
@@ -221,6 +254,7 @@ main() {
 
   resolve_paths || return
   prepare_state_directory || return
+  prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
   ensure_image || return
