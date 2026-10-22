@@ -1,413 +1,517 @@
 ---
 name: resumable-objective
-version: 2.0.0
 description: >
-  Make long-running objectives resumable
-  across infrequent or interrupted agent sessions
-  by maintaining a self-contained PROJECT_STATE.md
-  that embeds both the operating protocol and project state.
+  Keep long-running work resumable across infrequent or interrupted sessions
+  by tracking objectives, tasks and decisions in OBJECTIVES.md
+  on a meta/BRANCH/objectives branch that runs parallel to a code branch
+  and merges it in as work completes.
   Use when an objective is unlikely to finish in one session,
   when sessions may be separated by long gaps,
-  or whenever PROJECT_STATE.md already exists.
+  or whenever OBJECTIVES.md or a meta/BRANCH/objectives branch
+  is in the project or mentioned in the conversation.
+metadata:
+  version: 3.2.0
 ---
 
 # Resumable objective
 
-Use this skill for objectives that may span multiple sessions,
-especially personal or side projects worked on irregularly.
-Its purpose is not merely to track tasks;
-it is to make each future session immediately actionable
-with minimal reconstruction of context.
+Use this skill for work that spans several sessions,
+especially projects worked on irregularly.
+The aim is that any later session,
+by any capable agent or person,
+can start useful work after reading one file,
+without reconstructing earlier reasoning.
 
-The skill is a **bootstrap and recovery mechanism**.
-The durable artifact is `./PROJECT_STATE.md`,
-which must contain both:
-
-1. a versioned operating protocol telling any future capable agent
-   how to continue the project, even if this skill is not installed; and
-2. the current project state:
-   objectives, success criteria, plan, progress, decisions, evidence,
-   blockers, and exact resumption instructions.
-
-Once created,
-`PROJECT_STATE.md` is the project's primary handoff contract.
+The durable record is `OBJECTIVES.md`.
+It holds the objectives and how each is verified,
+the tasks under them,
+the decisions they depend on,
+and where work stands now.
+In a git repository it lives only on objectives branches,
+one per code branch,
+next to the code but never inside it.
 
 ## When to use
 
 Use this skill when any of the following is true:
 
 - The objective is unlikely to be completed in the current session.
-- The user expects irregular, short, or widely separated work sessions.
-- Work has dependencies, unresolved decisions, substantial context,
-  or costly restart overhead.
-- A `PROJECT_STATE.md` already exists in the working directory.
-- The user explicitly asks for persistent/resumable project execution.
+- Sessions are expected to be short, irregular or far apart.
+- The work has dependencies, open decisions,
+  or context that would be costly to rediscover.
+- `OBJECTIVES.md` or a `meta/<branch>/objectives` branch already exists.
+- The user asks for persistent or resumable tracking.
 
 Do not use it for trivial one-session work
-unless the user asks for persistence.
+unless the user asks for it.
 
-## Persistence and safety
+## Where the file lives
 
-Maintain `./PROJECT_STATE.md` in the current working directory.
-At the beginning of every session,
-check for and read the whole file before planning or acting.
+### Git repositories
 
-If the working directory is unavailable or not writable,
-explain that durable continuation cannot be guaranteed.
+Each code branch with objectives of its own
+has an objectives branch named `meta/<branch>/objectives`,
+for example `meta/dev/objectives` for `dev`.
+`OBJECTIVES.md` sits at its root, and only there.
+
+- **One objectives branch per code branch.**
+  Different code branches have different goals or progress,
+  so each keeps its own `OBJECTIVES.md`.
+  The branch name says which code branch it follows,
+  so the file does not repeat it.
+  An objectives branch merges in only its own code branch.
+- **Code branches never contain it.**
+  Code commits never add or change `OBJECTIVES.md`.
+- **The branch runs parallel to the code.**
+  `meta/<branch>/objectives` starts from its code branch
+  and merges it in as work completes.
+  It is never merged back into a code branch,
+  and `OBJECTIVES.md` is never cherry-picked into one.
+- **The `meta/` prefix** marks the branch as about the project,
+  not part of it.
+  Other branches of this kind,
+  such as `meta/<branch>/time-tracking`,
+  belong in the same namespace.
+
+Keep a separate worktree for each objectives branch,
+so that the code checkout never has to switch branches:
+
+```sh
+git worktree add ../<repository>.objectives/<branch> meta/<branch>/objectives
+```
+
+Read the file without a worktree with
+`git show meta/<branch>/objectives:OBJECTIVES.md`.
+
+When a new code branch starts from one that has objectives,
+give it its own objectives branch only if it has goals of its own.
+Refer to the parent's entries by branch and ID,
+for example `meta/dev/objectives O-008`,
+since IDs are unique only within one file.
+
+### Other directories
+
+Without git, keep `OBJECTIVES.md` in the working directory
+and skip the branch rules.
+If the location is not writable,
+say that progress cannot be kept between sessions.
 Never claim persistence without a successful write.
 
-Do not store secrets, credentials, authentication tokens, private keys,
-or unnecessary personal information in the state file.
-Prefer relative paths over machine-specific absolute paths.
+## Recording changes
 
-Treat the state file as a handoff record, not proof.
-Verify material claims against project artifacts, tests, commands,
-or user confirmation when appropriate.
+Every change to `OBJECTIVES.md` is a commit on its objectives branch,
+so its history is the project's history.
+Each commit describes the change to objectives, tasks or decisions,
+not the code.
 
-## Bootstrap behavior
+### Merge code with the update it completes
 
-If `PROJECT_STATE.md` does not exist:
+When code on the code branch completes a task,
+completes an objective, or changes a decision,
+merge the code branch into its objectives branch
+**up to the commit that completes it**,
+and stage the `OBJECTIVES.md` update into that merge commit:
 
-1. Create it from `templates/PROJECT_STATE.md`.
-2. Replace placeholders with the actual project information
-   known from the current session.
-3. Define at least one objective
-   with observable acceptance criteria and a verification method.
-4. Create an initial ordered task plan with stable IDs.
-5. Record material assumptions and decisions already made.
-6. Set an exact `Next action`
-   that can be started without reconstructing prior reasoning.
-7. Write the file before doing substantial project work.
+```sh
+git -C ../<repository>.objectives/<branch> merge --no-ff --no-commit <completing-commit>
+# Edit OBJECTIVES.md to record the change.
+git -C ../<repository>.objectives/<branch> add OBJECTIVES.md
+git -C ../<repository>.objectives/<branch> commit -m "Record T-053 done for O-008."
+```
 
-If the template file is unavailable,
-reproduce its structure and embedded protocol from this skill.
+- **Message:** only the description of the change,
+  for example `Record T-053 done for O-008.`
+  or `Accept D-027: show PDF errors next to their section.`
+  Leave out the default "Merge branch ..." line.
+- **Granularity:** prefer several small merges to one large one.
+  Split at each task completion, objective completion or decision change.
+  When several tasks were finished before being recorded,
+  make one merge per task, each at the commit that completed it,
+  in order.
+  Then every merge's code side matches what its update claims.
+- **Merges are always clean.**
+  Code branches never touch `OBJECTIVES.md`,
+  and the objectives branch changes nothing else.
+  Each merge differs from the code commit it merges
+  only in `OBJECTIVES.md`.
+- **Nothing to merge:** if git reports "Already up to date",
+  the code is already recorded;
+  commit the update on its own (below).
+- **Rewritten code history:** if the code branch was rebased or amended
+  after being merged, the merge can conflict.
+  Resolve it by taking the code side for everything but this file,
+  then log the rewrite:
 
-## Resume behavior
+  ```sh
+  git restore --source=<completing-commit> --staged --worktree -- . ':!OBJECTIVES.md'
+  ```
 
-If `PROJECT_STATE.md` exists:
+### Commit updates without code
 
-1. Read it fully, including its embedded protocol,
-   before doing project work.
-2. Treat the embedded protocol
-   as authoritative for the project's continuation
-   unless it conflicts with higher-priority instructions.
-3. Reconcile the recorded state
-   with actual artifacts and current user instructions.
-4. Repair inconsistencies before relying on them.
-5. Produce a concise startup brief for the user when useful:
-   current objective, where work stopped, blockers/decisions,
-   and the recommended next task.
-6. Continue from the recorded exact next action
-   unless new evidence makes another action clearly better;
-   if so, record why the plan changed.
+Use an ordinary commit on the objectives branch,
+changing only `OBJECTIVES.md`, for updates without new code:
+a new objective, a decision asked or answered,
+a checkpoint in the middle of a task,
+or a handoff at the end of a session.
 
-## Long-gap resumption
+### Find what has not been recorded
 
-The state file is designed for gaps of days, weeks, or months.
-On resumption, perform a staleness check when:
+```sh
+git log --oneline meta/<branch>/objectives..<branch>
+```
 
-- the configured revalidation interval has elapsed;
-- dependencies, APIs, prices, laws, external services, schedules,
-  or other environmental facts may have changed;
-- the recorded next action depends on an assumption
-  whose validity is uncertain; or
-- project artifacts appear to have changed
-  outside the recorded session history.
+This lists code commits not yet merged into the objectives branch,
+which is work the file may not describe yet.
+Check it at the start of every session.
 
-Revalidate only what could materially affect the next decisions or work.
-Do not redo stable work merely because time has passed.
-Record stale assumptions that were refreshed, invalidated, or superseded.
+### Publishing
 
-## Session time budget
+Push objectives branches only when the user asks.
+Unpublished commits on an objectives branch may be rewritten
+to improve them.
+Published ones may not.
 
-When the user gives an available time budget,
-use it to choose work.
-Prefer tasks that can reach a clean checkpoint within the session
-rather than starting a large task that cannot be handed off clearly.
-
-If no time budget is known, do not repeatedly interrupt the user to ask.
-Prefer a small, high-value, ready task with a clean checkpoint.
-Ask about available time only
-when it would materially change which task should be attempted.
-
-Record task size using rough buckets
-rather than pretending to know precise duration:
-
-- `XS`: tiny action / quick check
-- `S`: focused short task
-- `M`: normal work unit
-- `L`: substantial task; should usually be decomposed before execution
-
-## Operating loop
+## Session loop
 
 ### 1. Load and reconcile
 
-Read `PROJECT_STATE.md` and inspect relevant artifacts. Check for:
+1. Find the file:
+   check `git worktree list` for the objectives worktree,
+   and add it with the command above if it is missing,
+   for example on a new machine.
+2. Read the whole of `OBJECTIVES.md` before planning or acting.
+3. Compare it with the project:
+   unrecorded code commits (see above), the working tree,
+   test results, and current user instructions.
+4. Repair contradictions before relying on the file:
+   statuses that disagree, done tasks without evidence,
+   references to IDs that do not exist,
+   decisions still open that were answered,
+   deferred decisions whose trigger has fired.
+   Log material repairs.
+5. If the revalidation interval has passed,
+   or the next action depends on something that may have changed
+   (dependencies, services, external facts),
+   recheck only what could change the next work.
+   Do not redo stable work because time has passed.
+6. When useful, brief the user:
+   current objective, where work stopped,
+   open decisions or blockers, and the recommended next task.
 
-- contradictory objective or task statuses;
-- a `Current task` that does not match the task list;
-- completed work without verification evidence;
-- broken task dependencies or references to nonexistent IDs;
-- resolved decisions still marked pending/deferred;
-- deferred decisions whose revisit trigger has fired;
-- stale assumptions;
-- duplicated or obsolete tasks;
-- project changes made outside the recorded history.
+### 2. Choose work
 
-Repair the state rather than preserving known contradictions.
-Record material corrections and their reasons in the progress log.
+Pick the most valuable ready task:
+dependencies met, no open decision blocking it,
+and small enough to reach a clean checkpoint in the session.
+If the user gives a time budget, use it to choose;
+otherwise do not ask unless it would change the choice.
+Normally keep one task `in_progress`.
+Record intentional parallel work.
 
-If another agent or process may also edit the file,
-re-read it immediately before overwriting and merge changes
-rather than silently replacing them.
+### 3. Ask decisions well
 
-### 2. Reconfirm outcomes
+Make routine implementation choices without asking.
+For choices that belong to the user:
 
-Every objective must state:
+- Ask one decision at a time, in plain text,
+  with a recommendation first and the main alternatives.
+- Record it as `awaiting_user` with the question and the date asked.
+- Continue with unrelated ready work while waiting.
+- Record the answer in the user's own words, with the date.
 
-- the desired outcome;
-- observable acceptance criteria; and
-- how each criterion will be verified.
+### 4. Work and checkpoint
 
-Do not mark an objective complete because its task list is empty.
-Objective completion requires the acceptance criteria themselves to pass.
+Update the file at meaningful points, not only at the end:
+starting or switching a task,
+finishing a meaningful step,
+finding a blocker, constraint or risk,
+making or receiving a decision,
+completing, failing, cancelling or reopening a task,
+changing an objective,
+and before risky, long or interruption-prone work.
+A checkpoint should let someone resume
+even if the session stops without warning.
 
+If someone else may edit the file,
+re-read it just before writing and merge their changes.
+
+### 5. Verify before marking done
+
+A task is `done` only with evidence:
+commands and results, tests, inspected output,
+commits, or user confirmation
+where the criterion depends on the user's judgement.
+Say where the evidence came from,
+for example a sandbox without a required service,
+and what was not verified.
+
+An objective is `completed` only when its acceptance criteria pass.
+An empty task list is not enough.
+If all tasks are done but a criterion fails,
+add tasks to fix it.
+If later evidence contradicts a `done` task,
+reopen it and say why.
+
+### 6. Hand off
+
+Before the session ends,
+make `Status` concrete enough to start the next session immediately:
+the exact position,
+one executable next action with its expected result,
+relevant paths, commands or symbols,
+open decisions and blockers,
+what not to redo,
+and what to recheck after a long gap.
+Avoid handoffs such as `continue implementation`.
+
+## OBJECTIVES.md
+
+### Layout
+
+Use these sections in this order.
+Leave a section out only if it would be empty.
+
+```markdown
+# Objectives: <project name>
+
+Updated: <YYYY-MM-DD>. Recheck assumptions after: <N> days.
+
+## How to maintain this file
+
+<The rules block below, with <branch> filled in.>
+
+## Status
+
+- Current task: <T-xxx or none>
+- Progress: <exact position>
+- Last verified: <date, environment, result>
+- Blockers: <none or what blocks>
+- Waiting on the user: <D-xxx, ... or none>
+
+### Next action
+
+<One executable step, its inputs and its expected result.>
+
+### Handoff
+
+- Do not redo: <...>
+- Recheck after a long gap: <A-xxx, ...>
+
+## Objectives
+
+## Tasks
+
+## Decisions
+
+## Constraints and assumptions
+
+## Rejected approaches
+
+## Artifacts
+
+## Log
+```
+
+`Status` comes first because it is what every session needs first.
+The sections after it hold longer-lived knowledge.
+
+### Rules block
+
+Copy this block into `How to maintain this file`,
+replacing `<branch>` with the name of the code branch.
+It keeps the file usable when this skill is not available.
+Change it only to follow a new version of this skill,
+and log that change.
+
+```markdown
+This file tracks objectives, tasks and decisions
+so that work can resume in a later session.
+It follows the resumable-objective skill, version 3.2.0.
+
+- Read the whole file before working.
+  Start from `Status` and `Next action`.
+- This file exists only on branch `meta/<branch>/objectives`,
+  and tracks the code branch `<branch>`.
+  Code branches never contain it,
+  and this branch is never merged into them.
+- Run `git log --oneline meta/<branch>/objectives..<branch>`
+  to find code commits this file does not describe yet.
+- When code completes a task or objective, or changes a decision,
+  merge the code branch up to the completing commit,
+  and stage the update to this file into that merge.
+  The message describes only the update,
+  such as "Record T-053 done for O-008."
+  Other updates are ordinary commits that change only this file.
+- IDs (O-, AC-, T-, D-, A-) are permanent.
+  Never reuse them.
+- A task is done only with evidence.
+  An objective is completed only when its acceptance criteria pass.
+- Record user decisions in their words, with the date.
+- Never store secrets, credentials or tokens.
+  Prefer relative paths.
+```
+
+### Entries
+
+Every entry has a permanent ID and a status in backticks.
+Use the fields below.
+Leave out fields that do not apply,
+rather than filling them with "n/a".
+
+**Objectives** state an outcome
+with observable acceptance criteria and how each is checked.
+
+```markdown
+- **O-008** `[active]` PDF code has a single entry point
+  that returns the PDF path
+  or the errors explaining why there is none.
+  - AC-020: One public function takes one request object.
+    Check: review; no use of the builder outside the package.
+  - AC-021: Validation reports every problem at once.
+    Check: `pytest tests/test_loadsheet`.
+  - Evidence: none yet.
+  - Notes: Resolves D-022.
+```
+
+Statuses: `proposed`, `active`, `paused`, `long-term` (not scheduled),
+`completed`, `cancelled` (with the reason).
 If scope changes,
-update the objective, acceptance criteria, dependent tasks,
-and relevant decisions together.
+update the objective, its criteria, dependent tasks and decisions together.
 
-### 3. Maintain the plan
+**Tasks** are ordered, independently checkable steps toward an objective.
 
-Break work into ordered, independently verifiable tasks
-with stable IDs such as `T-001`.
-Every task should include:
+```markdown
+- **T-053** `[done]` Add the entry point;
+  remove partial files on failure.
+  - Objective: O-008. Depends on: T-052. Size: M.
+  - Done when: tests generate a PDF,
+    and return errors without leaving a file.
+  - Evidence: 2026-10-16, sandbox without G2:
+    `pytest tests/test_loadsheet` 31 passed.
+    Code: `ae1950b`.
+```
 
-- status;
-- objective;
-- dependencies;
-- rough size;
-- completion/verification condition; and
-- enough context to understand why the task exists.
+Statuses: `todo`, `in_progress`, `blocked` (name the blocker),
+`done` (with evidence), `cancelled` (with the reason).
+Sizes: `XS` (quick check), `S` (focused), `M` (normal),
+`L` (split it before starting).
+Add, reorder, cancel or reopen tasks as evidence changes.
+Dependencies point to existing tasks or name something outside the project.
 
-Split `L` tasks when possible.
-Add, reorder, cancel, or reopen tasks as new evidence appears.
-Never recycle IDs.
+**Decisions** record material choices,
+including the ones rejected,
+so that later sessions do not rediscover dead ends.
 
-### 4. Manage decisions explicitly
+```markdown
+- **D-027** `[accepted]` Show PDF errors
+  in the existing error output of each section.
+  - Context: the PDF callback has two outputs;
+    other sections have their own.
+  - Decision: user, 2026-10-16:
+    "Route them to the existing error outputs."
+    Rejected: one list by the Generate button.
+  - Revisit when: Dash is upgraded.
+```
 
-Track material choices with stable IDs such as `D-001` and one of:
+Statuses: `proposed`, `awaiting_user` (with the question and the date asked),
+`accepted`, `rejected` (with the reason),
+`deferred` (with a revisit trigger),
+`superseded` (naming the decision that replaces it).
+When a deferred decision's trigger fires,
+reopen it or turn it into a task or constraint.
 
-- `proposed`
-- `awaiting_user`
-- `accepted`
-- `rejected`
-- `deferred`
-- `superseded`
+**Constraints and assumptions:**
+constraints are rules the work must follow.
+Assumptions (`A-xxx`) are beliefs the plan depends on.
+Each says why it matters, how to check it, and when it was last checked.
 
-For rejected choices, preserve the rationale
-so future sessions do not repeatedly rediscover the same dead end.
+**Rejected approaches** lists what not to try again, and why,
+including approaches dropped without a formal decision.
 
-For deferred choices, record a concrete revisit trigger.
-When that trigger occurs,
-move the decision back into active consideration
-or convert it into a task/constraint as appropriate.
+**Artifacts** maps the main files, commands and external resources
+to the objectives that use them.
 
-When a user decision is required,
-record the exact question, options/implications when useful,
-the date or session in which it was asked, and the eventual response.
-Do not block on routine implementation choices
-that the agent can safely make.
+**Log** has one line per material change, newest last:
 
-### 5. Choose the next work
+```markdown
+- 2026-10-18: O-008: T-053 done;
+  single entry point `segwiseweb.loadsheet.generate`.
+  Code: up to `ae1950b`.
+```
 
-Select the highest-value ready task
-whose dependencies are satisfied and that fits the known session budget.
-Normally keep one task `in_progress`
-unless intentional parallel work is documented.
+### Invariants
 
-If blocked on a user decision,
-ask a focused question and continue unrelated ready work if possible.
+After every substantial update:
 
-### 6. Execute and checkpoint frequently
+1. Every ID is unique and has a status.
+2. Every active objective has acceptance criteria, each with a check.
+3. Every task names an existing objective.
+4. Every dependency names an existing task or an external item.
+5. Every `done` task and `completed` objective has evidence.
+6. Every `blocked` task names its blocker.
+7. Every `rejected` decision has a reason,
+   every `deferred` one a revisit trigger,
+   and every `awaiting_user` one its question.
+8. `Current task` is `none` or a task that is `in_progress`.
+9. `Next action` is one concrete, executable step.
+10. The rules block is present and unchanged apart from the branch name.
+11. No secrets or credentials appear.
 
-Update `PROJECT_STATE.md` at meaningful checkpoints,
-not only at session end.
-Checkpoint at minimum when:
+Fix violations when found and log material repairs.
 
-- starting or switching the current task;
-- completing a meaningful substep;
-- discovering a new constraint, blocker, or risk;
-- making or receiving a material decision;
-- completing, failing, cancelling, or reopening a task;
-- changing objectives or acceptance criteria;
-- before a risky, destructive, lengthy,
-  or interruption-prone operation when practical; and
-- before the session ends when possible.
+### Keeping it short
 
-A checkpoint should leave a future agent with enough information
-to resume even if the current session stops unexpectedly.
+The file is read at the start of every session, so keep it short.
+Git keeps every earlier version:
+`git log -p meta/<branch>/objectives -- OBJECTIVES.md`
+shows the full history.
+So when an objective is completed or cancelled,
+shorten its tasks to a summary with a pointer to the commits,
+and trim old log lines to what a reader still needs.
+Keep everything needed to resume:
+open objectives and their criteria, the active plan,
+decisions and rejections that still apply,
+assumptions, blockers, evidence summaries and the next action.
 
-Prefer safe/atomic writes where practical:
-write a temporary copy, validate it, then replace the original.
-Preserve unrelated concurrent edits.
+## Starting
 
-### 7. Verify before marking complete
+When neither the file nor the branch exists:
 
-Do not mark a task `done` merely
-because an action was attempted.
-Record evidence such as:
+1. Agree the objective with the user,
+   with observable acceptance criteria and how to check each.
+2. Create the objectives branch from the code branch,
+   and a worktree for it:
+   `git branch meta/<branch>/objectives <branch>`,
+   then
+   `git worktree add ../<repository>.objectives/<branch> meta/<branch>/objectives`.
+3. Write `OBJECTIVES.md` with the layout above:
+   the rules block, at least one objective,
+   an ordered first plan with task IDs,
+   known decisions and assumptions,
+   and an exact next action.
+4. Commit it, for example `Add O-001: <outcome>.`,
+   before doing substantial project work.
 
-- tests or commands and their result;
-- artifact inspection;
-- output paths;
-- before/after behavior;
-- user confirmation
-  where the criterion genuinely depends on user judgment.
+To convert a state file from an older version of this skill,
+such as `PROJECT_STATE.md`,
+keep its objectives, tasks, decisions, assumptions,
+evidence and log with their IDs,
+move them into the layout above,
+and drop the old embedded protocol.
+When the file follows an older version of this skill,
+replace its rules block with the one above and log the change.
 
-If later evidence contradicts a `done` task, reopen it and explain why.
+## Finishing
 
-If all planned tasks are `done`
-but an objective's acceptance criteria fail,
-create remediation tasks instead of declaring success.
+Before marking the work complete:
 
-### 8. Hand off deliberately
+1. Check the actual artifacts and every acceptance criterion.
+2. Resolve or explicitly close remaining blockers and decisions.
+3. Record the final evidence and mark the objectives `completed`.
+4. Set `Current task: none`,
+   and replace `Next action` with follow-up or maintenance guidance,
+   if any.
+5. Record it in a merge of the code branch up to the final commit.
 
-At the end of a work period,
-make `Next session handoff` concrete enough
-that another agent can resume without reconstructing the project.
-
-Include:
-
-- exact current position;
-- the next action, expressed as a single executable step;
-- relevant files, symbols, commands, URLs, or artifacts;
-- what result is expected from that action;
-- known hazards or things not to redo;
-- blockers and pending user decisions; and
-- anything that should be revalidated after a long gap.
-
-Avoid vague handoffs such as “continue implementation.”
-
-## Durable knowledge vs execution state
-
-Keep long-lived project knowledge separate
-from rapidly changing session state.
-
-**Durable knowledge** includes objectives, acceptance criteria,
-architecture/constraints, important decisions, rejected alternatives,
-assumptions, and verification strategy.
-
-**Execution state** includes the current task, exact progress,
-last command/test result, immediate blocker, session budget,
-and next action.
-
-Both belong in `PROJECT_STATE.md`, but in distinct sections
-so temporary details do not obscure durable reasoning.
-
-## Self-contained protocol safeguard
-
-`PROJECT_STATE.md` must remain usable even when this skill is absent.
-
-The generated file therefore contains:
-
-1. a short **Recovery directive** near the top
-   explaining that the file contains continuation instructions
-   and must be read before project work; and
-2. a full **Embedded operating protocol**
-   delimited by explicit BEGIN/END markers.
-
-Agents must preserve the embedded protocol block verbatim
-during ordinary state updates.
-State changes belong outside that block.
-
-Do not casually rewrite, summarize, or “clean up” the protocol block.
-This prevents gradual instruction loss.
-The state header also records a SHA-256 fingerprint
-of the canonical protocol body.
-When practical, compare the current protocol body
-with that fingerprint during reconciliation;
-a mismatch is evidence of accidental edit or an incomplete migration,
-not permission to discard project state.
-
-### Protocol migration
-
-The protocol may be intentionally changed
-only when there is a concrete reason, such as a format defect,
-a project-specific need,
-or an improved protocol supplied by the user/skill.
-
-When migrating:
-
-1. preserve all project state and decision history;
-2. record the old and new protocol versions;
-3. explain why migration was necessary;
-4. replace the protocol block as one deliberate operation
-   rather than piecemeal edits;
-5. recompute and update the protocol SHA-256 fingerprint;
-6. validate that required state sections still exist afterward; and
-7. add a migration entry to the progress log.
-
-If the full protocol block appears damaged or missing,
-use the Recovery directive plus the current state to reconstruct it
-from this skill/template when available.
-Do not discard project state merely because protocol text is damaged.
-
-## State invariants
-
-After every substantial update, make the file satisfy these invariants:
-
-1. Every objective has a unique stable ID and status.
-2. Every active objective
-   has acceptance criteria and verification methods.
-3. Every task
-   has a unique stable ID and references an existing objective.
-4. Every dependency references an existing task
-   or is explicitly external.
-5. A `done` task has verification evidence.
-6. A `blocked` task names its blocker.
-7. A rejected decision has a rationale.
-8. A deferred decision has a revisit trigger.
-9. An `awaiting_user` decision records the question asked.
-10. `Current task` is either `none`
-    or points to a task whose status is `in_progress`.
-11. Normally at most one task is `in_progress`;
-    documented parallelism is the exception.
-12. A completed objective has evidence that all acceptance criteria pass.
-13. `Next action` is concrete and executable, not a vague intention.
-14. The Recovery directive and complete embedded protocol remain present.
-15. No secrets or credentials are stored in the file.
-
-Fix violations when discovered and log material repairs.
-
-## Keeping the file manageable
-
-Keep `PROJECT_STATE.md` concise enough to reread at every session.
-Summarize obsolete execution detail
-rather than accumulating an unbounded diary.
-
-If history becomes large,
-move verbose historical logs to an optional `PROJECT_HISTORY.md`,
-but retain in `PROJECT_STATE.md` all information needed
-to resume safely: current objectives, acceptance criteria, active plan,
-material decisions/rejections, assumptions, blockers,
-verification evidence summaries, and exact next action.
-
-The project must remain resumable from `PROJECT_STATE.md` alone;
-an archive may add detail
-but must not become mandatory for ordinary continuation.
-
-## Completion
-
-Before marking the overall project complete:
-
-1. inspect the actual project artifacts;
-2. verify every acceptance criterion;
-3. resolve or explicitly close remaining blockers and decisions;
-4. record final verification evidence;
-5. set `Current task: none`;
-6. replace the next-session action
-   with final maintenance/follow-up guidance if useful; and
-7. mark each achieved objective `completed` only after verification.
-
-A completed project may retain `PROJECT_STATE.md`
-as an audit trail and future maintenance entry point.
+A finished objectives branch stays as the audit trail
+and the starting point for later maintenance.
