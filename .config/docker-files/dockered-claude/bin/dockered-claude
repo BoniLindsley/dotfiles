@@ -73,8 +73,8 @@ resolve_paths() {
   home="/home/${username}"
   state_dir="${DOCKERED_CLAUDE_HOME:-${XDG_STATE_HOME:-${HOME:?}/.local/state}/dockered-claude}"
   state_home="${state_dir}/home/${username}"
-  passwd_file="${state_dir}/passwd"
-  group_file="${state_dir}/group"
+  passwd_file="${state_dir}/etc/passwd"
+  group_file="${state_dir}/etc/group"
   agents_dir="${HOME:?}/.agents"
   config_dir="${HOME:?}/.config/claude"
 }
@@ -82,8 +82,9 @@ resolve_paths() {
 prepare_state_directory() {
   # Claude Code keeps its state in ~/.claude/ and ~/.claude.json; both end
   # up inside the persisted home directory.
-  mkdir -p -- "${state_home}/.claude/skills" || return
-  chmod 700 -- "${state_dir}" "${state_dir}/home" \
+  # The passwd and group files live in etc/, mirroring their mount paths.
+  mkdir -p -- "${state_home}/.claude/skills" "${state_dir}/etc" || return
+  chmod 700 -- "${state_dir}" "${state_dir}/etc" "${state_dir}/home" \
     "${state_home}" "${state_home}/.claude" || return
 }
 
