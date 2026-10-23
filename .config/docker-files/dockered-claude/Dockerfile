@@ -14,6 +14,7 @@ RUN : \
      file \
      findutils \
      gzip \
+     jq \
      less \
      procps \
      ripgrep \
