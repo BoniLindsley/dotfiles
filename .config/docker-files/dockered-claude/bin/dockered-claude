@@ -23,6 +23,11 @@ Skills:
   so each skill there is symlinked into the container's ~/.claude/skills,
   which stays writable for skills synced from claude.ai.
 
+Configuration:
+  ~/.config/claude is mounted read-only, and each entry in it is symlinked
+  into the container's ~/.claude (e.g. settings.json), so the configuration
+  is managed on the host while the rest of ~/.claude stays writable state.
+
 Examples:
   ${script_name}
   ${script_name} --build
@@ -71,6 +76,7 @@ resolve_paths() {
   passwd_file="${state_dir}/passwd"
   group_file="${state_dir}/group"
   agents_dir="${HOME:?}/.agents"
+  config_dir="${HOME:?}/.config/claude"
 }
 
 prepare_state_directory() {
@@ -111,6 +117,9 @@ prepare_mount_points() {
   prepare_home_mount_point "${workdir}" || return
   if [[ -d "${agents_dir}" ]]; then
     prepare_home_mount_point "${home}/.agents" || return
+  fi
+  if [[ -d "${config_dir}" ]]; then
+    prepare_home_mount_point "${home}/.config/claude" || return
   fi
 }
 
@@ -164,6 +173,46 @@ link_agent_skills() {
     fi
     if [[ -e "${link}" ]]; then
       warn "skipping skill '${name}': ${link} already exists"
+      continue
+    fi
+    ln -s -- "${link_prefix}${name}" "${link}" || return
+  done
+}
+
+# Symlink each entry in ~/.config/claude
+# into the persisted ~/.claude,
+# using relative path ../.config/claude/<name>.
+link_config_files() {
+  declare config_target="${state_home}/.claude"
+  declare link_prefix='../.config/claude/'
+  declare entry name link target
+
+  # Drop links from earlier runs whose file has since been removed.
+  for link in "${config_target}"/* "${config_target}"/.[!.]*; do
+    [[ -L "${link}" ]] || continue
+    target="$(readlink -- "${link}")" || return
+    [[ "${target}" == "${link_prefix}"* ]] || continue
+    name="${link##*/}"
+    if [[ ! -e "${config_dir}/${name}" ]]; then
+      rm -f -- "${link}" || return
+    fi
+  done
+
+  [[ -d "${config_dir}" ]] || return 0
+
+  for entry in "${config_dir}"/* "${config_dir}"/.[!.]*; do
+    [[ -e "${entry}" ]] || continue
+    name="${entry##*/}"
+    link="${config_target}/${name}"
+
+    if [[ -L "${link}" ]]; then
+      target="$(readlink -- "${link}")" || return
+      [[ "${target}" == "${link_prefix}${name}" ]] && continue
+      warn "skipping config '${name}': ${link} already links to ${target}"
+      continue
+    fi
+    if [[ -e "${link}" ]]; then
+      warn "skipping config '${name}': ${link} already exists"
       continue
     fi
     ln -s -- "${link_prefix}${name}" "${link}" || return
@@ -227,6 +276,11 @@ run_container() {
       --mount "type=bind,src=${agents_dir},dst=${home}/.agents,readonly"
     )
   fi
+  if [[ -d "${config_dir}" ]]; then
+    docker_args+=(
+      --mount "type=bind,src=${config_dir},dst=${home}/.config/claude,readonly"
+    )
+  fi
 
   exec docker "${docker_args[@]}" "${image}" "$@"
 }
@@ -242,7 +296,7 @@ main() {
   project_directory="$(dirname -- "${script_directory}")" || return
 
   declare image workdir state_dir state_home uid_host gid_host username groupname
-  declare home passwd_file group_file agents_dir
+  declare home passwd_file group_file agents_dir config_dir
   declare -A kwargs=()
   declare -a args=()
 
@@ -257,6 +311,7 @@ main() {
   prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
+  link_config_files || return
   ensure_image || return
   run_container "${args[@]}" || return
 }

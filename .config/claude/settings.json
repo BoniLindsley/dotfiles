@@ -1,0 +1,7 @@
+{
+  "theme": "auto",
+  "statusLine": {
+    "type": "command",
+    "command": "jq -r -f ~/.claude/statusline.jq"
+  }
+}
