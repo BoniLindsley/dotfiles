@@ -1,14 +1,14 @@
 ---
 name: user-agents-md
 description: >
-  Read and follow the user's standing instructions in ~/.agents/AGENTS.md
-  whenever that file exists.
-  Use at the start of every session in any project, before planning or acting,
-  again after compaction or when continuing from a summary,
-  and before writing a commit message, merge or pull request,
-  so that the user's rules override tool defaults such as commit attribution.
+  MUST be invoked before the first reply or tool call of every session,
+  whatever the task, unless ~/.agents/AGENTS.md is already in context.
+  Also invoke after compaction or when continuing from a summary,
+  and before writing a commit message, merge, amend or pull request.
+  Reads the user's standing instructions in ~/.agents/AGENTS.md,
+  which override tool defaults such as commit attribution.
 metadata:
-  version: 1.1.0
+  version: 1.2.0
 ---
 
 # User AGENTS.md
@@ -20,12 +20,17 @@ This skill makes sure they are read and followed.
 
 ## When to read it
 
-- At the start of every session, before planning or acting.
+- At the start of every session, before planning or acting,
+  even when the first task seems unrelated to the file's rules.
 - After compaction, when the conversation continues from a summary,
   since a summary may drop or paraphrase the file's rules.
 - Before writing a commit message, merge, amend or pull request,
   if the file has not been read in this session.
 - When the user says the file has changed.
+
+If the file's contents are already in context,
+for example through an `@~/.agents/AGENTS.md` import in `CLAUDE.md`,
+it has been read; do not read it again.
 
 ## How to apply it
 
