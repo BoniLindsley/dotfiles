@@ -38,6 +38,45 @@ mypy_path = "src:stubs:tests"
 show_error_codes = true
 strict = true
 
+[tool.pylint.MAIN]
+# Resolve standard modules missing here, such as `tkinter` without Tk,
+# from the typeshed stubs bundled with mypy.
+# Astroid calls the hook only when an import fails,
+# so installed modules are always checked instead.
+# The hook runs inside `exec` in a function, so names defined here
+# are not visible to `_from_typeshed`: it imports its own
+# and is bound with `functools.partial`.
+init-hook = """
+import functools
+import importlib.util
+import pathlib
+
+def _from_typeshed(modname, *, stdlib):
+    import astroid
+    from astroid.builder import AstroidBuilder
+    from astroid.exceptions import AstroidBuildingError
+
+    base = stdlib.joinpath(*modname.split("."))
+    for path in (base.with_suffix(".pyi"), base / "__init__.pyi"):
+        if path.is_file():
+            builder = AstroidBuilder(astroid.MANAGER)
+            return builder.file_build(str(path), modname)
+    raise AstroidBuildingError(modname=modname)
+
+_mypy = importlib.util.find_spec("mypy")
+if _mypy is not None and _mypy.submodule_search_locations:
+    import astroid
+
+    astroid.MANAGER.register_failed_import_hook(
+        functools.partial(
+            _from_typeshed,
+            stdlib=pathlib.Path(
+                _mypy.submodule_search_locations[0], "typeshed", "stdlib"
+            ),
+        )
+    )
+"""
+
 [tool.pylint.BASIC]
 # Violation of naming convention that should be accepted.
 good-names = [
