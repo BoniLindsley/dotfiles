@@ -2,18 +2,26 @@
 
 __help() {
   cat <<HELP
-Usage: ${script_name} [--help] [--build] [--] [claude arguments...]
+Usage: ${script_name} [--help] [--build] [--tool NAME]... [--] [claude arguments...]
+       ${script_name} [--build] [--tool NAME]... --install-tool NAME [--] [command...]
 
 Run Claude Code in an isolated Docker container.
 
-  -h, --help    Show this help
-  -b, --build   Rebuild the Docker image (also how Claude Code gets updated)
-  --            Pass remaining arguments directly to Claude Code
+  -h, --help              Show this help
+  -b, --build             Rebuild the Docker image (also how Claude Code gets updated)
+  -t, --tool NAME         Make tool NAME available (repeatable)
+  --install-tool NAME     Run command in a container that can write to tool NAME
+  --list-tools            List the installed tools
+  --                      Pass remaining arguments directly to Claude Code
 
 Environment:
   DOCKERED_CLAUDE_IMAGE   Image name (default: dockered-claude:latest)
   DOCKERED_CLAUDE_HOME    Host state directory (default: \$XDG_STATE_HOME/dockered-claude
                           or \$HOME/.local/state/dockered-claude)
+  DOCKERED_CLAUDE_TOOLS   Space-separated tools to use when no --tool is given
+  DOCKERED_CLAUDE_TOOLS_DIR
+                          Host tools directory (default: \$XDG_DATA_HOME/dockered-claude/tools
+                          or \$HOME/.local/share/dockered-claude/tools)
 
   Passed through when set: ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN,
   ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
@@ -28,11 +36,33 @@ Configuration:
   into the container's ~/.claude (e.g. settings.json), so the configuration
   is managed on the host while the rest of ~/.claude stays writable state.
 
+Tools:
+  Each tool is a prefix directory in the tools directory, with its
+  executables in bin/. A selected tool is mounted read-only at
+  /opt/tools/NAME and /opt/tools/NAME/bin is put in front of PATH, so tools
+  may consist of many files (e.g. an npm package) and the first tool
+  selected wins on name collisions.
+
+  Tools are installed from inside the image, at the path they are mounted
+  at, so that absolute paths and native code match the container. The
+  install container mounts the tool writable at /opt/tools/NAME, makes it
+  the working directory, and points installers at it:
+  NPM_CONFIG_PREFIX, UV_TOOL_DIR (NAME/venvs), UV_TOOL_BIN_DIR (NAME/bin)
+  and UV_PYTHON_INSTALL_DIR (NAME/python). HOME is a temporary directory.
+  Static binaries can instead be copied into the tool's bin/ on the host.
+
+  Known tools install with a built-in command when none is given:
+  ${known_tools[*]}. Run again to update.
+
 Examples:
   ${script_name}
   ${script_name} --build
   ${script_name} -- --help
   ${script_name} -p 'run the tests'
+  ${script_name} --tool rclone --tool typescript
+  ${script_name} --install-tool typescript
+  ${script_name} --install-tool prettier -- npm install --global prettier
+  ${script_name} --install-tool ruff -- uv tool install ruff
 HELP
 }
 
@@ -48,6 +78,20 @@ parse_arguments() {
     case "${argument}" in
     -h | --help) kwargs[help]=1 ;;
     -b | --build) kwargs[build]=1 ;;
+    -t | --tool | --install-tool)
+      if (($# == 0)); then
+        warn "${argument} requires a tool name"
+        return 1
+      fi
+      validate_tool_name "$1" || return
+      if [[ "${argument}" == --install-tool ]]; then
+        kwargs[install_tool]="$1"
+      else
+        tools+=("$1")
+      fi
+      shift
+      ;;
+    --list-tools) kwargs[list_tools]=1 ;;
     --)
       args+=("$@")
       break
@@ -77,6 +121,34 @@ resolve_paths() {
   group_file="${state_dir}/etc/group"
   agents_dir="${HOME:?}/.agents"
   config_dir="${HOME:?}/.config/claude"
+  tools_dir="${DOCKERED_CLAUDE_TOOLS_DIR:-${XDG_DATA_HOME:-${HOME:?}/.local/share}/dockered-claude/tools}"
+
+  if ((${#tools[@]} == 0)); then
+    read -r -a tools <<<"${DOCKERED_CLAUDE_TOOLS:-}"
+    declare tool
+    for tool in "${tools[@]}"; do
+      validate_tool_name "${tool}" || return
+    done
+  fi
+}
+
+# Tool names become path components on the host and in the container.
+validate_tool_name() {
+  declare name="$1"
+  if [[ ! "${name}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
+    warn "invalid tool name '${name}'"
+    return 1
+  fi
+}
+
+list_tools() {
+  [[ -d "${tools_dir}" ]] || return 0
+  declare entry
+  for entry in "${tools_dir}"/*/; do
+    [[ -d "${entry}bin" ]] || continue
+    entry="${entry%/}"
+    printf '%s\n' "${entry##*/}"
+  done
 }
 
 prepare_state_directory() {
@@ -237,25 +309,22 @@ ensure_image() {
   fi
 }
 
-run_container() {
-  declare -a docker_args=(
+# The docker run arguments shared by Claude Code and tool install containers.
+add_base_arguments() {
+  docker_args+=(
     run
     --cap-drop ALL
-    --env "HOME=${home}"
     --env "TERM=${TERM:-xterm-256color}"
     --init
     --interactive
     --mount "type=bind,src=${group_file},dst=/etc/group,readonly"
     --mount "type=bind,src=${passwd_file},dst=/etc/passwd,readonly"
-    --mount "type=bind,src=${state_dir}/home,dst=/home"
-    --mount "type=bind,src=${workdir},dst=${workdir}"
     --read-only
     --rm
     --security-opt no-new-privileges:true
     --security-opt seccomp=unconfined
     --tmpfs '/tmp:rw,nosuid,nodev,mode=1777'
     --user "${uid_host}:${gid_host}"
-    --workdir "${workdir}"
   )
 
   # Allocate a TTY only when attached to one, so piping works
@@ -263,6 +332,138 @@ run_container() {
   if [[ -t 0 && -t 1 ]]; then
     docker_args+=(--tty)
   fi
+}
+
+# Mount each selected tool read-only at /opt/tools/<name> and put its bin/
+# in front of the image's PATH, in selection order. The tool being installed
+# (if any) is mounted writable by the caller, but its bin/ is put on PATH
+# here so the install command sees a consistent PATH.
+add_tool_arguments() {
+  declare writable_tool="${1:-}"
+  declare image_path tool tool_path=''
+  declare -A seen=()
+
+  for tool in "${tools[@]}" ${writable_tool:+"${writable_tool}"}; do
+    [[ -z "${seen[${tool}]+defined}" ]] || continue
+    seen[${tool}]=1
+    tool_path+="/opt/tools/${tool}/bin:"
+    [[ "${tool}" == "${writable_tool}" ]] && continue
+    if [[ ! -d "${tools_dir}/${tool}/bin" ]]; then
+      warn "unknown tool '${tool}': ${tools_dir}/${tool}/bin does not exist"
+      return 1
+    fi
+    docker_args+=(
+      --mount "type=bind,src=${tools_dir}/${tool},dst=/opt/tools/${tool},readonly"
+    )
+  done
+
+  [[ -n "${tool_path}" ]] || return 0
+  image_path="$(docker image inspect \
+    --format '{{range .Config.Env}}{{println .}}{{end}}' "${image}" |
+    sed -n 's/^PATH=//p')" || return
+  if [[ -z "${image_path}" ]]; then
+    warn "cannot determine the PATH of image ${image}"
+    return 1
+  fi
+  docker_args+=(--env "PATH=${tool_path}${image_path}")
+}
+
+declare -a known_tools=(rclone typescript uv)
+
+# Set install_command to the built-in install command for a known tool.
+# It runs in the install container, with the tool's prefix as the working
+# directory; the downloads are the projects' official release archives.
+known_install_command() {
+  declare tool="$1"
+  case "${tool}" in
+  rclone)
+    install_command=(sh -c '
+      set -eu
+      case "$(uname -m)" in
+      x86_64) arch=amd64 ;;
+      aarch64) arch=arm64 ;;
+      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+      esac
+      tmp="$(mktemp -d)"
+      curl -fsSL -o "${tmp}/rclone.zip" \
+        "https://downloads.rclone.org/rclone-current-linux-${arch}.zip"
+      python3 -m zipfile -e "${tmp}/rclone.zip" "${tmp}"
+      install -D -m 755 "${tmp}"/rclone-*-linux-"${arch}"/rclone bin/rclone
+      rm -rf "${tmp}"
+      bin/rclone version
+    ')
+    ;;
+  typescript)
+    install_command=(sh -c '
+      set -eu
+      npm install --global typescript
+      bin/tsc --version
+    ')
+    ;;
+  uv)
+    install_command=(sh -c '
+      set -eu
+      case "$(uname -m)" in
+      x86_64 | aarch64) arch="$(uname -m)" ;;
+      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
+      esac
+      mkdir -p bin
+      curl -fsSL \
+        "https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-unknown-linux-gnu.tar.gz" |
+        tar -xz --strip-components=1 -C bin
+      bin/uv --version
+    ')
+    ;;
+  *) return 1 ;;
+  esac
+}
+
+# Run an install command in a container where the tool's prefix is
+# writable at the same path it is later mounted at read-only.
+install_tool() {
+  declare tool="${kwargs[install_tool]}"
+  declare prefix="/opt/tools/${tool}"
+  declare -a docker_args=() install_command=()
+
+  if (($# == 0)); then
+    if ! known_install_command "${tool}"; then
+      warn "no built-in install command for '${tool}'; give one after --" \
+        "(built-in: ${known_tools[*]})"
+      return 1
+    fi
+    set -- "${install_command[@]}"
+  fi
+
+  # Created here so that Docker does not create it as root.
+  mkdir -p -- "${tools_dir}/${tool}/bin" || return
+
+  add_base_arguments || return
+  add_tool_arguments "${tool}" || return
+  docker_args+=(
+    --entrypoint "$1"
+    --env HOME=/tmp
+    --env "NPM_CONFIG_PREFIX=${prefix}"
+    --env "UV_PYTHON_INSTALL_DIR=${prefix}/python"
+    --env "UV_TOOL_BIN_DIR=${prefix}/bin"
+    --env "UV_TOOL_DIR=${prefix}/venvs"
+    --mount "type=bind,src=${tools_dir}/${tool},dst=${prefix}"
+    --workdir "${prefix}"
+  )
+  shift
+
+  exec docker "${docker_args[@]}" "${image}" "$@"
+}
+
+run_container() {
+  declare -a docker_args=()
+  add_base_arguments || return
+  add_tool_arguments || return
+  docker_args+=(
+    --env "HOME=${home}"
+    --mount "type=bind,src=${state_dir}/home,dst=/home"
+    --mount "type=bind,src=${workdir},dst=${workdir}"
+    --workdir "${workdir}"
+  )
 
   declare variable
   for variable in ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
@@ -297,9 +498,9 @@ main() {
   project_directory="$(dirname -- "${script_directory}")" || return
 
   declare image workdir state_dir state_home uid_host gid_host username groupname
-  declare home passwd_file group_file agents_dir config_dir
+  declare home passwd_file group_file agents_dir config_dir tools_dir
   declare -A kwargs=()
-  declare -a args=()
+  declare -a args=() tools=()
 
   parse_arguments "$@" || return
   if [[ -n "${kwargs[help]+defined}" ]]; then
@@ -308,7 +509,19 @@ main() {
   fi
 
   resolve_paths || return
+  if [[ -n "${kwargs[list_tools]+defined}" ]]; then
+    list_tools
+    return
+  fi
+
   prepare_state_directory || return
+  if [[ -n "${kwargs[install_tool]+defined}" ]]; then
+    prepare_user_identity || return
+    ensure_image || return
+    install_tool "${args[@]}" || return
+    return
+  fi
+
   prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
