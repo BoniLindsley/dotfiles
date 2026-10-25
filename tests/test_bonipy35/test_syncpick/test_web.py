@@ -152,6 +152,18 @@ class TestDoGet:
         status, _, _ = request(server, "GET", "/?token=secret")
         assert status == 404
 
+    def test_packaged_page(self, server: Server) -> None:
+        server.static_directory = STATIC_DIRECTORY
+        status, _, content = request(server, "GET", "/?token=secret")
+        assert status == 200
+        page = content.decode("utf-8")
+        for used in ["/api/compare", "/api/copy", TOKEN_HEADER]:
+            assert used in page
+        for value in Direction:
+            assert '"{}"'.format(value.value) in page
+        for state in State:
+            assert "{}:".format(state.name.lower()) in page
+
 
 class TestDoPost:
     @pytest.fixture(name="received")

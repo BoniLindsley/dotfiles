@@ -5,8 +5,417 @@
     <meta name="referrer" content="no-referrer">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>syncpick</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --background: #ffffff;
+        --text: #1f2328;
+        --muted: #656d76;
+        --border: #d0d7de;
+        --stripe: #f6f8fa;
+        --accent: #0969da;
+        --good: #1a7f37;
+        --bad: #cf222e;
+        --newer: #9a6700;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --background: #0d1117;
+          --text: #e6edf3;
+          --muted: #8d96a0;
+          --border: #30363d;
+          --stripe: #161b22;
+          --accent: #4493f8;
+          --good: #3fb950;
+          --bad: #f85149;
+          --newer: #d29922;
+        }
+      }
+      body {
+        margin: 0;
+        padding: 16px;
+        background: var(--background);
+        color: var(--text);
+        font: 14px/1.4 system-ui, sans-serif;
+      }
+      h1 { margin: 0 0 12px; font-size: 20px; }
+      form, .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+        margin-bottom: 12px;
+      }
+      label.location { display: flex; gap: 4px; align-items: center; flex: 1 1 240px; }
+      label.location input { flex: 1; min-width: 0; }
+      input[type="text"], button {
+        font: inherit;
+        padding: 4px 8px;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        background: var(--background);
+        color: var(--text);
+      }
+      button { cursor: pointer; }
+      button:disabled { cursor: default; opacity: 0.5; }
+      button.primary { border-color: var(--accent); color: var(--accent); }
+      fieldset { border: 0; padding: 0; margin: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+      #message { min-height: 1.4em; margin: 0 0 12px; color: var(--muted); }
+      #message.error { color: var(--bad); }
+      .table { overflow-x: auto; }
+      table { border-collapse: collapse; width: 100%; }
+      th, td { padding: 2px 8px; border-bottom: 1px solid var(--border); text-align: left; white-space: nowrap; }
+      tbody tr:nth-child(even) { background: var(--stripe); }
+      td.number { text-align: right; font-variant-numeric: tabular-nums; }
+      td.time { font-variant-numeric: tabular-nums; }
+      td.path { white-space: normal; word-break: break-all; }
+      td.state { font-family: monospace; }
+      td.newer { color: var(--newer); font-weight: bold; }
+      td.result.ok { color: var(--good); }
+      td.result.failed { color: var(--bad); white-space: normal; }
+      .muted { color: var(--muted); }
+    </style>
   </head>
   <body>
     <h1>syncpick</h1>
+    <form id="locations">
+      <label class="location">Left <input type="text" id="left" required></label>
+      <label class="location">Right <input type="text" id="right" required></label>
+      <button type="submit" class="primary" id="compare">Compare</button>
+    </form>
+    <div class="toolbar">
+      <fieldset id="filters"></fieldset>
+      <button type="button" id="copy-right" disabled>Copy left to right</button>
+      <button type="button" id="copy-left" disabled>Copy right to left</button>
+      <button type="button" id="stop" hidden>Stop</button>
+    </div>
+    <p id="message" role="status"></p>
+    <div class="table">
+      <table>
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="pick-all" title="Pick all shown"></th>
+            <th title="= same, * different, + left only, - right only, ! error">State</th>
+            <th>Left size</th>
+            <th>Left modified (UTC)</th>
+            <th>Right size</th>
+            <th>Right modified (UTC)</th>
+            <th>Path</th>
+            <th>Result</th>
+          </tr>
+        </thead>
+        <tbody id="entries"></tbody>
+      </table>
+    </div>
+    <script>
+      "use strict";
+
+      // Marker and label of each state, as `rclone check --combined` uses.
+      const STATES = {
+        different: ["*", "Different"],
+        left_only: ["+", "Left only"],
+        right_only: ["-", "Right only"],
+        error: ["!", "Error"],
+        same: ["=", "Same"],
+      };
+
+      const parameters = new URLSearchParams(location.search);
+      const token = parameters.get("token") || "";
+      const element = (id) => document.getElementById(id);
+
+      // Locations of the shown comparison, which copies use.
+      let compared = null;
+      let entries = [];
+      const picked = new Set();
+      const shownStates = new Set(Object.keys(STATES).filter((state) => state !== "same"));
+      // Results of the last copy by path, shown until the next comparison.
+      const results = new Map();
+      let busy = null;
+
+      element("left").value = parameters.get("left") || "";
+      element("right").value = parameters.get("right") || "";
+
+      function showMessage(text, isError) {
+        const message = element("message");
+        message.textContent = text;
+        message.className = isError ? "error" : "";
+      }
+
+      async function post(path, body, signal) {
+        const response = await fetch(path, {
+          method: "POST",
+          headers: {"Content-Type": "application/json", "X-Syncpick-Token": token},
+          body: JSON.stringify(body),
+          signal: signal,
+        });
+        if (!response.ok) {
+          let text = response.status + " " + response.statusText;
+          try {
+            text = (await response.json()).error || text;
+          } catch (error) {
+            // Keep the status line.
+          }
+          throw new Error(text);
+        }
+        return response;
+      }
+
+      function shownEntries() {
+        return entries.filter((entry) => shownStates.has(entry.state));
+      }
+
+      // Picked and shown paths, only those on the source side if given.
+      function pickedPaths(source) {
+        return shownEntries()
+          .filter((entry) => picked.has(entry.path) && (!source || entry[source] !== null))
+          .map((entry) => entry.path);
+      }
+
+      function formatSize(side) {
+        return side ? String(side.size) : "-";
+      }
+
+      function formatTime(side) {
+        return side ? side.modified.replace("T", " ").replace(/\.\d+Z$/, "") : "-";
+      }
+
+      function cell(text, className) {
+        const td = document.createElement("td");
+        td.textContent = text;
+        if (className) {
+          td.className = className;
+        }
+        return td;
+      }
+
+      function renderFilters() {
+        const counts = {};
+        for (const entry of entries) {
+          counts[entry.state] = (counts[entry.state] || 0) + 1;
+        }
+        const filters = element("filters");
+        filters.replaceChildren();
+        for (const state of Object.keys(STATES)) {
+          const label = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = shownStates.has(state);
+          input.addEventListener("change", () => {
+            if (input.checked) {
+              shownStates.add(state);
+            } else {
+              shownStates.delete(state);
+            }
+            render();
+          });
+          label.append(input, " " + STATES[state][0] + " " + STATES[state][1] + " (" + (counts[state] || 0) + ")");
+          filters.append(label);
+        }
+      }
+
+      function renderRows() {
+        const rows = [];
+        for (const entry of shownEntries()) {
+          const row = document.createElement("tr");
+          const pick = document.createElement("td");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = picked.has(entry.path);
+          input.disabled = busy !== null;
+          input.addEventListener("change", () => {
+            if (input.checked) {
+              picked.add(entry.path);
+            } else {
+              picked.delete(entry.path);
+            }
+            renderControls();
+          });
+          pick.append(input);
+          const leftTime = entry.left && entry.left.modified;
+          const rightTime = entry.right && entry.right.modified;
+          const newer = entry.state === "different" && leftTime && rightTime
+            ? (leftTime > rightTime ? "left" : leftTime < rightTime ? "right" : "")
+            : "";
+          const result = results.get(entry.path);
+          let resultCell = cell("");
+          if (result !== undefined) {
+            resultCell = result === null
+              ? cell("Copied", "result ok")
+              : cell(result, "result failed");
+          }
+          row.append(
+            pick,
+            cell(STATES[entry.state][0], "state"),
+            cell(formatSize(entry.left), "number"),
+            cell(formatTime(entry.left), "time" + (newer === "left" ? " newer" : "")),
+            cell(formatSize(entry.right), "number"),
+            cell(formatTime(entry.right), "time" + (newer === "right" ? " newer" : "")),
+            cell(entry.path, "path"),
+            resultCell,
+          );
+          row.title = STATES[entry.state][1];
+          rows.push(row);
+        }
+        element("entries").replaceChildren(...rows);
+      }
+
+      function renderControls() {
+        const shown = shownEntries();
+        const count = pickedPaths().length;
+        const idle = busy === null;
+        const toRight = pickedPaths("left").length;
+        const toLeft = pickedPaths("right").length;
+        element("copy-right").disabled = !idle || compared === null || toRight === 0;
+        element("copy-left").disabled = !idle || compared === null || toLeft === 0;
+        element("copy-right").textContent = "Copy " + toRight + " left to right";
+        element("copy-left").textContent = "Copy " + toLeft + " right to left";
+        element("compare").disabled = !idle;
+        element("left").disabled = !idle;
+        element("right").disabled = !idle;
+        element("stop").hidden = idle;
+        const pickAll = element("pick-all");
+        pickAll.disabled = !idle || shown.length === 0;
+        pickAll.checked = shown.length > 0 && count === shown.length;
+        pickAll.indeterminate = count > 0 && count < shown.length;
+      }
+
+      function render() {
+        renderFilters();
+        renderRows();
+        renderControls();
+      }
+
+      async function runComparison(left, right) {
+        busy = new AbortController();
+        render();
+        showMessage("Comparing...");
+        try {
+          const response = await post("/api/compare", {left: left, right: right}, busy.signal);
+          entries = (await response.json()).entries;
+          compared = {left: left, right: right};
+          const paths = new Set(entries.map((entry) => entry.path));
+          for (const path of picked) {
+            if (!paths.has(path)) {
+              picked.delete(path);
+            }
+          }
+          const same = entries.filter((entry) => entry.state === "same").length;
+          showMessage(entries.length + " files, " + same + " the same.");
+          return true;
+        } catch (error) {
+          showMessage(error.name === "AbortError" ? "Comparison stopped." : "Comparing failed: " + error.message, true);
+          return false;
+        } finally {
+          busy = null;
+          render();
+        }
+      }
+
+      async function readLines(response, onLine) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        for (;;) {
+          const chunk = await reader.read();
+          buffer += decoder.decode(chunk.value || new Uint8Array(), {stream: !chunk.done});
+          const lines = buffer.split("\n");
+          buffer = lines.pop();
+          for (const line of lines) {
+            if (line) {
+              onLine(JSON.parse(line));
+            }
+          }
+          if (chunk.done) {
+            return;
+          }
+        }
+      }
+
+      async function runCopy(direction) {
+        const paths = pickedPaths(direction === "left-to-right" ? "left" : "right");
+        const locations = compared;
+        results.clear();
+        busy = new AbortController();
+        render();
+        let done = 0;
+        let failed = 0;
+        showMessage("Copying 0 of " + paths.length + "...");
+        let stopped = false;
+        try {
+          const response = await post("/api/copy", {
+            left: locations.left,
+            right: locations.right,
+            paths: paths,
+            direction: direction,
+          }, busy.signal);
+          await readLines(response, (result) => {
+            done += 1;
+            if (result.error !== null) {
+              failed += 1;
+            }
+            results.set(result.path, result.error);
+            renderRows();
+            showMessage("Copying " + done + " of " + paths.length + "...");
+          });
+        } catch (error) {
+          if (error.name === "AbortError") {
+            stopped = true;
+          } else {
+            busy = null;
+            render();
+            showMessage("Copying failed after " + done + " of " + paths.length + ": " + error.message, true);
+            return;
+          }
+        } finally {
+          busy = null;
+        }
+        // Keep the results to show them next to the refreshed comparison.
+        const copied = new Map(results);
+        if (await runComparison(locations.left, locations.right)) {
+          for (const [path, error] of copied) {
+            results.set(path, error);
+            if (error === null) {
+              picked.delete(path);
+            }
+          }
+          render();
+          const summary = (stopped ? "Stopped after " : "Copied ") + (done - failed) + " of " + paths.length
+            + (failed ? ", " + failed + " failed" : "") + ". Comparison refreshed.";
+          showMessage(summary, failed > 0);
+        }
+      }
+
+      element("locations").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const left = element("left").value;
+        const right = element("right").value;
+        if (!compared || compared.left !== left || compared.right !== right) {
+          picked.clear();
+        }
+        results.clear();
+        runComparison(left, right);
+      });
+      element("copy-right").addEventListener("click", () => runCopy("left-to-right"));
+      element("copy-left").addEventListener("click", () => runCopy("right-to-left"));
+      element("stop").addEventListener("click", () => busy && busy.abort());
+      element("pick-all").addEventListener("change", (event) => {
+        for (const entry of shownEntries()) {
+          if (event.target.checked) {
+            picked.add(entry.path);
+          } else {
+            picked.delete(entry.path);
+          }
+        }
+        render();
+      });
+
+      if (!token) {
+        showMessage("Open the address printed by syncpick, which includes the token.", true);
+      }
+      render();
+      if (token && element("left").value && element("right").value) {
+        runComparison(element("left").value, element("right").value);
+      }
+    </script>
   </body>
 </html>

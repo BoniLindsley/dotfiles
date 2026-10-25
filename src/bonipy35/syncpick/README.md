@@ -1,9 +1,30 @@
 # syncpick
 
 Compare two rclone locations and copy picked files in either direction.
-Work in progress: comparing works from the command line;
-copying exists as a library function for the coming frontends.
+Pick files in a browser page,
+or print a comparison from the command line.
 Requires rclone on `PATH`, or `--rclone PATH`.
+
+## Web page
+
+Serve the page on localhost, optionally with both locations filled in:
+
+```sh
+python -m bonipy35.syncpick web remote:dir some/directory
+```
+
+Open the printed address, which includes this run's token;
+requests without it are refused.
+With both locations given, the page compares them when it opens.
+The table hides files that are the same until their filter is ticked.
+Tick files, then copy them left to right or right to left:
+each button counts only the ticked files on its source side.
+Each file's result shows as it finishes,
+and the comparison refreshes afterwards.
+Stop ends copying within a file or two.
+Nothing is deleted.
+Press Ctrl+C to stop the server.
+`--port PORT` picks the port instead of any free one.
 
 ## Comparing
 
@@ -46,4 +67,4 @@ printing an `rclone rc` command with this run's credentials:
 python -m bonipy35.syncpick rc
 ```
 
-Both accept `--config PATH` to use another rclone configuration file.
+All commands accept `--config PATH` to use another rclone configuration file.
