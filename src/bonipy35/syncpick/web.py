@@ -14,11 +14,12 @@ import socketserver
 import typing
 import urllib.parse
 
-from typing import Callable, Dict, Union
+from typing import Callable, Dict, List, Union
 
 # Internal modules.
 from .compare import Entry, Side, compare
 from .rc import Daemon, RcError
+from .transfer import Direction, copy_files
 
 _logger = logging.getLogger(__name__)
 
@@ -170,6 +171,31 @@ def locations(body: object) -> Union[None, Dict[str, str]]:
     return {"left": left, "right": right}
 
 
+def copy_request(
+    body: object,
+) -> Union[None, typing.Tuple[str, str, List[str], Direction]]:
+    """Return locations, paths and direction of a copy request if valid."""
+    paths = locations(body)
+    if paths is None:
+        return None
+    body = typing.cast(Dict[str, object], body)
+    picked = body.get("paths")
+    if not isinstance(picked, list) or not all(
+        isinstance(path, str) for path in picked
+    ):
+        return None
+    try:
+        direction = Direction(body.get("direction"))
+    except ValueError:
+        return None
+    return (
+        paths["left"],
+        paths["right"],
+        typing.cast(List[str], picked),
+        direction,
+    )
+
+
 def add_routes(server: Server, daemon: Daemon) -> None:
     """Serve the API on ``server``, sending rclone requests to ``daemon``."""
 
@@ -187,4 +213,33 @@ def add_routes(server: Server, daemon: Daemon) -> None:
             200, {"entries": [entry_json(entry) for entry in entries]}
         )
 
+    def copy_route(handler: Handler, body: object) -> None:
+        request = copy_request(body)
+        if request is None:
+            handler.send_json_error(
+                400,
+                "Expected left and right as strings, paths as a list of"
+                " strings, and direction as left-to-right or right-to-left",
+            )
+            return
+        left, right, paths, direction = request
+        # One line per file as it finishes; the connection ends the stream.
+        handler.send_response(200)
+        handler.send_header("Content-Type", "application/x-ndjson")
+        handler.send_header("Cache-Control", "no-store")
+        handler.end_headers()
+        results = copy_files(daemon, left, right, paths, direction=direction)
+        try:
+            for result in results:
+                line = json.dumps(
+                    {"path": result.path, "error": result.error}
+                )
+                handler.wfile.write(line.encode("utf-8") + b"\n")
+        except ConnectionError:
+            # The page went away, so copy nothing more.
+            _logger.debug("Copy stopped: client disconnected.")
+        finally:
+            results.close()
+
     server.routes["/api/compare"] = compare_route
+    server.routes["/api/copy"] = copy_route

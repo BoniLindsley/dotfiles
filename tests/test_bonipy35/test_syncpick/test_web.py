@@ -21,12 +21,14 @@ import pytest
 from bonipy35.syncpick.compare import Entry, Side, State
 from bonipy35.syncpick.rc import Daemon, RcError
 from bonipy35.syncpick.runner import Runner
+from bonipy35.syncpick.transfer import Direction
 from bonipy35.syncpick.web import (
     STATIC_DIRECTORY,
     TOKEN_HEADER,
     Handler,
     Server,
     add_routes,
+    copy_request,
     entry_json,
     locations,
     side_json,
@@ -238,11 +240,18 @@ class TestLogMessage:
 
 
 class FakeDaemon(Daemon):
-    """Lists ``left`` with one file and checks it as left only."""
+    """Lists ``left`` with one file and checks it as left only.
+
+    Copies succeed except for source ``missing``.
+    After the first copy, each waits until ``proceed`` is set.
+    """
 
     def __init__(self) -> None:
         super().__init__(Runner(executable=sys.executable))
         self.error = None  # type: Union[None, RcError]
+        self.copied = []  # type: List[Dict[str, object]]
+        self.proceed = threading.Event()
+        self.proceed.set()
 
     def call(
         self, path: str, parameters: Union[None, Dict[str, object]] = None
@@ -250,6 +259,13 @@ class FakeDaemon(Daemon):
         if self.error is not None:
             raise self.error
         parameters = parameters or {}
+        if path == "operations/copyfile":
+            if self.copied:
+                self.proceed.wait()
+            self.copied.append(parameters)
+            if parameters["srcRemote"] == "missing":
+                raise RcError("object not found", path=path, status=404)
+            return {}
         if path == "operations/check":
             return {"combined": ["+ a"]}
         if parameters["fs"] == "left":
@@ -349,10 +365,139 @@ class TestCompareRoute:
         ) == (502, {"error": "no remote"})
 
 
+class TestCopyRequest:
+    def test_valid(self) -> None:
+        assert copy_request(
+            {
+                "left": "a",
+                "right": "b:",
+                "paths": ["x", "d/y"],
+                "direction": "right-to-left",
+            }
+        ) == ("a", "b:", ["x", "d/y"], Direction.RIGHT_TO_LEFT)
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"right": "b", "paths": [], "direction": "left-to-right"},
+            {"left": "a", "right": "b", "direction": "left-to-right"},
+            {"left": "a", "right": "b", "paths": [1]},
+            {"left": "a", "right": "b", "paths": "x"},
+            {"left": "a", "right": "b", "paths": [], "direction": "up"},
+            {"left": "a", "right": "b", "paths": []},
+        ],
+    )
+    def test_invalid(self, body: object) -> None:
+        assert copy_request(body) is None
+
+
+def copy_body(paths: List[str], direction: str = "left-to-right") -> bytes:
+    return json.dumps(
+        {"left": "l", "right": "r:", "paths": paths, "direction": direction}
+    ).encode("utf-8")
+
+
+class TestCopyRoute:
+    def test_streams_results(
+        self, server: Server, daemon: FakeDaemon
+    ) -> None:
+        status, headers, content = request(
+            server,
+            "POST",
+            "/api/copy",
+            body=copy_body(["a", "missing", "d/b"], "right-to-left"),
+            headers={TOKEN_HEADER: "secret"},
+        )
+        assert status == 200
+        assert headers["content-type"] == "application/x-ndjson"
+        assert "content-length" not in headers
+        assert [
+            json.loads(line) for line in content.decode("utf-8").splitlines()
+        ] == [
+            {"path": "a", "error": None},
+            {"path": "missing", "error": "object not found"},
+            {"path": "d/b", "error": None},
+        ]
+        assert [
+            (call["srcFs"], call["dstFs"], call["srcRemote"])
+            for call in daemon.copied
+        ] == [("r:", "l", "a"), ("r:", "l", "missing"), ("r:", "l", "d/b")]
+
+    def test_sends_each_result_as_it_finishes(
+        self, server: Server, daemon: FakeDaemon
+    ) -> None:
+        daemon.proceed.clear()
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_address[1]
+        )
+        try:
+            connection.request(
+                "POST",
+                "/api/copy",
+                body=copy_body(["a", "b"]),
+                headers={TOKEN_HEADER: "secret"},
+            )
+            response = connection.getresponse()
+            # Arrives while the second copy is still waiting.
+            assert json.loads(response.readline().decode("utf-8")) == {
+                "path": "a",
+                "error": None,
+            }
+            assert len(daemon.copied) == 1
+            daemon.proceed.set()
+            assert json.loads(response.readline().decode("utf-8")) == {
+                "path": "b",
+                "error": None,
+            }
+        finally:
+            connection.close()
+
+    def test_stops_when_client_disconnects(
+        self, server: Server, daemon: FakeDaemon
+    ) -> None:
+        finished = threading.Event()
+        route = server.routes["/api/copy"]
+
+        def watched(handler: Handler, body: object) -> None:
+            try:
+                route(handler, body)
+            finally:
+                finished.set()
+
+        server.routes["/api/copy"] = watched
+        daemon.proceed.clear()
+        paths = ["file{}".format(index) for index in range(100)]
+        connection = http.client.HTTPConnection(
+            "127.0.0.1", server.server_address[1]
+        )
+        try:
+            connection.request(
+                "POST",
+                "/api/copy",
+                body=copy_body(paths),
+                headers={TOKEN_HEADER: "secret"},
+            )
+            response = connection.getresponse()
+            response.readline()
+        finally:
+            response.close()
+            connection.close()
+        daemon.proceed.set()
+        assert finished.wait(timeout=10)
+        # Writes fail a file or two after the peer closes.
+        assert len(daemon.copied) < len(paths)
+
+    @pytest.mark.usefixtures("daemon")
+    def test_invalid_body(self, server: Server) -> None:
+        status, body = post(server, "/api/copy", copy_body(["a"], "up"))
+        assert status == 400
+        assert "direction" in typing.cast(Dict[str, str], body)["error"]
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(RCLONE is None, reason="Executable not found: rclone")
-class TestRealCompareRoute:
-    def test_entries(self, server: Server, tmp_path: pathlib.Path) -> None:
+class TestRealRoutes:
+    def test_compare(self, server: Server, tmp_path: pathlib.Path) -> None:
         config = tmp_path / "rclone.conf"
         config.write_text("")
         left = tmp_path / "left"
@@ -382,3 +527,44 @@ class TestRealCompareRoute:
         assert entries[0]["left"] is None
         assert entries[1]["left"]["size"] == 1
         assert entries[1]["left"]["modified"].endswith("Z")
+
+    def test_copies(self, server: Server, tmp_path: pathlib.Path) -> None:
+        config = tmp_path / "rclone.conf"
+        config.write_text("")
+        left = tmp_path / "left"
+        right = tmp_path / "right"
+        (left / "d").mkdir(parents=True)
+        (left / "d" / "a").write_text("a")
+        (left / "unpicked").write_text("u")
+        with Daemon(Runner(config=config)) as daemon:
+            add_routes(server, daemon)
+            status, _, content = request(
+                server,
+                "POST",
+                "/api/copy",
+                body=json.dumps(
+                    {
+                        "left": str(left),
+                        "right": str(right),
+                        "paths": ["d/a", "missing"],
+                        "direction": "left-to-right",
+                    }
+                ).encode("utf-8"),
+                headers={TOKEN_HEADER: "secret"},
+            )
+        assert status == 200
+        results = [
+            json.loads(line) for line in content.decode("utf-8").splitlines()
+        ]
+        assert [
+            (result["path"], result["error"] is None) for result in results
+        ] == [
+            ("d/a", True),
+            ("missing", False),
+        ]
+        assert sorted(
+            path.relative_to(right).as_posix()
+            for path in right.rglob("*")
+            if path.is_file()
+        ) == ["d/a"]
+        assert (right / "d" / "a").read_text() == "a"
