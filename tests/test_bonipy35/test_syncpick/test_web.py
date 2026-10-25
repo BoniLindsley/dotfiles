@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
+import datetime
 import http.client
 import json
 import logging
 import pathlib
+import shutil
+import sys
 import threading
+import typing
 import urllib.parse
 
 from typing import Dict, Iterator, List, Tuple, Union
@@ -14,12 +18,21 @@ from typing import Dict, Iterator, List, Tuple, Union
 import pytest
 
 # Internal modules.
+from bonipy35.syncpick.compare import Entry, Side, State
+from bonipy35.syncpick.rc import Daemon, RcError
+from bonipy35.syncpick.runner import Runner
 from bonipy35.syncpick.web import (
     STATIC_DIRECTORY,
     TOKEN_HEADER,
     Handler,
     Server,
+    add_routes,
+    entry_json,
+    locations,
+    side_json,
 )
+
+RCLONE = shutil.which("rclone")
 
 
 @pytest.fixture(name="server")
@@ -222,3 +235,150 @@ class TestLogMessage:
             request(server, "GET", "/?token=secret")
         assert "GET /?token=<token>" in caplog.text
         assert "secret" not in caplog.text
+
+
+class FakeDaemon(Daemon):
+    """Lists ``left`` with one file and checks it as left only."""
+
+    def __init__(self) -> None:
+        super().__init__(Runner(executable=sys.executable))
+        self.error = None  # type: Union[None, RcError]
+
+    def call(
+        self, path: str, parameters: Union[None, Dict[str, object]] = None
+    ) -> Dict[str, object]:
+        if self.error is not None:
+            raise self.error
+        parameters = parameters or {}
+        if path == "operations/check":
+            return {"combined": ["+ a"]}
+        if parameters["fs"] == "left":
+            return {
+                "list": [
+                    {
+                        "Path": "a",
+                        "Size": 1,
+                        "ModTime": "2026-10-25T01:02:03Z",
+                    }
+                ]
+            }
+        return {"list": []}
+
+
+@pytest.fixture(name="daemon")
+def fixture_daemon(server: Server) -> FakeDaemon:
+    daemon = FakeDaemon()
+    add_routes(server, daemon)
+    return daemon
+
+
+class TestSideJson:
+    def test_utc_with_microseconds(self) -> None:
+        offset = datetime.timezone(datetime.timedelta(hours=-1))
+        side = Side(
+            size=3,
+            modified=datetime.datetime(
+                2026, 10, 25, 1, 2, 3, 45, tzinfo=offset
+            ),
+        )
+        assert side_json(side) == {
+            "size": 3,
+            "modified": "2026-10-25T02:02:03.000045Z",
+        }
+
+    def test_missing(self) -> None:
+        assert side_json(None) is None
+
+
+class TestEntryJson:
+    def test_state_name(self) -> None:
+        assert entry_json(
+            Entry(path="p", state=State.RIGHT_ONLY, left=None, right=None)
+        ) == {"path": "p", "state": "right_only", "left": None, "right": None}
+
+
+class TestLocations:
+    def test_valid(self) -> None:
+        assert locations({"left": "a", "right": "b:", "other": 1}) == {
+            "left": "a",
+            "right": "b:",
+        }
+
+    @pytest.mark.parametrize(
+        "body", [[], {"left": "a"}, {"left": "a", "right": 1}, {"right": "b"}]
+    )
+    def test_invalid(self, body: object) -> None:
+        assert locations(body) is None
+
+
+class TestCompareRoute:
+    @pytest.mark.usefixtures("daemon")
+    def test_entries(self, server: Server) -> None:
+        assert post(
+            server, "/api/compare", b'{"left": "left", "right": "right"}'
+        ) == (
+            200,
+            {
+                "entries": [
+                    {
+                        "path": "a",
+                        "state": "left_only",
+                        "left": {
+                            "size": 1,
+                            "modified": "2026-10-25T01:02:03.000000Z",
+                        },
+                        "right": None,
+                    }
+                ]
+            },
+        )
+
+    @pytest.mark.usefixtures("daemon")
+    def test_invalid_body(self, server: Server) -> None:
+        assert post(server, "/api/compare", b'{"left": "left"}') == (
+            400,
+            {"error": "Expected left and right as strings"},
+        )
+
+    def test_rclone_error(self, server: Server, daemon: FakeDaemon) -> None:
+        daemon.error = RcError(
+            "no remote", path="operations/list", status=500
+        )
+        assert post(
+            server, "/api/compare", b'{"left": "x:", "right": "y"}'
+        ) == (502, {"error": "no remote"})
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(RCLONE is None, reason="Executable not found: rclone")
+class TestRealCompareRoute:
+    def test_entries(self, server: Server, tmp_path: pathlib.Path) -> None:
+        config = tmp_path / "rclone.conf"
+        config.write_text("")
+        left = tmp_path / "left"
+        right = tmp_path / "right"
+        (left / "d").mkdir(parents=True)
+        right.mkdir()
+        (left / "d" / "a file").write_text("a")
+        (right / "b").write_text("bb")
+        with Daemon(Runner(config=config)) as daemon:
+            add_routes(server, daemon)
+            status, body = post(
+                server,
+                "/api/compare",
+                json.dumps({"left": str(left), "right": str(right)}).encode(
+                    "utf-8"
+                ),
+            )
+        assert status == 200
+        entries = typing.cast(
+            List[Dict[str, typing.Any]],
+            typing.cast(Dict[str, object], body)["entries"],
+        )
+        assert [(entry["path"], entry["state"]) for entry in entries] == [
+            ("b", "right_only"),
+            ("d/a file", "left_only"),
+        ]
+        assert entries[0]["left"] is None
+        assert entries[1]["left"]["size"] == 1
+        assert entries[1]["left"]["modified"].endswith("Z")
