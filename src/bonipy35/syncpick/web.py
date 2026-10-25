@@ -10,7 +10,11 @@ import json
 import logging
 import os
 import pathlib
+import selectors
+import signal
+import socket
 import socketserver
+import sys
 import typing
 import urllib.parse
 
@@ -19,6 +23,7 @@ from typing import Callable, Dict, List, Union
 # Internal modules.
 from .compare import Entry, Side, compare
 from .rc import Daemon, RcError
+from .runner import RcloneError, argument_parser, runner_from_arguments
 from .transfer import Direction, copy_files
 
 _logger = logging.getLogger(__name__)
@@ -243,3 +248,122 @@ def add_routes(server: Server, daemon: Daemon) -> None:
 
     server.routes["/api/compare"] = compare_route
     server.routes["/api/copy"] = copy_route
+
+
+def page_url(server: Server, *, left: str = "", right: str = "") -> str:
+    """The page address, with ``left`` and ``right`` to fill in if given."""
+    query = [("left", left), ("right", right)]
+    extra = urllib.parse.urlencode([item for item in query if item[1]])
+    return server.url + ("&" + extra if extra else "")
+
+
+class Waker:
+    """A socket pair: writing to one end wakes a selector on the other.
+
+    ``signal.set_wakeup_fd(waker.writer_fileno)`` makes signals write to it
+    as they arrive, so Ctrl+C wakes a waiting selector on Windows too.
+    """
+
+    def __init__(self) -> None:
+        self._reader, self._writer = socket.socketpair()
+        self._reader.setblocking(False)
+        self._writer.setblocking(False)
+        self.stopped = False
+
+    def __enter__(self) -> "Waker":
+        return self
+
+    def __exit__(self, *_: object) -> None:
+        self.close()
+
+    @property
+    def writer_fileno(self) -> int:
+        return self._writer.fileno()
+
+    def fileno(self) -> int:
+        return self._reader.fileno()
+
+    def stop(self) -> None:
+        """Make ``serve`` return, from any thread."""
+        self.stopped = True
+        try:
+            self._writer.send(b"\0")
+        except BlockingIOError:
+            pass  # Already full, so a wakeup is pending.
+
+    def drain(self) -> None:
+        # Any bytes left wake the selector again and are drained then.
+        try:
+            self._reader.recv(4096)
+        except BlockingIOError:
+            pass
+
+    def close(self) -> None:
+        self._reader.close()
+        self._writer.close()
+
+
+def serve(server: Server, waker: Waker) -> None:
+    """Handle requests until ``waker`` is stopped, waiting without timeouts."""
+    with selectors.DefaultSelector() as selector:
+        selector.register(server, selectors.EVENT_READ)
+        selector.register(waker, selectors.EVENT_READ)
+        while True:
+            for key, _ in selector.select():
+                if key.fileobj is waker:
+                    # A signal's handler, if any, runs after this returns.
+                    waker.drain()
+                    if waker.stopped:
+                        return
+                else:
+                    server.handle_request()
+
+
+def main(argv: Union[None, List[str]] = None) -> int:
+    """Serve the syncpick page on localhost until Ctrl+C.
+
+    Prints the page address, which includes this run's token.
+    """
+    parser = argument_parser(description=typing.cast(str, main.__doc__))
+    parser.add_argument(
+        "left", nargs="?", default="", help="rclone path to fill in"
+    )
+    parser.add_argument(
+        "right", nargs="?", default="", help="rclone path to fill in"
+    )
+    parser.add_argument(
+        "--port", type=int, default=0, help="port (default: any free one)"
+    )
+    arguments = parser.parse_args((sys.argv if argv is None else argv)[1:])
+    try:
+        with Daemon(
+            runner_from_arguments(arguments)
+        ) as daemon, Waker() as waker:
+            # Servers are context managers only from Python 3.6.
+            server = Server(port=arguments.port)
+            try:
+                add_routes(server, daemon)
+                print(
+                    "Open:",
+                    page_url(
+                        server, left=arguments.left, right=arguments.right
+                    ),
+                )
+                print("Press Ctrl+C to stop.", flush=True)
+                previous = signal.set_wakeup_fd(waker.writer_fileno)
+                try:
+                    serve(server, waker)
+                except KeyboardInterrupt:
+                    pass
+                finally:
+                    signal.set_wakeup_fd(previous)
+            finally:
+                server.server_close()
+    except (OSError, RcError, RcloneError) as error:
+        print(error, file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
