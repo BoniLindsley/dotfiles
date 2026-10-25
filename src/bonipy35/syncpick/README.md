@@ -1,8 +1,25 @@
 # syncpick
 
 Compare two rclone locations and copy picked files in either direction.
-Work in progress: only the rclone building blocks exist so far.
+Work in progress: comparing works from the command line;
+copying exists as a library function for the coming frontends.
 Requires rclone on `PATH`, or `--rclone PATH`.
+
+## Comparing
+
+Print one tab-separated line per file:
+state, left size and time, right size and time (UTC), then the path.
+
+```sh
+python -m bonipy35.syncpick compare remote:dir some/directory
+```
+
+States are those of `rclone check --combined`:
+`=` same, `*` different, `+` left only, `-` right only, `!` error.
+A missing side shows `-` for its size and time,
+and a location that does not exist compares as empty.
+The exit status is 0 if all files are the same,
+1 if any differ, and 2 on errors.
 
 ## Trying the building blocks
 

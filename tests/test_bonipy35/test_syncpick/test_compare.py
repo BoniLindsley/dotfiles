@@ -18,6 +18,8 @@ from bonipy35.syncpick.compare import (
     Side,
     State,
     compare,
+    format_entry,
+    format_side,
     list_files,
     parse_time,
 )
@@ -215,6 +217,40 @@ class TestListFiles:
             list_files(daemon, "left")
         assert raised.value.path == "operations/list"
         assert raised.value.status == 200
+
+
+class TestFormatSide:
+    def test_converts_to_utc(self) -> None:
+        offset = datetime.timezone(datetime.timedelta(hours=2))
+        side = Side(
+            size=12,
+            modified=datetime.datetime(
+                2026, 10, 24, 0, 0, 1, 999999, tzinfo=offset
+            ),
+        )
+        assert format_side(side) == "12\t2026-10-23T22:00:01Z"
+
+    def test_missing(self) -> None:
+        assert format_side(None) == "-\t-"
+
+
+class TestFormatEntry:
+    def test_ends_with_path(self) -> None:
+        side = Side(
+            size=-1,
+            modified=datetime.datetime(2026, 10, 23, 21, 3, 35, tzinfo=UTC),
+        )
+        assert (
+            format_entry(
+                Entry(
+                    path="d/a file",
+                    state=State.LEFT_ONLY,
+                    left=side,
+                    right=None,
+                )
+            )
+            == "+\t-1\t2026-10-23T21:03:35Z\t-\t-\td/a file"
+        )
 
 
 class TestParseTime:
