@@ -5,8 +5,13 @@ import datetime
 import http.client
 import json
 import logging
+import os
 import pathlib
+import selectors
 import shutil
+import signal
+import socket
+import subprocess
 import sys
 import threading
 import typing
@@ -28,9 +33,12 @@ from bonipy35.syncpick.web import (
     Handler,
     Server,
     add_routes,
+    Waker,
     copy_request,
     entry_json,
     locations,
+    page_url,
+    serve,
     side_json,
 )
 
@@ -41,16 +49,15 @@ RCLONE = shutil.which("rclone")
 def fixture_server(tmp_path: pathlib.Path) -> Iterator[Server]:
     (tmp_path / "index.html").write_text("<p>page</p>")
     server = Server(token="secret", static_directory=tmp_path)
-    # Polls only to notice shutdown() quickly; see T-017 for serving.
-    thread = threading.Thread(
-        target=server.serve_forever, kwargs={"poll_interval": 0.01}
-    )
+    waker = Waker()
+    thread = threading.Thread(target=serve, args=(server, waker))
     thread.start()
     try:
         yield server
     finally:
-        server.shutdown()
+        waker.stop()
         thread.join()
+        waker.close()
         server.server_close()
 
 
@@ -568,3 +575,139 @@ class TestRealRoutes:
             if path.is_file()
         ) == ["d/a"]
         assert (right / "d" / "a").read_text() == "a"
+
+
+class TestPageUrl:
+    def test_without_paths(self, server: Server) -> None:
+        assert page_url(server) == server.url
+
+    def test_with_paths(self, server: Server) -> None:
+        url = page_url(server, left="a b", right="r:x&y")
+        assert url.startswith(server.url + "&")
+        assert urllib.parse.parse_qs(urllib.parse.urlsplit(url).query) == {
+            "token": ["secret"],
+            "left": ["a b"],
+            "right": ["r:x&y"],
+        }
+
+    def test_one_path(self, server: Server) -> None:
+        assert page_url(server, right="r:") == server.url + "&right=r%3A"
+
+
+def readable(waker: Waker) -> bool:
+    with selectors.DefaultSelector() as selector:
+        selector.register(waker, selectors.EVENT_READ)
+        return bool(selector.select(timeout=0))
+
+
+class TestWaker:
+    def test_stop_wakes(self) -> None:
+        with Waker() as waker:
+            assert not readable(waker)
+            waker.stop()
+            assert waker.stopped
+            assert readable(waker)
+            waker.drain()
+            assert not readable(waker)
+
+    def test_drain_without_wakeup(self) -> None:
+        with Waker() as waker:
+            waker.drain()
+            assert not readable(waker)
+
+    def test_stop_when_full(self) -> None:
+        with Waker() as waker:
+            with pytest.raises(BlockingIOError):
+                while True:
+                    send_wakeup(waker, b"\0" * 65536)
+            waker.stop()
+            assert waker.stopped
+            # Bytes left after one drain wake the selector again.
+            waker.drain()
+            assert readable(waker)
+
+    @pytest.mark.skipif(
+        not hasattr(signal, "raise_signal"),
+        reason="Needs signal.raise_signal",
+    )
+    def test_signal_wakes(self) -> None:
+        received = []  # type: List[int]
+        previous_handler = signal.signal(
+            signal.SIGINT, lambda number, frame: received.append(number)
+        )
+        try:
+            with Waker() as waker:
+                previous = signal.set_wakeup_fd(waker.writer_fileno)
+                try:
+                    signal.raise_signal(signal.SIGINT)
+                finally:
+                    signal.set_wakeup_fd(previous)
+                assert readable(waker)
+                assert not waker.stopped
+        finally:
+            signal.signal(signal.SIGINT, previous_handler)
+        assert received == [signal.SIGINT]
+
+
+def send_wakeup(waker: Waker, data: bytes = b"\0") -> None:
+    """Write to the waker as a signal would, without stopping it."""
+    writer = socket.socket(fileno=waker.writer_fileno)
+    try:
+        writer.send(data)
+    finally:
+        writer.detach()
+
+
+class TestServe:
+    def test_wakeup_without_stop_keeps_serving(
+        self, tmp_path: pathlib.Path
+    ) -> None:
+        (tmp_path / "index.html").write_text("page")
+        server = Server(token="secret", static_directory=tmp_path)
+        try:
+            with Waker() as waker:
+                thread = threading.Thread(target=serve, args=(server, waker))
+                thread.start()
+                try:
+                    send_wakeup(waker)
+                    assert request(server, "GET", "/?token=secret")[0] == 200
+                    assert thread.is_alive()
+                finally:
+                    waker.stop()
+                    thread.join()
+        finally:
+            server.server_close()
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(RCLONE is None, reason="Executable not found: rclone")
+@pytest.mark.skipif(os.name != "posix", reason="Sends SIGINT")
+class TestRealMain:
+    def test_serves_until_interrupted(self, tmp_path: pathlib.Path) -> None:
+        config = tmp_path / "rclone.conf"
+        config.write_text("")
+        command = [sys.executable, "-m", "bonipy35.syncpick", "web"]
+        with subprocess.Popen(
+            command + ["--config", str(config), "left dir"],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        ) as process:
+            try:
+                stdout = typing.cast(typing.BinaryIO, process.stdout)
+                line = stdout.readline().decode("utf-8")
+                assert line.startswith("Open: http://127.0.0.1:")
+                url = urllib.parse.urlsplit(line.split()[1])
+                assert urllib.parse.parse_qs(url.query)["left"] == [
+                    "left dir"
+                ]
+                connection = http.client.HTTPConnection("127.0.0.1", url.port)
+                try:
+                    connection.request("GET", "/?" + url.query)
+                    assert connection.getresponse().status == 200
+                finally:
+                    connection.close()
+                process.send_signal(signal.SIGINT)
+                assert process.wait(timeout=10) == 0
+            finally:
+                if process.poll() is None:
+                    process.kill()
