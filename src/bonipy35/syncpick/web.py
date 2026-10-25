@@ -3,6 +3,7 @@
 
 # Standard libraries.
 import binascii
+import datetime
 import hmac
 import http.server
 import json
@@ -13,7 +14,11 @@ import socketserver
 import typing
 import urllib.parse
 
-from typing import Callable, Dict
+from typing import Callable, Dict, Union
+
+# Internal modules.
+from .compare import Entry, Side, compare
+from .rc import Daemon, RcError
 
 _logger = logging.getLogger(__name__)
 
@@ -131,3 +136,55 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.address_string(),
             message.replace(self.app.token, "<token>"),
         )
+
+
+def side_json(side: Union[None, Side]) -> Union[None, Dict[str, object]]:
+    """Describe a side for JSON, with its time in UTC to microseconds."""
+    if side is None:
+        return None
+    modified = side.modified.astimezone(datetime.timezone.utc)
+    return {
+        "size": side.size,
+        "modified": modified.strftime("%Y-%m-%dT%H:%M:%S.%fZ"),
+    }
+
+
+def entry_json(entry: Entry) -> Dict[str, object]:
+    """Describe an entry for JSON; ``state`` is a name such as ``left_only``."""
+    return {
+        "path": entry.path,
+        "state": entry.state.name.lower(),
+        "left": side_json(entry.left),
+        "right": side_json(entry.right),
+    }
+
+
+def locations(body: object) -> Union[None, Dict[str, str]]:
+    """Return ``left`` and ``right`` of a request body if both are strings."""
+    if not isinstance(body, dict):
+        return None
+    left = body.get("left")
+    right = body.get("right")
+    if not isinstance(left, str) or not isinstance(right, str):
+        return None
+    return {"left": left, "right": right}
+
+
+def add_routes(server: Server, daemon: Daemon) -> None:
+    """Serve the API on ``server``, sending rclone requests to ``daemon``."""
+
+    def compare_route(handler: Handler, body: object) -> None:
+        paths = locations(body)
+        if paths is None:
+            handler.send_json_error(400, "Expected left and right as strings")
+            return
+        try:
+            entries = compare(daemon, paths["left"], paths["right"])
+        except RcError as error:
+            handler.send_json_error(502, str(error))
+            return
+        handler.send_json(
+            200, {"entries": [entry_json(entry) for entry in entries]}
+        )
+
+    server.routes["/api/compare"] = compare_route
