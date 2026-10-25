@@ -5,12 +5,14 @@
 import datetime
 import enum
 import re
+import sys
 import typing
 
 from typing import Dict, List, Union
 
 # Internal modules.
 from .rc import Daemon, RcError
+from .runner import RcloneError, argument_parser, runner_from_arguments
 
 _LIST = "operations/list"
 _CHECK = "operations/check"
@@ -177,3 +179,47 @@ def _unexpected(value: object) -> RcError:
     return RcError(
         "Unexpected response: {!r}".format(value), path=_LIST, status=200
     )
+
+
+def format_side(side: Union[None, Side]) -> str:
+    """Format a side as size and UTC time, or ``-`` for both if missing."""
+    if side is None:
+        return "-\t-"
+    modified = side.modified.astimezone(datetime.timezone.utc)
+    return "{}\t{}".format(side.size, modified.strftime("%Y-%m-%dT%H:%M:%SZ"))
+
+
+def format_entry(entry: Entry) -> str:
+    """Format an entry as one tab-separated line, ending with its path."""
+    return "{}\t{}\t{}\t{}".format(
+        entry.state.value,
+        format_side(entry.left),
+        format_side(entry.right),
+        entry.path,
+    )
+
+
+def main(argv: Union[None, List[str]] = None) -> int:
+    """Compare two rclone paths, printing one line per file.
+
+    Columns: state, left size and time, right size and time, path.
+    States are those of ``rclone check --combined``.
+    Exits with 0 if all files are the same, 1 if any differ, 2 on errors.
+    """
+    parser = argument_parser(description=typing.cast(str, main.__doc__))
+    parser.add_argument("left", help="rclone path, such as remote:dir")
+    parser.add_argument("right", help="rclone path, such as some/directory")
+    arguments = parser.parse_args((sys.argv if argv is None else argv)[1:])
+    try:
+        with Daemon(runner_from_arguments(arguments)) as daemon:
+            entries = compare(daemon, arguments.left, arguments.right)
+    except (RcError, RcloneError) as error:
+        print(error, file=sys.stderr)
+        return 2
+    for entry in entries:
+        print(format_entry(entry))
+    return int(any(entry.state is not State.SAME for entry in entries))
+
+
+if __name__ == "__main__":
+    sys.exit(main())
