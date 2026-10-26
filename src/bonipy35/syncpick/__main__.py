@@ -13,7 +13,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
     """Forward command arguments to the corresponding syncpick module."""
     return runpy_ext.subcommand_main(
         argv=argv,
-        choices=("compare", "rc", "runner", "web"),
+        choices=("compare", "rc", "runner", "tui", "web"),
         package=__package__,
         description="Compare and copy files with rclone.",
     )

@@ -173,6 +173,13 @@ class TestScreen:
             screen.refresh(ENTRIES[2:])
             assert names(screen)[screen.cursor - screen.top].endswith("deep/")
 
+        def test_resize(self, screen: Screen) -> None:
+            press(screen, curses.KEY_END)
+            screen.resize(4)
+            assert (screen.page, screen.top) == (2, 5)
+            screen.resize(20)
+            assert (screen.page, screen.top) == (18, 0)
+
         def test_clamps_removed_row(self, screen: Screen) -> None:
             press(screen, curses.KEY_END)
             screen.refresh(ENTRIES[:2])
