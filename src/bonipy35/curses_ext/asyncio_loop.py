@@ -9,6 +9,7 @@ import curses
 import math
 import selectors
 import signal
+import sys
 import threading
 import typing
 
@@ -69,7 +70,9 @@ class EventLoop(asyncio.BaseEventLoop):  # pylint: disable=abstract-method
     """
 
     wakeup_key = curses.KEY_MAX + 1
-    wakeup_signal = signal.SIGUSR1
+    # Windows has no SIGUSR1; define it elsewhere so the package imports.
+    if sys.platform != "win32":  # pragma: no branch
+        wakeup_signal = signal.SIGUSR1
 
     def __init__(self, *, stdscr: "curses.window") -> None:
         super().__init__()
