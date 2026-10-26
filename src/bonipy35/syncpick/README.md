@@ -29,6 +29,29 @@ Nothing is deleted.
 Press Ctrl+C to stop the server.
 `--port PORT` picks the port instead of any free one.
 
+## Terminal
+
+Compare and copy in the terminal, with the same tree as the web page:
+
+```sh
+python -m bonipy35.syncpick tui remote:dir some/directory
+```
+
+| Key | Action |
+| --- | --- |
+| Up, Down, `k`, `j`, PgUp, PgDn, Home, End | Move |
+| Space | Pick or unpick a file or directory |
+| Enter, Right | Expand a directory |
+| Left | Collapse a directory, or go to its parent |
+| `>`, `<` | Copy picked files to the right, or to the left |
+| `=` | Show or hide identical files |
+| `r` | Compare again |
+| Esc | Stop copying after the current file |
+| `q` | Quit |
+
+Times are in UTC to the minute.
+On Windows it needs `windows-curses`, and does not work yet.
+
 ## Comparing
 
 Print one tab-separated line per file:

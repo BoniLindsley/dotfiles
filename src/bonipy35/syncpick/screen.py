@@ -111,6 +111,11 @@ class Screen:
             self.cursor = keys.index(key)
         self._move(0)
 
+    def resize(self, height: int) -> None:
+        """Fit the page to a new number of terminal rows."""
+        self.height = height
+        self._move(0)
+
     def refresh(self, entries: List[compare.Entry]) -> None:
         """Show a new comparison of the same locations."""
         self.model.refresh(entries)
