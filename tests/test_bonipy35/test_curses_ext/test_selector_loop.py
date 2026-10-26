@@ -129,6 +129,45 @@ def make_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
         asyncio.set_event_loop(None)
 
 
+@pytest.fixture(name="windows_console")
+def fixture_windows_console(
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[None]:
+    """Make the loop's real Windows consoles wait on an unsignalled event.
+
+    Mock windows read no console events, so events pending on the real
+    console input, such as releasing Enter after starting the tests,
+    would keep it signalled and the loop from ever waiting.
+    """
+    if sys.platform != "win32":
+        pytest.skip("needs Windows")
+    # pylint: disable-next=import-outside-toplevel
+    import ctypes
+    from ctypes import wintypes  # pylint: disable=import-outside-toplevel
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateEventW.restype = wintypes.HANDLE
+    kernel32.CreateEventW.argtypes = [
+        wintypes.LPVOID,
+        wintypes.BOOL,
+        wintypes.BOOL,
+        wintypes.LPCWSTR,
+    ]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    event = kernel32.CreateEventW(None, True, False, None)
+    assert event
+    monkeypatch.setattr(
+        selector_loop,
+        "_new_console",
+        # pylint: disable-next=protected-access
+        lambda: selector_loop._Console(console_input=event),
+    )
+    try:
+        yield
+    finally:
+        kernel32.CloseHandle(event)
+
+
 @pytest.fixture(
     name="wait",
     params=(
@@ -152,6 +191,8 @@ def fixture_wait(
     elif request.param == "fake-console":
         console = FakeConsole(terminal)
         monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
+    else:
+        request.getfixturevalue("windows_console")
     return typing.cast(str, request.param)
 
 
@@ -186,10 +227,13 @@ def fixture_console_loop(
 
 
 @pytest.fixture(name="stdin")
-def fixture_stdin(terminal: Terminal) -> Iterator[Terminal]:
+def fixture_stdin(
+    request: pytest.FixtureRequest, terminal: Terminal
+) -> Iterator[Terminal]:
     """Put the terminal's input on file descriptor 0 for ``run``."""
     if WINDOWS:
         # The loop waits on the console there, not on descriptor 0.
+        request.getfixturevalue("windows_console")
         yield terminal
         return
     saved = os.dup(0)
@@ -654,9 +698,20 @@ class TestRun:
             stdin.type(b"r")
             return await loop.getch()
 
+        assert run(app()) == ord("r")
+        assert run(app()) == ord("r")
+
+    @needs_sigwinch
+    def test_restores_resize_handler(
+        self, window: Mock, stdin: Terminal
+    ) -> None:
+        del window, stdin
+
+        async def app() -> None:
+            pass
+
         previous = signal.getsignal(signal.SIGWINCH)
-        assert run(app()) == ord("r")
-        assert run(app()) == ord("r")
+        run(app())
         assert signal.getsignal(signal.SIGWINCH) == previous
 
     def test_terminal_cleanup_on_failure(
