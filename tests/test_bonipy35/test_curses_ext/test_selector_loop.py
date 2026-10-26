@@ -8,6 +8,7 @@ import asyncio
 import collections
 import curses
 import os
+import signal
 import socket
 import sys
 import threading
@@ -23,6 +24,7 @@ import pytest
 from bonipy35.curses_ext.selector_loop import (
     EventLoop,
     EventLoopPolicy,
+    keep_resize_handler,
     run,
     use_event_loop_policy,
 )
@@ -254,6 +256,51 @@ class TestEventLoop:
         assert 1 <= len(waits) <= 2
         assert waits[0] >= 0.04
 
+    def test_resize(
+        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        resized = loop.create_future()
+        monkeypatch.setattr(
+            curses,
+            "resizeterm",
+            Mock(side_effect=lambda *size: resized.set_result(size)),
+        )
+        monkeypatch.setattr(
+            os,
+            "get_terminal_size",
+            Mock(return_value=os.terminal_size((100, 30))),
+        )
+        loop.call_soon(os.kill, os.getpid(), signal.SIGWINCH)
+        assert loop.run_until_complete(asyncio.wait_for(resized, 1)) == (
+            30,
+            100,
+        )
+
+    def test_resize_without_terminal(
+        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(curses, "resizeterm", Mock())
+        monkeypatch.setattr(
+            os, "get_terminal_size", Mock(side_effect=OSError)
+        )
+        loop._resize()  # pylint: disable=protected-access
+        curses.resizeterm.assert_not_called()  # type: ignore[attr-defined]
+
+    def test_without_sigwinch(
+        self,
+        window: Mock,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delattr(signal, "SIGWINCH")
+        loop = EventLoop(
+            stdscr=window, input_fd=terminal.input_socket.fileno()
+        )
+        try:
+            assert not loop._signal_handlers  # type: ignore[attr-defined]  # pylint: disable=protected-access
+        finally:
+            loop.close()
+
     def test_input_error(
         self, loop: EventLoop, window: Mock, terminal: Terminal
     ) -> None:
@@ -274,6 +321,7 @@ class TestEventLoop:
         loop.close()
         assert waiter.cancelled()
         window.nodelay.assert_called_with(False)
+        assert signal.getsignal(signal.SIGWINCH) == signal.SIG_DFL
         # The input is no longer watched.
         terminal.type(b"z")
         with pytest.raises(RuntimeError, match="closed"):
@@ -293,6 +341,36 @@ class TestEventLoop:
                 loop.close()
 
         loop.run_until_complete(check())
+
+
+class TestKeepResizeHandler:
+    def test_restores(self) -> None:
+        previous = signal.getsignal(signal.SIGWINCH)
+        with keep_resize_handler():
+            # A Python handler, so ncurses does not install its own.
+            assert callable(signal.getsignal(signal.SIGWINCH))
+            os.kill(os.getpid(), signal.SIGWINCH)
+        assert signal.getsignal(signal.SIGWINCH) == previous
+
+    def test_unknown_previous(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        handlers = []
+
+        # Handlers installed outside Python are reported as None.
+        def set_handler(signum: int, handler: typing.Any) -> None:
+            assert signum == signal.SIGWINCH
+            handlers.append(handler)
+
+        monkeypatch.setattr(signal, "signal", set_handler)
+        with keep_resize_handler():
+            pass
+        assert handlers[-1] == signal.SIG_DFL
+
+    def test_without_sigwinch(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.delattr(signal, "SIGWINCH")
+        monkeypatch.setattr(signal, "signal", Mock())
+        with keep_resize_handler():
+            pass
+        signal.signal.assert_not_called()  # type: ignore[attr-defined]
 
 
 class TestPolicy:
@@ -335,8 +413,10 @@ class TestRun:
             stdin.type(b"r")
             return await loop.getch()
 
+        previous = signal.getsignal(signal.SIGWINCH)
         assert run(app()) == ord("r")
         assert run(app()) == ord("r")
+        assert signal.getsignal(signal.SIGWINCH) == previous
 
     def test_terminal_cleanup_on_failure(
         self, window: Mock, stdin: Terminal

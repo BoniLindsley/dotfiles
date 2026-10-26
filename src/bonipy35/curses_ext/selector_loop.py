@@ -15,7 +15,9 @@ import asyncio
 import collections
 import contextlib
 import curses
+import os
 import selectors
+import signal
 import typing
 
 from typing import Iterator, List, Mapping, Tuple, Union
@@ -79,6 +81,13 @@ class EventLoop(asyncio.SelectorEventLoop):
     Applications control screen updates with refresh(),
     or noutrefresh() followed by curses.doupdate().
     Submit worker-thread callbacks with call_soon_threadsafe().
+
+    Where SIGWINCH exists, the loop handles it by resizing curses
+    to the terminal, which queues `KEY_RESIZE` for ``getch()``.
+    Ncurses installs its own handler at initialisation
+    only if none is set, and never again,
+    so install a Python handler before initialising curses
+    and restore it after ending curses, as ``run()`` does.
     """
 
     def __init__(self, *, stdscr: "curses.window", input_fd: int = 0) -> None:
@@ -91,6 +100,8 @@ class EventLoop(asyncio.SelectorEventLoop):
         super().__init__(_Selector(selectors.DefaultSelector(), self))
         stdscr.nodelay(True)
         self.add_reader(input_fd, self._read_keys)
+        if hasattr(signal, "SIGWINCH"):
+            self.add_signal_handler(signal.SIGWINCH, self._resize)
 
     def create_future(self) -> "asyncio.Future[typing.Any]":
         # BaseEventLoop.create_future was added in Python 3.5.2.
@@ -135,6 +146,14 @@ class EventLoop(asyncio.SelectorEventLoop):
             else:
                 self._keys.append(key)
 
+    def _resize(self) -> None:
+        try:
+            columns, lines = os.get_terminal_size()
+        except OSError:
+            return
+        # Queues KEY_RESIZE if the size changed.
+        curses.resizeterm(lines, columns)
+
     def close(self) -> None:
         if self.is_running():
             raise RuntimeError("Cannot close a running event loop")
@@ -176,12 +195,39 @@ def use_event_loop_policy(
         asyncio.set_event_loop_policy(previous)
 
 
+def _ignore_signal(signum: int, frame: typing.Any) -> None:
+    del signum, frame
+
+
+@contextlib.contextmanager
+def keep_resize_handler() -> Iterator[None]:
+    """Hold a Python SIGWINCH handler while curses is initialised.
+
+    Ncurses then leaves SIGWINCH to the loop,
+    and the previous handler is restored afterwards.
+    """
+    if not hasattr(signal, "SIGWINCH"):
+        yield
+        return
+    previous = signal.signal(signal.SIGWINCH, _ignore_signal)
+    try:
+        yield
+    finally:
+        # Python cannot restore a handler installed outside it.
+        signal.signal(
+            signal.SIGWINCH,
+            signal.SIG_DFL if previous is None else previous,
+        )
+
+
 def run(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:
     """Run a coroutine with curses initialised and this loop's policy set.
 
-    Restores the terminal and previous policy even on exceptions.
+    Restores the terminal, SIGWINCH handler and previous policy
+    even on exceptions.
     Unfinished tasks are cancelled and awaited.
     """
-    with raii.initialise() as window:
-        with use_event_loop_policy(window):
-            return asyncio_ext.run(coro)
+    with keep_resize_handler():
+        with raii.initialise() as window:
+            with use_event_loop_policy(window):
+                return asyncio_ext.run(coro)
