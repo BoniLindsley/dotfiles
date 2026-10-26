@@ -322,6 +322,10 @@
         const row = document.createElement("tr");
         const leftTime = entry.left && entry.left.modified;
         const rightTime = entry.right && entry.right.modified;
+        // Show right values equal to the left ones as "same", to stand out less.
+        // Times compare as shown, since backends keep different precisions.
+        const sameSize = entry.left && entry.right && entry.left.size === entry.right.size;
+        const sameTime = leftTime && rightTime && formatTime(entry.left) === formatTime(entry.right);
         const newer = entry.state === "different" && leftTime && rightTime
           ? (leftTime > rightTime ? "left" : leftTime < rightTime ? "right" : "")
           : "";
@@ -338,8 +342,10 @@
           cell(STATES[entry.state][0], "state"),
           cell(formatSize(entry.left), "number"),
           cell(formatTime(entry.left), "time" + (newer === "left" ? " newer" : "")),
-          cell(formatSize(entry.right), "number"),
-          cell(formatTime(entry.right), "time" + (newer === "right" ? " newer" : "")),
+          sameSize ? cell("same", "number muted") : cell(formatSize(entry.right), "number"),
+          sameTime
+            ? cell("same", "time muted")
+            : cell(formatTime(entry.right), "time" + (newer === "right" ? " newer" : "")),
           resultCell,
         );
         row.title = entry.path + " (" + STATES[entry.state][1] + ")";
