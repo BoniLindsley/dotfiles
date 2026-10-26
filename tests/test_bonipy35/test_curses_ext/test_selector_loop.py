@@ -6,23 +6,28 @@
 # Standard libraries.
 import asyncio
 import collections
+import contextlib
 import curses
 import os
+import select
+import selectors
 import signal
 import socket
 import sys
 import threading
 import typing
 
-from typing import Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional
 from unittest.mock import Mock
 
 # External dependencies.
 import pytest
 
 # Internal modules.
+from bonipy35.curses_ext import selector_loop
 from bonipy35.curses_ext.selector_loop import (
     EventLoop,
+    _ConsoleSelector,
     EventLoopPolicy,
     keep_resize_handler,
     run,
@@ -62,6 +67,43 @@ class Terminal:
         self.keyboard.close()
 
 
+class FakeConsole:
+    """Stand in for the Windows console, waiting with ``select``.
+
+    The terminal's input socket plays the console input handle;
+    bound descriptors play sockets bound to the console's event.
+    """
+
+    def __init__(self, terminal: Terminal) -> None:
+        self.input_socket = terminal.input_socket
+        self.bound = {}  # type: Dict[int, int]
+        self.resets = 0
+        self.waits = []  # type: List[Optional[float]]
+        self.closed = False
+
+    def bind(self, fd: int, events: int) -> None:
+        self.bound[fd] = events
+
+    def unbind(self, fd: int) -> None:
+        del self.bound[fd]
+
+    def reset(self) -> None:
+        self.resets += 1
+
+    def wait(self, timeout: Optional[float]) -> None:
+        self.waits.append(timeout)
+        select.select(
+            [self.input_socket]
+            + [fd for fd, events in self.bound.items() if events & 1],
+            [fd for fd, events in self.bound.items() if events & 2],
+            [],
+            timeout,
+        )
+
+    def close(self) -> None:
+        self.closed = True
+
+
 @pytest.fixture(name="terminal")
 def fixture_terminal(window: Mock) -> Iterator[Terminal]:
     terminal = Terminal(window)
@@ -71,8 +113,8 @@ def fixture_terminal(window: Mock) -> Iterator[Terminal]:
         terminal.close()
 
 
-@pytest.fixture(name="loop")
-def fixture_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
+@contextlib.contextmanager
+def make_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
     loop = EventLoop(stdscr=window, input_fd=terminal.input_socket.fileno())
     asyncio.set_event_loop(loop)
     try:
@@ -80,6 +122,49 @@ def fixture_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
     finally:
         loop.close()
         asyncio.set_event_loop(None)
+
+
+@pytest.fixture(
+    name="console", params=[False, True], ids=["descriptors", "console"]
+)
+def fixture_console(
+    request: pytest.FixtureRequest,
+    terminal: Terminal,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Optional[FakeConsole]:
+    """Wait on file descriptors, or on a console as on Windows."""
+    if not request.param:
+        return None
+    console = FakeConsole(terminal)
+    monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
+    return console
+
+
+@pytest.fixture(name="loop")
+def fixture_loop(
+    window: Mock, terminal: Terminal, console: Optional[FakeConsole]
+) -> Iterator[EventLoop]:
+    del console
+    with make_loop(window, terminal) as loop:
+        yield loop
+
+
+@pytest.fixture(name="descriptor_loop")
+def fixture_descriptor_loop(
+    window: Mock, terminal: Terminal
+) -> Iterator[EventLoop]:
+    with make_loop(window, terminal) as loop:
+        yield loop
+
+
+@pytest.fixture(name="console_loop")
+def fixture_console_loop(
+    window: Mock, terminal: Terminal, monkeypatch: pytest.MonkeyPatch
+) -> Iterator[EventLoop]:
+    console = FakeConsole(terminal)
+    monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
+    with make_loop(window, terminal) as loop:
+        yield loop
 
 
 @pytest.fixture(name="stdin")
@@ -147,12 +232,12 @@ class TestEventLoop:
     def test_queued_key_before_wait(
         self, loop: EventLoop, terminal: Terminal
     ) -> None:
-        # Nothing arrives on the input; only curses' queue holds a key.
-        terminal.queued.append(curses.KEY_RESIZE)
-        assert (
-            loop.run_until_complete(asyncio.wait_for(loop.getch(), 1))
-            == curses.KEY_RESIZE
-        )
+        # Nothing arrives on the input; only curses' queue holds a key,
+        # as after ungetch.
+        terminal.queued.append(ord("u"))
+        assert loop.run_until_complete(
+            asyncio.wait_for(loop.getch(), 1)
+        ) == ord("u")
 
     def test_queued_key_with_timer(
         self, loop: EventLoop, terminal: Terminal
@@ -238,27 +323,33 @@ class TestEventLoop:
         )
 
     def test_no_periodic_wakeups(
-        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+        self,
+        loop: EventLoop,
+        console: Optional[FakeConsole],
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         # pylint: disable-next=protected-access
         selector = loop._selector._selector  # type: ignore[attr-defined]
-        select = selector.select
+        selector_select = selector.select
         timeouts = []  # type: List[Optional[float]]
 
         def record(timeout: Optional[float] = None) -> typing.Any:
             timeouts.append(timeout)
-            return select(timeout)
+            return selector_select(timeout)
 
         monkeypatch.setattr(selector, "select", record)
         loop.run_until_complete(asyncio.sleep(0.05))
+        if console is not None:
+            timeouts = console.waits
         waits = [timeout for timeout in timeouts if timeout]
         # Timer resolution may add one short wait at the end.
         assert 1 <= len(waits) <= 2
         assert waits[0] >= 0.04
 
     def test_resize(
-        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+        self, descriptor_loop: EventLoop, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        loop = descriptor_loop
         resized = loop.create_future()
         monkeypatch.setattr(
             curses,
@@ -277,8 +368,9 @@ class TestEventLoop:
         )
 
     def test_resize_without_terminal(
-        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+        self, descriptor_loop: EventLoop, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        loop = descriptor_loop
         monkeypatch.setattr(curses, "resizeterm", Mock())
         monkeypatch.setattr(
             os, "get_terminal_size", Mock(side_effect=OSError)
@@ -321,11 +413,14 @@ class TestEventLoop:
         loop.close()
         assert waiter.cancelled()
         window.nodelay.assert_called_with(False)
-        assert signal.getsignal(signal.SIGWINCH) == signal.SIG_DFL
         # The input is no longer watched.
         terminal.type(b"z")
         with pytest.raises(RuntimeError, match="closed"):
             asyncio.run(loop.getch())
+
+    def test_close_signal(self, descriptor_loop: EventLoop) -> None:
+        descriptor_loop.close()
+        assert signal.getsignal(signal.SIGWINCH) == signal.SIG_DFL
 
     def test_wrong_loop(self, loop: EventLoop) -> None:
         other = asyncio.new_event_loop()
@@ -341,6 +436,122 @@ class TestEventLoop:
                 loop.close()
 
         loop.run_until_complete(check())
+
+
+class TestConsoleSelector:
+    def test_input_not_registered(
+        self, console_loop: EventLoop, terminal: Terminal
+    ) -> None:
+        # pylint: disable-next=protected-access
+        selector = console_loop._selector  # type: ignore[attr-defined]
+        assert terminal.input_socket.fileno() not in selector.get_map()
+        # Only asyncio's own wakeup socket.
+        assert len(selector.get_map()) == 1
+
+    def test_ready_without_waiting(
+        self, console_loop: EventLoop, terminal: Terminal
+    ) -> None:
+        console = FakeConsole(terminal)
+        selector = _ConsoleSelector(
+            selectors.DefaultSelector(), console_loop, console
+        )
+        left, right = socket.socketpair()
+        try:
+            selector.register(left, selectors.EVENT_READ)
+            right.sendall(b"x")
+            # Ready before waiting, as a socket whose network event
+            # was already signalled would be.
+            assert [key.fileobj for key, _events in selector.select()] == [
+                left
+            ]
+            left.recv(1)
+            terminal.queued.append(ord("k"))
+            # A key read before waiting also returns at once.
+            assert not selector.select()
+            assert not console.waits
+            assert console.resets == 2
+            assert console_loop.run_until_complete(console_loop.getch()) == (
+                ord("k")
+            )
+            selector.unregister(left)
+            assert not console.bound
+        finally:
+            selector.close()
+            left.close()
+            right.close()
+        assert console.closed
+
+    def test_zero_timeout(self, console_loop: EventLoop) -> None:
+        # pylint: disable-next=protected-access
+        selector = console_loop._selector  # type: ignore[attr-defined]
+        assert not selector.select(0)
+        assert not selector._console.waits  # pylint: disable=protected-access
+
+    def test_binding(self, console_loop: EventLoop) -> None:
+        # pylint: disable-next=protected-access
+        selector = console_loop._selector  # type: ignore[attr-defined]
+        console = selector._console  # pylint: disable=protected-access
+        left, right = socket.socketpair()
+        try:
+            console_loop.add_reader(left.fileno(), lambda: None)
+            assert console.bound[left.fileno()] == selectors.EVENT_READ
+            console_loop.add_writer(left.fileno(), lambda: None)
+            assert console.bound[left.fileno()] == (
+                selectors.EVENT_READ | selectors.EVENT_WRITE
+            )
+            console_loop.remove_reader(left.fileno())
+            console_loop.remove_writer(left.fileno())
+            assert left.fileno() not in console.bound
+        finally:
+            left.close()
+            right.close()
+
+    def test_bind_failure(
+        self, console_loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        # pylint: disable-next=protected-access
+        selector = console_loop._selector  # type: ignore[attr-defined]
+        console = selector._console  # pylint: disable=protected-access
+        monkeypatch.setattr(console, "bind", Mock(side_effect=OSError))
+        left, right = socket.socketpair()
+        try:
+            with pytest.raises(OSError):
+                console_loop.add_reader(left.fileno(), lambda: None)
+            assert left.fileno() not in selector.get_map()
+        finally:
+            left.close()
+            right.close()
+
+    def test_resize(
+        self,
+        console_loop: EventLoop,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(curses, "resize_term", Mock())
+        terminal.queued.append(curses.KEY_RESIZE)
+        assert console_loop.run_until_complete(console_loop.getch()) == (
+            curses.KEY_RESIZE
+        )
+        curses.resize_term.assert_called_once_with(0, 0)  # type: ignore[attr-defined]
+
+    def test_wakeup_fd(
+        self,
+        window: Mock,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        console = FakeConsole(terminal)
+        monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
+        previous = signal.set_wakeup_fd(-1)
+        signal.set_wakeup_fd(previous)
+        with make_loop(window, terminal) as loop:
+            current = signal.set_wakeup_fd(-1)
+            signal.set_wakeup_fd(current)
+            # pylint: disable-next=protected-access
+            assert current == loop._csock.fileno()  # type: ignore[attr-defined]
+        assert signal.set_wakeup_fd(previous) == previous
+        assert console.closed
 
 
 class TestKeepResizeHandler:
