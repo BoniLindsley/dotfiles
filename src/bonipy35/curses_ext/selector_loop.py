@@ -160,9 +160,13 @@ if sys.platform == "win32":  # pragma: no cover
     _Signature = typing.Tuple[typing.Any, typing.Any, typing.List[typing.Any]]
 
     class _Console:
-        """Wait on the console input and an event bound to sockets."""
+        """Wait on the console input and an event bound to sockets.
 
-        def __init__(self) -> None:
+        ``console_input`` is a handle to wait on for input,
+        by default standard input's.
+        """
+
+        def __init__(self, console_input: Union[None, int] = None) -> None:
             self._kernel32 = kernel32 = ctypes.WinDLL(
                 "kernel32", use_last_error=True
             )
@@ -202,7 +206,8 @@ if sys.platform == "win32":  # pragma: no cover
             for function, restype, argtypes in signatures:
                 function.restype = restype
                 function.argtypes = argtypes
-            console_input = kernel32.GetStdHandle(_STD_INPUT_HANDLE)
+            if console_input is None:
+                console_input = kernel32.GetStdHandle(_STD_INPUT_HANDLE)
             self._event = kernel32.CreateEventW(None, True, False, None)
             if not self._event:
                 raise ctypes.WinError(ctypes.get_last_error())
