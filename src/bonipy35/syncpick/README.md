@@ -16,8 +16,11 @@ python -m bonipy35.syncpick web remote:dir some/directory
 Open the printed address, which includes this run's token;
 requests without it are refused.
 With both locations given, the page compares them when it opens.
-The table hides files that are the same until their filter is ticked.
-Tick files, then copy them left to right or right to left:
+Files show as a tree, with each directory's counts by state.
+Directories with only identical files start collapsed.
+The state filters hide files, and directories with none left.
+Tick files or whole directories,
+then copy them left to right or right to left:
 each button counts only the ticked files on its source side.
 Each file's result shows as it finishes,
 and the comparison refreshes afterwards.
