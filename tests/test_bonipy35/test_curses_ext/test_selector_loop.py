@@ -34,6 +34,11 @@ from bonipy35.curses_ext.selector_loop import (
     use_event_loop_policy,
 )
 
+WINDOWS = sys.platform == "win32"
+needs_sigwinch = pytest.mark.skipif(
+    not hasattr(signal, "SIGWINCH"), reason="no SIGWINCH"
+)
+
 
 class Terminal:
     """Stand in for ncurses reading stdin a byte at a time.
@@ -125,34 +130,47 @@ def make_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
 
 
 @pytest.fixture(
-    name="console", params=[False, True], ids=["descriptors", "console"]
+    name="wait",
+    params=(
+        ["fake-console", "windows-console"]
+        if WINDOWS
+        else ["descriptors", "fake-console"]
+    ),
 )
-def fixture_console(
+def fixture_wait(
     request: pytest.FixtureRequest,
     terminal: Terminal,
     monkeypatch: pytest.MonkeyPatch,
-) -> Optional[FakeConsole]:
-    """Wait on file descriptors, or on a console as on Windows."""
-    if not request.param:
-        return None
-    console = FakeConsole(terminal)
-    monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
-    return console
+) -> str:
+    """Wait on descriptors, a fake console, or the real Windows console.
+
+    Keys typed on the terminal reach the loop in each case,
+    since the tests type them before the loop checks for keys.
+    """
+    if request.param == "descriptors":
+        monkeypatch.setattr(selector_loop, "_new_console", lambda: None)
+    elif request.param == "fake-console":
+        console = FakeConsole(terminal)
+        monkeypatch.setattr(selector_loop, "_new_console", lambda: console)
+    return typing.cast(str, request.param)
 
 
 @pytest.fixture(name="loop")
 def fixture_loop(
-    window: Mock, terminal: Terminal, console: Optional[FakeConsole]
+    window: Mock, terminal: Terminal, wait: str
 ) -> Iterator[EventLoop]:
-    del console
+    del wait
     with make_loop(window, terminal) as loop:
         yield loop
 
 
 @pytest.fixture(name="descriptor_loop")
 def fixture_descriptor_loop(
-    window: Mock, terminal: Terminal
+    window: Mock, terminal: Terminal, monkeypatch: pytest.MonkeyPatch
 ) -> Iterator[EventLoop]:
+    if WINDOWS:
+        pytest.skip("Windows waits on the console")
+    monkeypatch.setattr(selector_loop, "_new_console", lambda: None)
     with make_loop(window, terminal) as loop:
         yield loop
 
@@ -170,6 +188,10 @@ def fixture_console_loop(
 @pytest.fixture(name="stdin")
 def fixture_stdin(terminal: Terminal) -> Iterator[Terminal]:
     """Put the terminal's input on file descriptor 0 for ``run``."""
+    if WINDOWS:
+        # The loop waits on the console there, not on descriptor 0.
+        yield terminal
+        return
     saved = os.dup(0)
     os.dup2(terminal.input_socket.fileno(), 0)
     try:
@@ -271,6 +293,7 @@ class TestEventLoop:
             thread.join(timeout=2)
         assert not thread.is_alive()
 
+    @pytest.mark.skipif(WINDOWS, reason="Windows selects only sockets")
     def test_pipe_reader(self, loop: EventLoop) -> None:
         read_fd, write_fd = os.pipe()
         try:
@@ -307,6 +330,9 @@ class TestEventLoop:
             left.close()
             right.close()
 
+    @pytest.mark.skipif(
+        WINDOWS, reason="Windows selector loops run no subprocesses"
+    )
     def test_subprocess(self, loop: EventLoop) -> None:
         async def check() -> bytes:
             process = await asyncio.create_subprocess_exec(
@@ -323,24 +349,24 @@ class TestEventLoop:
         )
 
     def test_no_periodic_wakeups(
-        self,
-        loop: EventLoop,
-        console: Optional[FakeConsole],
-        monkeypatch: pytest.MonkeyPatch,
+        self, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         # pylint: disable-next=protected-access
-        selector = loop._selector._selector  # type: ignore[attr-defined]
-        selector_select = selector.select
+        selector = loop._selector  # type: ignore[attr-defined]
+        # Consoles wait themselves; otherwise the wrapped selector waits.
+        waiter, name = getattr(selector, "_console", None), "wait"
+        if waiter is None:
+            # pylint: disable-next=protected-access
+            waiter, name = selector._selector, "select"
+        wait = getattr(waiter, name)
         timeouts = []  # type: List[Optional[float]]
 
         def record(timeout: Optional[float] = None) -> typing.Any:
             timeouts.append(timeout)
-            return selector_select(timeout)
+            return wait(timeout)
 
-        monkeypatch.setattr(selector, "select", record)
+        monkeypatch.setattr(waiter, name, record)
         loop.run_until_complete(asyncio.sleep(0.05))
-        if console is not None:
-            timeouts = console.waits
         waits = [timeout for timeout in timeouts if timeout]
         # Timer resolution may add one short wait at the end.
         assert 1 <= len(waits) <= 2
@@ -378,12 +404,14 @@ class TestEventLoop:
         loop._resize()  # pylint: disable=protected-access
         curses.resizeterm.assert_not_called()  # type: ignore[attr-defined]
 
+    @needs_sigwinch
     def test_without_sigwinch(
         self,
         window: Mock,
         terminal: Terminal,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        monkeypatch.setattr(selector_loop, "_new_console", lambda: None)
         monkeypatch.delattr(signal, "SIGWINCH")
         loop = EventLoop(
             stdscr=window, input_fd=terminal.input_socket.fileno()
@@ -555,6 +583,7 @@ class TestConsoleSelector:
 
 
 class TestKeepResizeHandler:
+    @needs_sigwinch
     def test_restores(self) -> None:
         previous = signal.getsignal(signal.SIGWINCH)
         with keep_resize_handler():
@@ -563,6 +592,7 @@ class TestKeepResizeHandler:
             os.kill(os.getpid(), signal.SIGWINCH)
         assert signal.getsignal(signal.SIGWINCH) == previous
 
+    @needs_sigwinch
     def test_unknown_previous(self, monkeypatch: pytest.MonkeyPatch) -> None:
         handlers = []
 
@@ -577,7 +607,7 @@ class TestKeepResizeHandler:
         assert handlers[-1] == signal.SIG_DFL
 
     def test_without_sigwinch(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delattr(signal, "SIGWINCH")
+        monkeypatch.delattr(signal, "SIGWINCH", raising=False)
         monkeypatch.setattr(signal, "signal", Mock())
         with keep_resize_handler():
             pass
