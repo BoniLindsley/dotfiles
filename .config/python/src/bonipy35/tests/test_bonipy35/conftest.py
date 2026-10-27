@@ -2,12 +2,39 @@
 
 # Standard libraries.
 import logging
+import os
 import pathlib
+import socket
+import sys
+
+from typing import Iterator
 
 # External dependencies.
 import pytest
 
 _logger = logging.getLogger(__name__)
+
+
+@pytest.fixture(name="selectable_stdin")
+def fixture_selectable_stdin() -> Iterator[None]:
+    """Put a socket on descriptor 0 for loops waiting on standard input.
+
+    Under pytest it may be /dev/null, which epoll rejects.
+    Windows loops wait on the console instead.
+    """
+    if sys.platform == "win32":
+        yield
+        return
+    reader, writer = socket.socketpair()
+    saved = os.dup(0)
+    os.dup2(reader.fileno(), 0)
+    try:
+        yield
+    finally:
+        os.dup2(saved, 0)
+        os.close(saved)
+        reader.close()
+        writer.close()
 
 
 @pytest.fixture(name="is_generating_reference")

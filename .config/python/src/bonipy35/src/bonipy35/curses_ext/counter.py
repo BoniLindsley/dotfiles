@@ -13,7 +13,7 @@ import typing
 from typing import List, Union
 
 # Internal modules.
-from . import asyncio_loop
+from . import selector_loop
 from . import ui
 
 
@@ -51,7 +51,7 @@ class Data:
 
 
 async def async_run() -> int:
-    loop = typing.cast(asyncio_loop.EventLoop, asyncio.get_event_loop())
+    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
     path = pathlib.Path("data.json")
     data = Data.load(path)
     while True:
@@ -77,7 +77,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
         description="Persistent counter using asyncio and ncurses"
     )
     parser.parse_args(None if argv is None else argv[1:])
-    return asyncio_loop.run(async_run())
+    return selector_loop.run(async_run())
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ import typing
 from typing import List, Union
 
 # Internal modules.
-from .asyncio_loop import EventLoop, run
+from .selector_loop import EventLoop, run
 from .ui import draw
 
 

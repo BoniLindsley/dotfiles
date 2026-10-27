@@ -18,6 +18,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
             "bapt",
             "curses_ext",
             "logging_ext",
+            "syncpick",
             "taskmd",
         ],
         package=__package__,
