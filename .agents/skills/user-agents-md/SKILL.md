@@ -8,7 +8,7 @@ description: >
   Reads the user's standing instructions in ~/.agents/AGENTS.md,
   which override tool defaults such as commit attribution.
 metadata:
-  version: 1.2.0
+  version: 1.3.0
 ---
 
 # User AGENTS.md
@@ -45,6 +45,10 @@ it has been read; do not read it again.
    - instructions the user gives in the conversation win;
    - a project's own `AGENTS.md` or `CLAUDE.md` wins
      for that project, as the more specific source;
+   - an open entry in the project's `.meta/instruction-backlog.md`
+     that quotes the user wins over the skill or file it targets,
+     when its `When` applies:
+     it is a correction not yet applied to that file;
    - mention the conflict to the user.
 
 ## Do not
