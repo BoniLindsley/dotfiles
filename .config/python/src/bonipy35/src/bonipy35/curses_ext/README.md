@@ -3,7 +3,9 @@
 Await terminal input while asyncio tasks and timers continue running,
 without periodic polling.
 Applications decide when to refresh the screen.
-Requires Python 3.5 or newer, Unix, and Python's `curses` module.
+Requires Python 3.5 or newer and Python's `curses` module,
+which on Windows comes from the `windows-curses` package,
+installed with the `curses` extra.
 
 ```sh
 python -m bonipy35.curses_ext clock
@@ -15,6 +17,9 @@ python -m bonipy35.curses_ext tower
 The clock quits with `q`.
 In the counter, `+` increments, `s` saves to `data.json`,
 and `q` saves and quits.
+
+To check a terminal, run `python -m bonipy35.curses_ext.selector_loop`:
+it shows keys, a clock, the size and thread wakeups.
 
 ## Usage
 
@@ -42,9 +47,16 @@ print("Key:", key)  # The terminal has been restored.
 
 The `run()` function restores the terminal on exit
 and cancels unfinished tasks.
-Socket, pipe, subprocess, and file-descriptor readiness are unsupported.
-The loop reserves `SIGUSR1` by default;
-applications must not use its wakeup signal concurrently.
+The loop waits outside curses and reads keys when input is ready,
+so socket, pipe and subprocess readiness work as usual on Unix.
+On Windows it waits on the console and the loop's sockets,
+the only readiness Windows selector loops support.
+
+`getch()` returns `KEY_RESIZE` when the terminal is resized.
+On Unix the loop handles `SIGWINCH`;
+`run()` keeps ncurses from installing its own handler.
+Applications that initialise curses themselves
+should do so inside `keep_resize_handler()`.
 
 ## Mini-editor
 
