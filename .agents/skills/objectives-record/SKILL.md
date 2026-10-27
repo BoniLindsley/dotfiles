@@ -15,7 +15,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.1.0
+  version: 5.1.1
 ---
 
 # Objectives record
@@ -37,7 +37,6 @@ long decision records, and older log lines.
 Like skills, they are listed in the index with a one-line summary
 and read only when the work at hand needs them.
 Nothing is deleted from the record, so its history does not depend on git.
-
 ## When to use
 
 Use this skill when any of the following is true:
@@ -74,153 +73,30 @@ objectives/
   holding its finished tasks.
 - **`log/<YYYY-MM>.md`** holds the log lines of one month.
 
-Every detail file starts with a header
-that says what it holds without reading further,
-with the same keys in every file,
-so that one search covers all of them:
-
-```markdown
----
-id: D-012
-status: accepted
-summary: Flip when the bubbles stop rising, not on a timer.
-applies: src/flipbot/flip/, flip timing
-decided: 2026-10-26, user
-revisit: A new batter recipe stops making bubbles.
-supersedes: D-004
-related: O-008, T-053, A-006
----
-```
-
-- `id`, `status`, `summary`: always.
-- `applies`: the paths, modules or topics the entry constrains
-  or delivered, so that an agent can tell whether its work touches them.
-- `related`: other IDs.
-- Decisions: `decided` (date and who), `revisit` (the trigger),
-  `supersedes` or `superseded_by`.
-- Objectives: `completed` or `cancelled` (the date).
-
-Leave out keys that do not apply.
-Keep each key and its value on one line, never wrapped or folded,
-whatever the line length limit for prose,
-so that a line-based search sees the whole value.
-Keep values short instead:
-a `summary` of one sentence,
-an `applies` naming directories or topics rather than every file.
-Find entries that cover a path without reading them, for example
-`grep -l '^applies:.*flipbot/flip' details/*.md`.
-
-The body uses fixed headings, leaving out any that would be empty.
-A decision file:
-
-```markdown
-## Context
-What forced the choice; constraints in play.
-
-## Options
-### 1. Watch for bubbles (chosen)
-- Pro: works for thin and thick batter. Con: needs the camera (A-006).
-### 2. Flip after a fixed 90 seconds (D-004)
-- Rejected: thin batter burns, thick batter stays raw.
-
-## Decision
-User, 2026-10-26: "Trust the bubbles."
-
-## Consequences
-What this commits the code to; open risks.
-
-## Evidence
-Spikes, measurements, commands and results.
-```
-
-An objective file has `## Delivered`
-(what, where by paths and commits, what was left out or not verified),
-`## Acceptance criteria`, `## Tasks`, `## Evidence` and `## Notes`.
+Detail files start with a header of fixed keys and use fixed body headings:
+see [details.md](details.md).
 
 The index names every detail file with its ID, status and summary,
 so a session can tell which ones it needs.
 
-### Where it lives in git
+### Where it lives
 
-Each code branch with objectives of its own
-has an objectives branch named `meta/<branch>/objectives`,
-for example `meta/dev/objectives` for `dev`.
-The objectives directory is `objectives/` at its root, and only there.
-
-- **One objectives branch per code branch.**
-  Different code branches have different goals or progress,
-  so each keeps its own record.
-  The branch name says which code branch it follows,
-  so the record does not repeat it.
-  An objectives branch merges in only its own code branch.
-- **Code branches never contain it.**
-  Code commits never add or change anything under `objectives/`.
-- **The branch runs parallel to the code.**
-  `meta/<branch>/objectives` starts from its code branch
-  and merges it in as work completes.
-  It is never merged back into a code branch,
-  and nothing under `objectives/` is cherry-picked into one.
-- **The `meta/` prefix** marks the branch as about the project,
-  not part of it.
-  Other branches of this kind,
-  such as `meta/<branch>/time-tracking`,
-  belong in the same namespace.
-
-Check the objectives branch out at `.meta/objectives/<branch>`
-inside the code checkout,
-limited to the objectives directory with a sparse checkout,
-so that it is within reach of tools that work in the project directory
-without holding a second copy of the code:
-
-```sh
-exclude="$(git rev-parse --git-common-dir)/info/exclude"
-grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
-git worktree add --no-checkout .meta/objectives/<branch> meta/<branch>/objectives
-git -C .meta/objectives/<branch> sparse-checkout set --no-cone '/objectives/'
-git -C .meta/objectives/<branch> checkout
-```
-
-The index is then `.meta/objectives/<branch>/objectives/OBJECTIVES.md`.
-
-- `.meta/` holds agent state for the project, not only this record,
-  such as the instruction backlog.
-  Keep the record under `.meta/objectives/` and nothing else there.
-- The exclusion goes in `.git/info/exclude`, not `.gitignore`,
-  so that no code commit mentions it.
-  The command adds it only if it is missing.
-- Merges of the code branch still bring in all of its files;
-  the sparse checkout only keeps them out of this worktree.
-- `git clean -fdx` in the code checkout skips the worktree,
-  because it holds its own repository link;
-  only `git clean -ffdx` would remove it.
-- Tools that skip hidden directories,
-  such as pytest's default collection, also skip it.
-
+In git, the record is `objectives/` on branch `meta/<branch>/objectives`,
+which runs parallel to the code branch `<branch>`
+and merges it in as work completes.
+It is checked out at `.meta/objectives/<branch>`
+inside the code checkout, sparse to `objectives/`,
+and `/.meta/` is excluded through `.git/info/exclude`.
+Code branches never contain it,
+and it is never merged into them.
 Read the index without a worktree with
 `git show meta/<branch>/objectives:objectives/OBJECTIVES.md`.
 
-When a new code branch starts from one that has objectives,
-give it its own objectives branch only if it has goals of its own.
-Refer to the parent's entries by branch and ID,
-for example `meta/dev/objectives O-008`,
-since IDs are unique only within one record.
-
-### Without git
-
-Keep the objectives directory at `.meta/objectives/` in the working directory,
-and skip the branch rules.
-If the location is not writable,
-say that progress cannot be kept between sessions.
-Never claim persistence without a successful write.
-
-### Not in temporary directories
-
-Do not keep the record in `/tmp`, a scratchpad or another temporary directory,
-even when it is easier to reach.
-They are cleared on restart or by cleaners,
-and session scratch directories can be wiped between sessions,
-so a record there can vanish without warning.
-Copies there are fine for scratch work, never as the record.
+Without git, the record is `.meta/objectives/` in the working directory.
+Never keep it in a temporary directory.
+The reasons, the commands to set it up,
+and the rules for new code branches
+are in [git-setup.md](git-setup.md).
 
 ## Recording changes
 
@@ -305,12 +181,13 @@ Published ones may not.
 
 1. Find the record:
    in git, check `git worktree list` for `.meta/objectives/<branch>`,
-   and add it with the commands above if it is missing,
+   and add it if it is missing,
+   with the commands in [git-setup.md](git-setup.md),
    for example on a new machine.
    A record of an older version may be checked out elsewhere,
    such as `.objectives/<branch>` for version 4:
    use it where it is, following its own rules block,
-   and see "Converting an older record".
+   and see [lifecycle.md](lifecycle.md) on converting it.
 2. Read the whole of `OBJECTIVES.md` before planning or acting,
    and again after compaction,
    since a summary can drop the position and the decisions.
@@ -438,7 +315,7 @@ Updated: <YYYY-MM-DD>. Recheck assumptions after: <N> days.
 
 ## How to maintain this record
 
-<The rules block below, with <branch> filled in.>
+<The rules block from rules-block.md, with <branch> filled in.>
 
 ## Status
 
@@ -478,54 +355,6 @@ Updated: <YYYY-MM-DD>. Recheck assumptions after: <N> days.
 `Position` says where work stands now, not how it got there:
 the story belongs in the log and in detail files.
 The sections after `Status` hold longer-lived knowledge.
-
-### Rules block
-
-Copy this block into `How to maintain this record`,
-replacing `<branch>` with the name of the code branch.
-It keeps the record usable when this skill is not available.
-Change it only to follow a new version of this skill,
-and log that change.
-
-```markdown
-This record tracks objectives, tasks and decisions
-so that work can resume in a later session.
-It follows the objectives-record skill, version 5.1.0.
-
-- Read this whole file before working, and again after compaction.
-  Start from `Status` and `Next action`.
-- Files under `details/` and `log/` are listed in `Details`
-  or named by the decision they hold.
-  Read one only when the work needs it.
-  Never delete record content: move it into a detail file instead.
-- This record exists only under `objectives/`
-  on branch `meta/<branch>/objectives`,
-  and tracks the code branch `<branch>`.
-  Code branches never contain it,
-  and this branch is never merged into them.
-  It is checked out at `.meta/objectives/<branch>`
-  in the code checkout, sparse to `objectives/`.
-- Before changing something, check the `Applies` lines,
-  and `grep '^applies:' details/*.md`, for entries that cover it.
-- Run `git log --oneline meta/<branch>/objectives..<branch>`
-  to find code commits this record does not describe yet.
-- When code completes a task or objective, or changes a decision,
-  merge the code branch up to the completing commit,
-  and stage the record update into that merge.
-  The message describes only the update,
-  such as "Record T-053 done for O-008."
-  Other updates are ordinary commits that change only `objectives/`.
-- IDs (O-, AC-, T-, D-, C-, A-) are permanent.
-  Never reuse them.
-- A task is done only with evidence.
-  An objective is completed only when its acceptance criteria pass.
-- Record user decisions in their words, with the date.
-- Never store secrets, credentials or tokens.
-  Prefer relative paths.
-```
-
-Without git, replace the branch items with
-"This record lives in `.meta/objectives/` in the project directory."
 
 ### Entries
 
@@ -686,7 +515,8 @@ After every substantial update:
    and every `awaiting_user` one its question.
 8. `Current task` is `none` or a task that is `in_progress`.
 9. `Next action` is one concrete, executable step.
-10. The rules block is present and unchanged apart from the branch name.
+10. The rules block is present and unchanged apart from the branch name
+    (compare with [rules-block.md](rules-block.md)).
 11. Every detail file is listed in `Details`
     or named by its summary in `Decisions`,
     every listed file exists,
@@ -737,104 +567,13 @@ open objectives and their criteria, the active plan,
 decisions, constraints and rejections that still apply,
 assumptions, blockers, recent evidence and the next action.
 
-## Starting
+## Reference files
 
-When no record exists:
+Read these only when the work needs them:
 
-1. Agree the objective with the user,
-   with observable acceptance criteria and how to check each.
-2. In git, create the objectives branch from the code branch
-   and check it out as described in "Where it lives in git":
-   `git branch meta/<branch>/objectives <branch>`,
-   then the exclusion, worktree and sparse-checkout commands.
-   Without git, create `.meta/objectives/` in the working directory.
-3. Write `objectives/OBJECTIVES.md` with the layout above:
-   the rules block, at least one objective,
-   an ordered first plan with task IDs,
-   known decisions and assumptions,
-   and an exact next action.
-4. Commit it, for example `Add O-001: <outcome>.`,
-   before doing substantial project work.
-
-## Converting an older record
-
-Convert only with the user's approval:
-conversion moves the worktree and rewrites the rules block.
-Until then, keep working with the record as it is,
-following its own rules block,
-and mention in the briefing that it can be converted.
-
-From version 4
-(checked out at `.objectives/<branch>`):
-
-1. Move the worktree under `.meta/`:
-
-   ```sh
-   exclude="$(git rev-parse --git-common-dir)/info/exclude"
-   grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
-   mkdir -p .meta/objectives
-   git worktree move .objectives/<branch> .meta/objectives/<branch>
-   ```
-
-   When no worktrees are left in `.objectives/`,
-   remove the empty directory and the `/.objectives/` exclusion.
-2. Replace the rules block with the one above.
-3. Move decisions that still apply and take more than about five lines
-   into detail files, leaving summaries,
-   as in "Keeping the index short".
-   Remove their lines from `Details`.
-4. Add `Applies` to the entries that need it (invariant 12),
-   and the new header keys and body headings to detail files.
-   Remove files from `Artifacts` once an `Applies` line names them.
-5. Commit, for example `Convert the record to objectives-record 5.1.0.`,
-   and log the conversion.
-
-From version 3, named resumable-objective
-(`OBJECTIVES.md` at the root of the objectives branch,
-checked out at `../<repository>.objectives/<branch>`):
-
-1. On the objectives branch, move the file into the directory:
-   `mkdir objectives`, then `git mv OBJECTIVES.md objectives/OBJECTIVES.md`.
-2. Move completed and cancelled objectives, finished tasks,
-   long decision records and old log lines into detail files,
-   as in "Keeping the index short",
-   and add the `Details` section.
-   Rename the section `How to maintain this file`
-   to `How to maintain this record`,
-   rename `Progress` in `Status` to `Position`
-   and shorten it to the current position.
-3. Replace the rules block with the one above.
-4. Commit, for example `Convert the record to objectives-record 5.1.0.`,
-   and log the conversion.
-5. Move the worktree into the code checkout
-   and make it sparse:
-
-   ```sh
-   exclude="$(git rev-parse --git-common-dir)/info/exclude"
-   grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
-   mkdir -p .meta/objectives
-   git worktree move ../<repository>.objectives/<branch> .meta/objectives/<branch>
-   git -C .meta/objectives/<branch> sparse-checkout set --no-cone '/objectives/'
-   ```
-
-From an older state file, such as `PROJECT_STATE.md`,
-keep its objectives, tasks, decisions, assumptions,
-evidence and log with their IDs,
-arrange them as above,
-and drop the old embedded protocol.
-
-## Finishing
-
-Before marking the work complete:
-
-1. Check the actual artifacts and every acceptance criterion.
-2. Resolve or explicitly close remaining blockers and decisions.
-3. Record the final evidence and mark the objectives `completed`.
-4. Move them to detail files as in "Keeping the index short".
-5. Set `Current task: none`,
-   and replace `Next action` with follow-up or maintenance guidance,
-   if any.
-6. Record it in a merge of the code branch up to the final commit.
-
-A finished objectives branch stays as the audit trail
-and the starting point for later maintenance.
+- [git-setup.md](git-setup.md): where the record lives in git and why,
+  the worktree commands, new code branches, the record without git.
+- [rules-block.md](rules-block.md): the rules block every index carries.
+- [details.md](details.md): detail-file header keys and body headings.
+- [lifecycle.md](lifecycle.md): starting a record,
+  finishing an objective, converting an older record.
