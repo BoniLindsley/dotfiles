@@ -15,7 +15,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.0.0
+  version: 5.1.0
 ---
 
 # Objectives record
@@ -307,6 +307,10 @@ Published ones may not.
    in git, check `git worktree list` for `.meta/objectives/<branch>`,
    and add it with the commands above if it is missing,
    for example on a new machine.
+   A record of an older version may be checked out elsewhere,
+   such as `.objectives/<branch>` for version 4:
+   use it where it is, following its own rules block,
+   and see "Converting an older record".
 2. Read the whole of `OBJECTIVES.md` before planning or acting,
    and again after compaction,
    since a summary can drop the position and the decisions.
@@ -486,7 +490,7 @@ and log that change.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 5.0.0.
+It follows the objectives-record skill, version 5.1.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
@@ -754,6 +758,12 @@ When no record exists:
 
 ## Converting an older record
 
+Convert only with the user's approval:
+conversion moves the worktree and rewrites the rules block.
+Until then, keep working with the record as it is,
+following its own rules block,
+and mention in the briefing that it can be converted.
+
 From version 4
 (checked out at `.objectives/<branch>`):
 
@@ -776,7 +786,7 @@ From version 4
 4. Add `Applies` to the entries that need it (invariant 12),
    and the new header keys and body headings to detail files.
    Remove files from `Artifacts` once an `Applies` line names them.
-5. Commit, for example `Convert the record to objectives-record 5.0.0.`,
+5. Commit, for example `Convert the record to objectives-record 5.1.0.`,
    and log the conversion.
 
 From version 3, named resumable-objective
@@ -794,7 +804,7 @@ checked out at `../<repository>.objectives/<branch>`):
    rename `Progress` in `Status` to `Position`
    and shorten it to the current position.
 3. Replace the rules block with the one above.
-4. Commit, for example `Convert the record to objectives-record 5.0.0.`,
+4. Commit, for example `Convert the record to objectives-record 5.1.0.`,
    and log the conversion.
 5. Move the worktree into the code checkout
    and make it sparse:

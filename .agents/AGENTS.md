@@ -28,11 +28,13 @@ A project's own `AGENTS.md` adds to these.
   objectives records, the instruction backlog, and drafts for review.
   Do not add other state files or directories to the project tree.
 - Before the first reply of a session, and again after compaction,
-  run `ls -a .meta .meta/objectives` in the project root;
+  run `ls -a .meta` and `git worktree list` in the project root;
   `.meta/` is hidden and excluded from git, so it is easy to miss.
   Read `.meta/instruction-backlog.md` if it exists,
-  and the objectives index of the current branch,
-  `.meta/objectives/<branch>/objectives/OBJECTIVES.md`, if it exists.
+  and the objectives index of the current branch if there is a record,
+  usually `.meta/objectives/<branch>/objectives/OBJECTIVES.md`;
+  an older record may be checked out elsewhere,
+  as the objectives-record skill describes.
 
 ## Improving instructions
 
