@@ -4,7 +4,8 @@ Await terminal input while asyncio tasks and timers continue running,
 without periodic polling.
 Applications decide when to refresh the screen.
 Requires Python 3.5 or newer and Python's `curses` module,
-which on Windows comes from the `windows-curses` package.
+which on Windows comes from the `windows-curses` package,
+installed with the `curses` extra.
 
 ```sh
 python -m bonipy35.curses_ext clock
