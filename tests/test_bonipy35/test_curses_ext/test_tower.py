@@ -11,7 +11,7 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.asyncio_loop import EventLoop
+from bonipy35.curses_ext.selector_loop import EventLoop
 from bonipy35.curses_ext.tower import (
     AttackSource,
     AttackTarget,
@@ -280,5 +280,5 @@ class TestRun:
             coro.close()
             return 7
 
-        monkeypatch.setattr("bonipy35.curses_ext.asyncio_loop.run", runner)
+        monkeypatch.setattr("bonipy35.curses_ext.selector_loop.run", runner)
         assert run() == 7

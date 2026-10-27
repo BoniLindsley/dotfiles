@@ -7,7 +7,7 @@ import curses
 from typing import List
 
 # Internal modules.
-from .asyncio_loop import EventLoop
+from .selector_loop import EventLoop
 
 
 def draw(loop: EventLoop, lines: List[str]) -> None:

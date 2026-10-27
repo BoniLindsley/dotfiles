@@ -14,7 +14,7 @@ import pytest
 
 # Internal modules.
 from bonipy35 import asyncio_ext
-from bonipy35.curses_ext.asyncio_loop import use_event_loop_policy
+from bonipy35.curses_ext.selector_loop import use_event_loop_policy
 from bonipy35.syncpick.compare import Entry, Side, State
 from bonipy35.syncpick.rc import RcError
 from bonipy35.syncpick.screen import Screen, Style
@@ -34,7 +34,10 @@ ESCAPE = 27
 
 
 @pytest.fixture(name="window")
-def fixture_window(monkeypatch: pytest.MonkeyPatch) -> Mock:
+def fixture_window(
+    monkeypatch: pytest.MonkeyPatch, selectable_stdin: None
+) -> Mock:
+    del selectable_stdin
     window = Mock()
     window.getmaxyx.return_value = (6, 41)
     monkeypatch.setattr(curses, "doupdate", Mock())

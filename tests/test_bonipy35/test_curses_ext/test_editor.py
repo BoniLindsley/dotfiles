@@ -10,7 +10,7 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.asyncio_loop import EventLoop
+from bonipy35.curses_ext.selector_loop import EventLoop
 from bonipy35.curses_ext.editor import Editor, async_run
 
 

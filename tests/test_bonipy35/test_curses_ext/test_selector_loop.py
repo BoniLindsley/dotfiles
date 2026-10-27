@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-# Shares code with asyncio_loop, the loop this one is meant to replace.
-# pylint: disable=duplicate-code
-
 # Standard libraries.
 import asyncio
 import collections
@@ -120,13 +117,15 @@ def fixture_terminal(window: Mock) -> Iterator[Terminal]:
 
 @contextlib.contextmanager
 def make_loop(window: Mock, terminal: Terminal) -> Iterator[EventLoop]:
-    loop = EventLoop(stdscr=window, input_fd=terminal.input_socket.fileno())
-    asyncio.set_event_loop(loop)
-    try:
-        yield loop
-    finally:
-        loop.close()
-        asyncio.set_event_loop(None)
+    input_fd = terminal.input_socket.fileno()
+    with contextlib.closing(
+        EventLoop(stdscr=window, input_fd=input_fd)
+    ) as loop:
+        asyncio.set_event_loop(loop)
+        try:
+            yield loop
+        finally:
+            asyncio.set_event_loop(None)
 
 
 @pytest.fixture(name="windows_console")
