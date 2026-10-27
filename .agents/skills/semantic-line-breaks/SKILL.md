@@ -107,7 +107,8 @@ since both force a visible line break.
 - Keep comment continuation lines in the language's comment form,
   aligned with the comment above.
 - In YAML, use a folded block scalar (`>`)
-  so that line breaks become spaces.
+  so that line breaks become spaces,
+  except for values read line by line (see below).
 
 ## Where Not to Apply
 
@@ -115,6 +116,9 @@ Line breaks are significant, or the text is not prose, in:
 
 - code, command lines, tables, headings,
   and the first lines of list items when the format needs one line;
+- values that tools read line by line,
+  such as front matter keys meant to be searched with `grep`;
+  keep each on one line and shorten it instead;
 - commit message subject lines;
 - user-facing strings in code,
   where a line break would change the output;

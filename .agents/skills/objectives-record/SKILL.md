@@ -7,15 +7,15 @@ description: >
   and detail files loaded only when needed.
   In git it lives on a meta/BRANCH/objectives branch
   that runs parallel to a code branch and merges it in as work completes,
-  checked out at .objectives/BRANCH inside the code checkout.
+  checked out at .meta/objectives/BRANCH inside the code checkout.
   Use when an objective is unlikely to finish in one session,
   when sessions may be separated by long gaps,
-  or whenever OBJECTIVES.md, an .objectives directory
+  or whenever OBJECTIVES.md, a .meta/objectives or .objectives directory
   or a meta/BRANCH/objectives branch
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 4.0.0
+  version: 5.0.0
 ---
 
 # Objectives record
@@ -46,7 +46,7 @@ Use this skill when any of the following is true:
 - Sessions are expected to be short, irregular or far apart.
 - The work has dependencies, open decisions,
   or context that would be costly to rediscover.
-- `OBJECTIVES.md`, an `.objectives` directory
+- `OBJECTIVES.md`, a `.meta/objectives` or `.objectives` directory
   or a `meta/<branch>/objectives` branch already exists.
 - The user asks for persistent or resumable tracking.
 
@@ -65,26 +65,79 @@ objectives/
 
 - **`OBJECTIVES.md`** is the index.
   Keep it short enough to read at the start of every session:
-  aim for under about 250 lines.
+  aim for under about 500 lines.
 - **`details/<ID>.md`** holds one objective or one decision
   in full.
+  A decision that still applies can have a detail file too,
+  with a summary of it in the index.
   An objective's file can exist while the objective is active,
   holding its finished tasks.
 - **`log/<YYYY-MM>.md`** holds the log lines of one month.
 
 Every detail file starts with a header
-that says what it holds without reading further:
+that says what it holds without reading further,
+with the same keys in every file,
+so that one search covers all of them:
 
 ```markdown
 ---
-id: O-002
-status: completed
-summary: Curses frontend for syncpick on Debian and Windows.
-related: D-010, D-011, D-012, T-021 to T-027, T-007
+id: D-012
+status: accepted
+summary: Flip when the bubbles stop rising, not on a timer.
+applies: src/flipbot/flip/, flip timing
+decided: 2026-10-26, user
+revisit: A new batter recipe stops making bubbles.
+supersedes: D-004
+related: O-008, T-053, A-006
 ---
 ```
 
-The index lists every detail file with its ID, status and summary,
+- `id`, `status`, `summary`: always.
+- `applies`: the paths, modules or topics the entry constrains
+  or delivered, so that an agent can tell whether its work touches them.
+- `related`: other IDs.
+- Decisions: `decided` (date and who), `revisit` (the trigger),
+  `supersedes` or `superseded_by`.
+- Objectives: `completed` or `cancelled` (the date).
+
+Leave out keys that do not apply.
+Keep each key and its value on one line, never wrapped or folded,
+whatever the line length limit for prose,
+so that a line-based search sees the whole value.
+Keep values short instead:
+a `summary` of one sentence,
+an `applies` naming directories or topics rather than every file.
+Find entries that cover a path without reading them, for example
+`grep -l '^applies:.*flipbot/flip' details/*.md`.
+
+The body uses fixed headings, leaving out any that would be empty.
+A decision file:
+
+```markdown
+## Context
+What forced the choice; constraints in play.
+
+## Options
+### 1. Watch for bubbles (chosen)
+- Pro: works for thin and thick batter. Con: needs the camera (A-006).
+### 2. Flip after a fixed 90 seconds (D-004)
+- Rejected: thin batter burns, thick batter stays raw.
+
+## Decision
+User, 2026-10-26: "Trust the bubbles."
+
+## Consequences
+What this commits the code to; open risks.
+
+## Evidence
+Spikes, measurements, commands and results.
+```
+
+An objective file has `## Delivered`
+(what, where by paths and commits, what was left out or not verified),
+`## Acceptance criteria`, `## Tasks`, `## Evidence` and `## Notes`.
+
+The index names every detail file with its ID, status and summary,
 so a session can tell which ones it needs.
 
 ### Where it lives in git
@@ -113,24 +166,28 @@ The objectives directory is `objectives/` at its root, and only there.
   such as `meta/<branch>/time-tracking`,
   belong in the same namespace.
 
-Check the objectives branch out at `.objectives/<branch>`
+Check the objectives branch out at `.meta/objectives/<branch>`
 inside the code checkout,
 limited to the objectives directory with a sparse checkout,
 so that it is within reach of tools that work in the project directory
 without holding a second copy of the code:
 
 ```sh
-echo '/.objectives/' >> "$(git rev-parse --git-common-dir)/info/exclude"
-git worktree add --no-checkout .objectives/<branch> meta/<branch>/objectives
-git -C .objectives/<branch> sparse-checkout set --no-cone '/objectives/'
-git -C .objectives/<branch> checkout
+exclude="$(git rev-parse --git-common-dir)/info/exclude"
+grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
+git worktree add --no-checkout .meta/objectives/<branch> meta/<branch>/objectives
+git -C .meta/objectives/<branch> sparse-checkout set --no-cone '/objectives/'
+git -C .meta/objectives/<branch> checkout
 ```
 
-The index is then `.objectives/<branch>/objectives/OBJECTIVES.md`.
+The index is then `.meta/objectives/<branch>/objectives/OBJECTIVES.md`.
 
+- `.meta/` holds agent state for the project, not only this record,
+  such as the instruction backlog.
+  Keep the record under `.meta/objectives/` and nothing else there.
 - The exclusion goes in `.git/info/exclude`, not `.gitignore`,
   so that no code commit mentions it.
-  Exclude it once per clone.
+  The command adds it only if it is missing.
 - Merges of the code branch still bring in all of its files;
   the sparse checkout only keeps them out of this worktree.
 - `git clean -fdx` in the code checkout skips the worktree,
@@ -150,7 +207,7 @@ since IDs are unique only within one record.
 
 ### Without git
 
-Keep the objectives directory at `.objectives/` in the working directory,
+Keep the objectives directory at `.meta/objectives/` in the working directory,
 and skip the branch rules.
 If the location is not writable,
 say that progress cannot be kept between sessions.
@@ -183,15 +240,15 @@ merge the code branch into its objectives branch
 and stage the record update into that merge commit:
 
 ```sh
-git -C .objectives/<branch> merge --no-ff --no-commit <completing-commit>
+git -C .meta/objectives/<branch> merge --no-ff --no-commit <completing-commit>
 # Update the record under objectives/.
-git -C .objectives/<branch> add objectives
-git -C .objectives/<branch> commit -m "Record T-053 done for O-008."
+git -C .meta/objectives/<branch> add objectives
+git -C .meta/objectives/<branch> commit -m "Record T-053 done for O-008."
 ```
 
 - **Message:** only the description of the change,
   for example `Record T-053 done for O-008.`
-  or `Accept D-027: show PDF errors next to their section.`
+  or `Accept D-027: the first pancake goes to the cook.`
   Leave out the default "Merge branch ..." line.
 - **Granularity:** prefer several small merges to one large one.
   Split at each task completion, objective completion or decision change.
@@ -247,10 +304,12 @@ Published ones may not.
 ### 1. Load and reconcile
 
 1. Find the record:
-   in git, check `git worktree list` for `.objectives/<branch>`,
+   in git, check `git worktree list` for `.meta/objectives/<branch>`,
    and add it with the commands above if it is missing,
    for example on a new machine.
-2. Read the whole of `OBJECTIVES.md` before planning or acting.
+2. Read the whole of `OBJECTIVES.md` before planning or acting,
+   and again after compaction,
+   since a summary can drop the position and the decisions.
    Do not read detail files yet.
 3. Compare it with the project:
    unrecorded code commits (see above), the working tree,
@@ -276,7 +335,8 @@ Published ones may not.
 Read a detail file when the work at hand needs what it holds:
 
 - the next task names its ID, or depends on it;
-- the work changes code or behaviour that a finished objective delivered;
+- the work changes something its `Applies` line or `applies:` key names,
+  such as code a finished objective delivered;
 - a decision summary in the index is not enough to apply it,
   or the work may contradict it;
 - the user asks about it;
@@ -322,6 +382,12 @@ even if the session stops without warning.
 
 If someone else may edit the record,
 re-read it just before writing and merge their changes.
+
+The record holds what applies to the current work.
+A correction or lesson that applies beyond it
+belongs in the project's `AGENTS.md`,
+or in the instruction backlog for skills and the user's `AGENTS.md`,
+as the instruction-backlog skill describes.
 
 ### 6. Verify before marking done
 
@@ -420,11 +486,12 @@ and log that change.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 4.0.0.
+It follows the objectives-record skill, version 5.0.0.
 
-- Read this whole file before working.
+- Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
-- Files under `details/` and `log/` are listed in `Details`.
+- Files under `details/` and `log/` are listed in `Details`
+  or named by the decision they hold.
   Read one only when the work needs it.
   Never delete record content: move it into a detail file instead.
 - This record exists only under `objectives/`
@@ -432,8 +499,10 @@ It follows the objectives-record skill, version 4.0.0.
   and tracks the code branch `<branch>`.
   Code branches never contain it,
   and this branch is never merged into them.
-  It is checked out at `.objectives/<branch>`
+  It is checked out at `.meta/objectives/<branch>`
   in the code checkout, sparse to `objectives/`.
+- Before changing something, check the `Applies` lines,
+  and `grep '^applies:' details/*.md`, for entries that cover it.
 - Run `git log --oneline meta/<branch>/objectives..<branch>`
   to find code commits this record does not describe yet.
 - When code completes a task or objective, or changes a decision,
@@ -442,7 +511,7 @@ It follows the objectives-record skill, version 4.0.0.
   The message describes only the update,
   such as "Record T-053 done for O-008."
   Other updates are ordinary commits that change only `objectives/`.
-- IDs (O-, AC-, T-, D-, A-) are permanent.
+- IDs (O-, AC-, T-, D-, C-, A-) are permanent.
   Never reuse them.
 - A task is done only with evidence.
   An objective is completed only when its acceptance criteria pass.
@@ -452,7 +521,7 @@ It follows the objectives-record skill, version 4.0.0.
 ```
 
 Without git, replace the branch items with
-"This record lives in `.objectives/` in the project directory."
+"This record lives in `.meta/objectives/` in the project directory."
 
 ### Entries
 
@@ -465,13 +534,12 @@ rather than filling them with "n/a".
 with observable acceptance criteria and how each is checked.
 
 ```markdown
-- **O-008** `[active]` PDF code has a single entry point
-  that returns the PDF path
-  or the errors explaining why there is none.
-  - AC-020: One public function takes one request object.
-    Check: review; no use of the builder outside the package.
-  - AC-021: Validation reports every problem at once.
-    Check: `pytest tests/test_loadsheet`.
+- **O-008** `[active]` The robot cooks a stack of pancakes
+  without anyone touching the pan.
+  - AC-020: Each pancake is flipped exactly once.
+    Check: `pytest tests/test_flip`; flip count in the log.
+  - AC-021: No pancake leaves the pan raw in the middle.
+    Check: user eats the third pancake.
   - Evidence: none yet.
   - Notes: Resolves D-022.
 ```
@@ -484,13 +552,13 @@ update the objective, its criteria, dependent tasks and decisions together.
 **Tasks** are ordered, independently checkable steps toward an objective.
 
 ```markdown
-- **T-053** `[done]` Add the entry point;
-  remove partial files on failure.
+- **T-053** `[done]` Watch the batter through the camera;
+  flip when the bubbles stop rising.
   - Objective: O-008. Depends on: T-052. Size: M.
-  - Done when: tests generate a PDF,
-    and return errors without leaving a file.
-  - Evidence: 2026-10-16, sandbox without G2:
-    `pytest tests/test_loadsheet` 31 passed.
+  - Done when: tests on recorded videos flip at the right frame,
+    and never flip twice.
+  - Evidence: 2026-10-16, sandbox without the camera:
+    `pytest tests/test_flip` 31 passed on recorded videos.
     Code: `ae1950b`.
 ```
 
@@ -508,15 +576,38 @@ including the ones rejected,
 so that later sessions do not rediscover dead ends.
 
 ```markdown
-- **D-027** `[accepted]` Show PDF errors
-  in the existing error output of each section.
-  - Context: the PDF callback has two outputs;
-    other sections have their own.
+- **D-027** `[accepted]` The first pancake of a batch goes to the cook.
+  - Applies: `src/flipbot/serve/`, plating order.
+  - Context: the first pancake comes out pale while the pan heats up;
+    nobody wants it on the plate.
   - Decision: user, 2026-10-16:
-    "Route them to the existing error outputs."
-    Rejected: one list by the Generate button.
-  - Revisit when: Dash is upgraded.
+    "The cook eats the first one. That's the rule."
+    Rejected: throwing it away.
+  - Revisit when: the pan gets a preheat step.
 ```
+
+A decision that still applies
+can instead be summarized in the index in at most three lines,
+with its full record in `details/D-xxx.md`:
+what was decided, its status, what it applies to,
+what was rejected, the revisit trigger if any, and the file.
+Do this once the full record passes about five lines,
+and always for spikes, measurements and alternatives in depth.
+
+```markdown
+- **D-027** `[accepted]` The first pancake of a batch goes to the cook.
+  Applies: `src/flipbot/serve/`, plating order.
+  Rejected: throwing it away. Revisit: preheat step. `details/D-027.md`
+```
+
+`Applies` is what lets a session tell,
+from the index alone,
+whether a decision constrains the work at hand.
+
+Keep in the index, in full,
+what a session needs to act without opening the file:
+the question and date of an `awaiting_user` decision,
+and anything a rule of the record refers to.
 
 Statuses: `proposed`, `awaiting_user` (with the question and the date asked),
 `accepted`, `rejected` (with the reason),
@@ -526,23 +617,44 @@ When a deferred decision's trigger fires,
 reopen it or turn it into a task or constraint.
 
 **Constraints and assumptions:**
-constraints are rules the work must follow.
+constraints (`C-xxx`) are rules the work must follow.
 Assumptions (`A-xxx`) are beliefs the plan depends on.
-Each says why it matters, how to check it, and when it was last checked.
-
-**Rejected approaches** lists what not to try again, and why,
-including approaches dropped without a formal decision.
-
-**Artifacts** maps the main files, commands and external resources
-to the objectives that use them.
-
-**Details** lists every detail file, one line each:
+Each says what it applies to;
+an assumption also says why it matters, how to check it,
+and when it was last checked.
 
 ```markdown
-- **O-002** `[completed]` Curses frontend on Debian and Windows.
-  `details/O-002.md`
-- **D-012** `[accepted]` Wait outside curses on both platforms;
-  spikes and signal findings. `details/D-012.md`
+- **C-002** The spatula never leaves the pan while the burner is on.
+  Applies: `src/flipbot/flip/`, `spatula.py`. From `AGENTS.md`.
+- **A-006** The camera sees the whole pan from above.
+  Applies: bubble watching (T-053). Check: `flipbot camera --snapshot`
+  shows all four edges. Last checked: 2026-10-26.
+```
+
+**Rejected approaches** lists what not to try again, why,
+and what it applies to,
+including approaches dropped without a formal decision.
+
+```markdown
+- Tossing pancakes in the air to flip them: impressive,
+  but one in five lands on the floor. Applies: flip motion.
+```
+
+**Artifacts** lists commands and external resources
+that no entry's `Applies` names,
+such as a service, a dashboard, or a script to check the environment.
+Files are found through `Applies`, not listed here again.
+
+**Details** lists every other detail file, one line each:
+those not named by a summary in `Decisions`.
+A completed objective's line says what it applies to:
+the paths it delivered.
+
+```markdown
+- **O-002** `[completed]` Batter is mixed without lumps.
+  Applies: `src/flipbot/mix/`. `details/O-002.md`
+- **D-004** `[superseded]` Flip on a fixed timer;
+  replaced by D-012. `details/D-004.md`
 - Log: `log/2026-10.md` (2026-10-22 to 2026-10-27).
 ```
 
@@ -550,7 +662,7 @@ to the objectives that use them.
 
 ```markdown
 - 2026-10-18: O-008: T-053 done;
-  single entry point `segwiseweb.loadsheet.generate`.
+  flips when the bubbles stop rising, `flipbot.flip.watch_bubbles`.
   Code: up to `ae1950b`.
 ```
 
@@ -571,10 +683,14 @@ After every substantial update:
 8. `Current task` is `none` or a task that is `in_progress`.
 9. `Next action` is one concrete, executable step.
 10. The rules block is present and unchanged apart from the branch name.
-11. Every detail file is listed in `Details`,
+11. Every detail file is listed in `Details`
+    or named by its summary in `Decisions`,
     every listed file exists,
-    and its header's ID and status match the index.
-12. No secrets or credentials appear.
+    and its header's ID, status, `applies` and `revisit`
+    match the index.
+12. Every decision that applies, constraint, assumption,
+    rejected approach and completed objective says what it applies to.
+13. No secrets or credentials appear.
 
 Fix violations when found and log material repairs.
 
@@ -584,27 +700,25 @@ The index is read at the start of every session, so keep it short.
 Move entries out of it instead of deleting them,
 so the record keeps its own history.
 Move them when an objective finishes,
-at a handoff, or when the index passes about 250 lines.
+at a handoff, or when the index passes about 500 lines.
 
 - **A completed or cancelled objective**
   moves to `details/O-xxx.md` with its criteria, evidence,
   tasks and progress notes, unchanged,
-  under a short closing summary:
+  under `## Delivered`:
   what was delivered, where (paths, commits),
   and what was left out or not verified.
-  The index keeps one line in `Details`.
+  The index keeps one line in `Details`, with what it applies to.
   Decisions it settled stay in the index while they still apply.
 - **Done tasks of an active objective**
   move to that objective's detail file
   once their notes are no longer needed for the next work.
   The objective's index entry says which tasks are done
   and where they are.
-- **A long decision record**
-  (spikes, measurements, alternatives in depth)
-  moves to `details/D-xxx.md`.
-  The index keeps the decision, its status, the user's words,
-  what was rejected, and the revisit trigger,
-  in a few lines, and points to the file.
+- **A decision that still applies**
+  moves to `details/D-xxx.md` once its record passes about five lines.
+  The index keeps a summary of one or two lines
+  that points to the file (see "Entries").
 - **A decision that no longer applies**
   (superseded, or about finished work only)
   moves whole to its detail file,
@@ -629,7 +743,7 @@ When no record exists:
    and check it out as described in "Where it lives in git":
    `git branch meta/<branch>/objectives <branch>`,
    then the exclusion, worktree and sparse-checkout commands.
-   Without git, create `.objectives/` in the working directory.
+   Without git, create `.meta/objectives/` in the working directory.
 3. Write `objectives/OBJECTIVES.md` with the layout above:
    the rules block, at least one objective,
    an ordered first plan with task IDs,
@@ -639,6 +753,31 @@ When no record exists:
    before doing substantial project work.
 
 ## Converting an older record
+
+From version 4
+(checked out at `.objectives/<branch>`):
+
+1. Move the worktree under `.meta/`:
+
+   ```sh
+   exclude="$(git rev-parse --git-common-dir)/info/exclude"
+   grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
+   mkdir -p .meta/objectives
+   git worktree move .objectives/<branch> .meta/objectives/<branch>
+   ```
+
+   When no worktrees are left in `.objectives/`,
+   remove the empty directory and the `/.objectives/` exclusion.
+2. Replace the rules block with the one above.
+3. Move decisions that still apply and take more than about five lines
+   into detail files, leaving summaries,
+   as in "Keeping the index short".
+   Remove their lines from `Details`.
+4. Add `Applies` to the entries that need it (invariant 12),
+   and the new header keys and body headings to detail files.
+   Remove files from `Artifacts` once an `Applies` line names them.
+5. Commit, for example `Convert the record to objectives-record 5.0.0.`,
+   and log the conversion.
 
 From version 3, named resumable-objective
 (`OBJECTIVES.md` at the root of the objectives branch,
@@ -655,16 +794,17 @@ checked out at `../<repository>.objectives/<branch>`):
    rename `Progress` in `Status` to `Position`
    and shorten it to the current position.
 3. Replace the rules block with the one above.
-4. Commit, for example `Convert the record to objectives-record 4.0.0.`,
+4. Commit, for example `Convert the record to objectives-record 5.0.0.`,
    and log the conversion.
 5. Move the worktree into the code checkout
    and make it sparse:
 
    ```sh
-   echo '/.objectives/' >> "$(git rev-parse --git-common-dir)/info/exclude"
-   mkdir -p .objectives
-   git worktree move ../<repository>.objectives/<branch> .objectives/<branch>
-   git -C .objectives/<branch> sparse-checkout set --no-cone '/objectives/'
+   exclude="$(git rev-parse --git-common-dir)/info/exclude"
+   grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
+   mkdir -p .meta/objectives
+   git worktree move ../<repository>.objectives/<branch> .meta/objectives/<branch>
+   git -C .meta/objectives/<branch> sparse-checkout set --no-cone '/objectives/'
    ```
 
 From an older state file, such as `PROJECT_STATE.md`,
