@@ -13,7 +13,7 @@ import typing
 from typing import Awaitable, Callable, Dict, Generator, List, Union
 
 # Internal modules.
-from ..curses_ext import asyncio_loop
+from ..curses_ext import selector_loop
 from . import compare
 from . import rc
 from . import runner
@@ -227,7 +227,7 @@ class App:
 
 async def run(daemon: rc.Daemon, left: str, right: str) -> None:
     """Run the app in the curses event loop of ``curses_ext.run``."""
-    loop = typing.cast(asyncio_loop.EventLoop, asyncio.get_event_loop())
+    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
     app = App(
         view=screen.Screen(tree.Model(), left=left, right=right),
         window=loop.window,
@@ -250,7 +250,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
     os.environ.setdefault("ESCDELAY", "25")
     try:
         with rc.Daemon(runner.runner_from_arguments(arguments)) as daemon:
-            asyncio_loop.run(run(daemon, arguments.left, arguments.right))
+            selector_loop.run(run(daemon, arguments.left, arguments.right))
             return 0
     except (OSError, rc.RcError, runner.RcloneError) as error:
         print(error, file=sys.stderr)

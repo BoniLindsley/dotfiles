@@ -12,9 +12,6 @@ which are the only readiness Windows selectors support.
 Run ``python -m bonipy35.curses_ext.selector_loop`` to check a terminal.
 """
 
-# Shares code with asyncio_loop, the loop this one is meant to replace.
-# pylint: disable=duplicate-code
-
 # Standard libraries.
 import asyncio
 import collections

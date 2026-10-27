@@ -10,11 +10,14 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.asyncio_loop import EventLoop, use_event_loop_policy
+from bonipy35.curses_ext.selector_loop import EventLoop, use_event_loop_policy
 
 
 @pytest.fixture(name="window")
-def fixture_window(monkeypatch: pytest.MonkeyPatch) -> Mock:
+def fixture_window(
+    monkeypatch: pytest.MonkeyPatch, selectable_stdin: None
+) -> Mock:
+    del selectable_stdin
     window = Mock()
     window.getch.return_value = -1
     window.getmaxyx.return_value = (24, 80)

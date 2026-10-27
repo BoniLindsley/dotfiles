@@ -14,7 +14,7 @@ import typing
 from typing import List, Union
 
 # Internal modules.
-from . import asyncio_loop
+from . import selector_loop
 
 MAX_FILE_SIZE = 4096
 
@@ -228,7 +228,7 @@ class Editor:
 
 
 async def async_run() -> int:
-    loop = typing.cast(asyncio_loop.EventLoop, asyncio.get_event_loop())
+    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
     editor = Editor(loop.window)
     while True:
         editor.render()
@@ -241,7 +241,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
         description="Modal ASCII editor using asyncio and ncurses"
     )
     parser.parse_args(None if argv is None else argv[1:])
-    return asyncio_loop.run(async_run())
+    return selector_loop.run(async_run())
 
 
 if __name__ == "__main__":
