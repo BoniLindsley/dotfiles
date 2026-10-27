@@ -50,7 +50,8 @@ python -m bonipy35.syncpick tui remote:dir some/directory
 | `q` | Quit |
 
 Times are in UTC to the minute.
-On Windows it needs `windows-curses`, and does not work yet.
+On Windows it needs `windows-curses`,
+installed with the `curses` extra, such as `pip install 'bonipy35[curses]'`.
 
 ## Comparing
 
