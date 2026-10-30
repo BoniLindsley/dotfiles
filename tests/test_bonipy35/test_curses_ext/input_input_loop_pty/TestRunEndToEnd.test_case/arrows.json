@@ -1,0 +1,9 @@
+{
+  "description": "Escape sequences typed at once read as arrow keys.",
+  "steps": [
+    {"type": "\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA\u001bOA"},
+    {"expect": ["KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP"]},
+    {"type": "\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx\u001bOBx"},
+    {"expect": ["KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x", "KEY_DOWN", "x"]}
+  ]
+}

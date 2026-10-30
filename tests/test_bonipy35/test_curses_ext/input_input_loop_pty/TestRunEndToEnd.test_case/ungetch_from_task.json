@@ -1,0 +1,7 @@
+{
+  "description": "A key pushed back by another task wakes a waiting getch.",
+  "steps": [
+    {"type": "u"},
+    {"expect": ["U"]}
+  ]
+}

@@ -1,0 +1,21 @@
+{
+  "description": "An escape sequence split across reads is one key.",
+  "steps": [
+    {"type": "\u001b"},
+    {"sleep": 0.01},
+    {"type": "OA"},
+    {"type": "\u001b"},
+    {"sleep": 0.01},
+    {"type": "OA"},
+    {"type": "\u001b"},
+    {"sleep": 0.01},
+    {"type": "OA"},
+    {"type": "\u001b"},
+    {"sleep": 0.01},
+    {"type": "OA"},
+    {"type": "\u001b"},
+    {"sleep": 0.01},
+    {"type": "OA"},
+    {"expect": ["KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP", "KEY_UP"]}
+  ]
+}

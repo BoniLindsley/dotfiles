@@ -1,0 +1,7 @@
+{
+  "description": "A worker thread wakes the loop with call_soon_threadsafe.",
+  "steps": [
+    {"type": "t"},
+    {"expect": ["woken"]}
+  ]
+}

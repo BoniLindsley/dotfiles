@@ -1,0 +1,7 @@
+{
+  "description": "Typeahead left unread does not spin the loop, and is read afterwards.",
+  "steps": [
+    {"type": "wx"},
+    {"expect": ["idle", "x"]}
+  ]
+}

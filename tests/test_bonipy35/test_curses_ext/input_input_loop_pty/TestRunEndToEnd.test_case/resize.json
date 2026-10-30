@@ -1,0 +1,11 @@
+{
+  "description": "A terminal resize while waiting wakes the waiter with KEY_RESIZE.",
+  "steps": [
+    {"resize": [30, 100]},
+    {"expect": ["KEY_RESIZE 30 100"]},
+    {"type": "k"},
+    {"expect": ["k"]},
+    {"resize": [20, 60]},
+    {"expect": ["KEY_RESIZE 20 60"]}
+  ]
+}
