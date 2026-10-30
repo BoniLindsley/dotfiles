@@ -19,9 +19,8 @@ When no record exists:
    a file for each of those tasks,
    and known decisions, constraints and assumptions.
 5. Write `objectives/OBJECTIVES.md` with the layout in [SKILL.md](SKILL.md):
-   the rules block, `Status` with an exact next action,
-   and an empty `## Open entries`;
-   run `sh record.sh update` and `sh record.sh check`.
+   the rules block and `Status` with an exact next action;
+   run `sh record.sh list` and `sh record.sh check`.
 6. Log the start, and commit, for example `Add O-001: <outcome>.`,
    before doing substantial project work.
 
@@ -43,12 +42,12 @@ Before marking an objective complete:
    keep or delete it, and log which.
 5. Set `Current task: none`,
    replace `Next action` with follow-up or maintenance guidance,
-   if any, and run `sh record.sh update` and `sh record.sh check`.
+   if any, and run `sh record.sh check`.
 6. Record it in a merge of the code branch up to the final commit,
    and log it.
 
 Nothing moves: the entry stays where it is,
-and leaves `Open entries` because of its status.
+and leaves `sh record.sh list` because of its status.
 A finished objectives branch stays as the audit trail
 and the starting point for later maintenance.
 
@@ -60,23 +59,6 @@ and older versions may also move the worktree.
 Until then, keep working with the record as it is,
 following its own rules block,
 and mention in the briefing that it can be converted.
-
-### From version 6.0
-
-1. Copy [record.sh](record.sh) and delete `list.awk`.
-2. Replace the rules block with the one in [rules-block.md](rules-block.md).
-3. Make `applies:` paths relative to the repository root,
-   if they were not.
-4. Run `sh record.sh check` and fix what it reports;
-   `sh record.sh update` rewrites `Open entries`.
-5. Move conventions out of `Next action` and `Handoff` into constraints,
-   keep `Current task` to a task ID or `none`,
-   and add `completed:` to done tasks that lack it,
-   taking the date from the log.
-6. Commit, for example `Convert the record to objectives-record 6.1.0.`,
-   and log the conversion.
-
-Existing log lines may stay wrapped; new ones take one line each.
 
 ### From version 5
 
@@ -102,22 +84,23 @@ Prefer one commit per step, so each is easy to review.
    Evidence kept in dated progress notes moves under `## Evidence`,
    or `## Evidence` says it is in the notes above.
    Take each done task's `completed:` date from the log.
+   Every entry starts with `---`, `id:`, `status:`, `summary:`,
+   and for tasks `objective:`.
 4. Keep acceptance criteria IDs,
    written as `- AC-016:` at the start of a line
    in their objective's `## Acceptance criteria`.
 5. Give each constraint and assumption a file.
    Conventions in `Handoff` become constraints.
 6. Write every ID range in full, in entries and in the index.
-7. Move the index's `## Log` lines, if any,
-   to `log/<YYYY-MM-DD>.md` by date;
-   monthly log files stay as they are.
+7. Move log lines, from the index's `## Log` and from monthly files
+   such as `log/2026-10.md`, into `log/<YYYY-MM-DD>.md` by date,
+   one physical line per entry, the date only in the file name.
 8. Replace the rules block with the one in [rules-block.md](rules-block.md),
-   replace the sections `Objectives`, `Tasks`, `Decisions`,
-   `Constraints and assumptions`, `Rejected approaches` and `Details`
-   with `## Open entries`, filled by `sh record.sh update`,
+   remove the sections `Objectives`, `Tasks`, `Decisions`,
+   `Constraints and assumptions`, `Rejected approaches` and `Details`,
    and keep `Status`, `Handoff` and `Artifacts`.
 9. Run `sh record.sh check`; `details/` is then empty.
-10. Commit, for example `Convert the record to objectives-record 6.1.0.`,
+10. Commit, for example `Convert the record to objectives-record 6.2.0.`,
     and log the conversion.
 
 ### From version 4

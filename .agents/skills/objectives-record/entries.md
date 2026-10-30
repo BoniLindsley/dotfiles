@@ -2,9 +2,11 @@
 
 Every objective, task, decision, constraint and assumption
 is one file, `entries/<ID>.md`.
-It starts with a header of fixed keys
-that says what it holds without reading further,
-so that one search covers all entries:
+It starts with a header that says what it holds without reading further.
+The first lines are fixed, in this order:
+`---`, `id:`, `status:`, `summary:`, and for tasks `objective:`;
+`record.sh` reads them by position.
+Other keys follow in any order:
 
 ```markdown
 ---
@@ -70,7 +72,7 @@ whose `applies` names that path or a directory above it.
   Define each once, as `- AC-020:` at the start of a line
   in its objective's `## Acceptance criteria`;
   `grep -l '^- AC-020:' entries/O-*.md` finds its objective,
-  and `record.sh check` catches duplicates.
+  and is never defined twice.
   Elsewhere, such as in evidence, do not start a line with `AC-020:`.
 - IDs do not name their parent.
   Tasks and criteria keep their IDs if they move to another objective:
@@ -239,8 +241,7 @@ Log files are data, not prose:
 each event is one physical line, never wrapped,
 so that `grep -H T-053 log/*.md` shows whole events,
 with the date in the file name.
-Monthly files such as `log/2026-10.md`,
-kept from versions before 5.3.0, stay as they are.
+Each file starts with `# Log: <YYYY-MM-DD>`.
 
 ## Data files
 
@@ -265,32 +266,31 @@ After every substantial update.
 `sh record.sh check` checks those marked (c);
 check the rest by reading.
 
-1. (c) Every entry file's name is its `id`,
-   and its `status` is one of its type's values.
-2. Every active objective has acceptance criteria (c),
-   each with a check.
-3. (c) Every task names one existing objective in `objective`,
+1. (c) Every entry starts with the fixed lines, its `id` is its file name,
+   and its `status` is one of its type's values (`check` accepts
+   any type's values).
+2. Every active objective has acceptance criteria, each with a check.
+3. Every task names one existing objective (c),
    and appears in that objective's `## Tasks`.
-4. (c) Every `depends` names an existing entry or an external item.
-5. (c) Every `done` task and `completed` objective has evidence.
-6. (c) Every `blocked` task names its blocker in `depends`.
+4. Every `depends` names an existing entry or an external item.
+5. Every `done` task and `completed` objective has evidence.
+6. Every `blocked` task names its blocker in `depends`.
 7. Every `deferred` decision has `revisit`,
    every `superseded` one `superseded_by`,
-   and every `awaiting_user` one `asked` and `## Question` (c);
-   every `rejected` one says why.
+   every `awaiting_user` one `asked` and `## Question`,
+   and every `rejected` one says why.
 8. `Current task` is `none` or a task that is `in_progress`,
    and `Next action` belongs to it or to the task that comes next.
 9. `Next action` is one concrete, executable step
    that has not been done yet.
 10. The rules block is unchanged apart from the branch name,
     and `record.sh` matches this skill's.
-11. (c) `Open entries` matches `sh record.sh list`.
-12. (c) Every objective, decision, constraint and assumption
-    has `applies`.
-13. (c) IDs are written in full everywhere, never as ranges,
-    and every ID mentioned in an entry has a file.
-14. Log lines are only in `log/`, one physical line each.
-15. (c) Every directory under `data/` belongs to an existing ID,
+11. Every objective, decision, constraint and assumption
+    has `applies`, naming paths when it concerns files.
+12. IDs are written in full everywhere, never as ranges (c),
+    and every ID mentioned has a file.
+13. (c) Log lines are only in `log/`, one physical line each.
+14. Every directory under `data/` belongs to an existing ID,
     and every file in it is named by that entry.
-16. No secrets or credentials appear.
-17. (c) Every acceptance criterion ID is defined once.
+15. No secrets or credentials appear.
+16. Every acceptance criterion ID is defined once.

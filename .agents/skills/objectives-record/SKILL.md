@@ -16,7 +16,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 6.1.0
+  version: 6.2.0
 ---
 
 # Objectives record
@@ -32,8 +32,8 @@ without reconstructing earlier reasoning.
 The record is a small database of plain text files.
 Each objective, task, decision, constraint and assumption
 is an entry file, which is authoritative.
-The index, `OBJECTIVES.md`, holds where work stands, the next step,
-and a list of open entries rebuilt from their files.
+The index, `OBJECTIVES.md`, holds where work stands and the next step;
+`sh record.sh list` lists the open entries from their files.
 Log files record events, one file per day.
 Nothing moves when work finishes: an entry's status changes in place.
 Nothing but data no longer needed is deleted,
@@ -69,16 +69,17 @@ objectives/
   data/T-053/         Files an entry needs that are not code.
 ```
 
-- **`OBJECTIVES.md`**: only `Status`, `Next action`, `Handoff`
-  and `Artifacts` are written by hand;
-  `Open entries` comes from `sh record.sh update`.
+- **`OBJECTIVES.md`**: `Status`, `Next action`, `Handoff` and `Artifacts`,
+  all written by hand; it holds no lists of entries.
   Where the index and an entry disagree, the entry wins.
 - **`entries/<ID>.md`**: header keys, statuses, body headings,
   IDs, what goes where, data files and invariants
   are in [entries.md](entries.md).
 - **`record.sh`** is copied from this skill when the record starts,
   so the record does not need the skill to maintain itself:
-  `list`, `update`, `check`, `applies <path>`, `next <prefix>`.
+  `list`, `check`, `applies <path>`, `next <prefix>`.
+  It relies on the fixed start of every entry:
+  `---`, `id:`, `status:`, `summary:`, and for tasks `objective:`.
 - **`log/<YYYY-MM-DD>.md`**: events, one physical line each,
   naming the full IDs they concern,
   so `grep -H T-053 log/*.md` gives an entry's history.
@@ -106,9 +107,9 @@ Setup, commits and merges are in [git-setup.md](git-setup.md).
 2. Read the whole of `OBJECTIVES.md` before planning or acting,
    and again after compaction,
    since a summary can drop the position and the decisions.
-3. Run `sh record.sh check`.
-   Where the index and the entries differ, the entries are right:
-   `sh record.sh update` corrects the list.
+3. Run `sh record.sh list` for the open entries,
+   and `sh record.sh check`.
+   Where the index and the entries differ, the entries are right.
 4. Compare the record with the project:
    unrecorded code commits
    (`git log --oneline meta/<branch>/objectives..<branch>`),
@@ -144,7 +145,7 @@ Read an entry when the work at hand needs it:
 - reconciling needs its evidence.
 
 Read only the entries that apply.
-A summary in `Open entries` is enough to know that something exists.
+A summary from `record.sh list` is enough to know that something exists.
 Entries not listed there are finished;
 find them with `record.sh applies` or `grep`
 when the work touches what they cover.
@@ -191,7 +192,7 @@ An update changes the entries it concerns,
 adds one log line per event,
 and, when a task changes status,
 updates `Current task`, `Position` and `Next action` together,
-then runs `sh record.sh update` and `sh record.sh check`.
+then runs `sh record.sh check`.
 New IDs come from `sh record.sh next <prefix>`.
 Put each piece of content where [entries.md](entries.md) says.
 
@@ -266,10 +267,6 @@ naming the entries to read first.>
 - Do not redo: <...>
 - Recheck after a long gap: <A-xxx, ...>
 
-## Open entries
-
-<Written by sh record.sh update.>
-
 ## Artifacts
 ```
 
@@ -279,7 +276,7 @@ naming the entries to read first.>
   the story belongs in the log.
 - `Waiting on the user` names decisions `awaiting_user`,
   and anything else owed by the user, such as a review.
-- `Open entries` lists, one line each, entries that are not finished:
+- `sh record.sh list` shows, one line each, entries not finished:
   objectives `proposed`, `active`, `paused` or `long-term`;
   tasks `todo`, `in_progress` or `blocked`, with their objective;
   decisions `proposed`, `awaiting_user`, `accepted` or `deferred`;
@@ -288,8 +285,7 @@ naming the entries to read first.>
   that no entry's `applies` names,
   such as a service, a dashboard, or a script to check the environment.
 
-The index stays short by itself:
-finished entries leave `Open entries` when their status changes.
+The index stays short by itself: it holds no lists of entries.
 An objective with too many open tasks to read at a glance
 is usually several objectives.
 

@@ -11,22 +11,23 @@ The version in the block is the last one that changed it.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 6.1.0.
+It follows the objectives-record skill, version 6.2.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
 - Each objective, task, decision, constraint and assumption
   is a file `entries/<ID>.md`, and the files are authoritative.
-  `record.sh` beside this file keeps the rest consistent:
-  `sh record.sh update` rewrites `Open entries` from them,
-  `sh record.sh check` checks this record's rules,
+  After this file, run `sh record.sh list` for the open entries.
+  `sh record.sh check` finds entries and logs not in this format,
   `sh record.sh applies <path>` lists the entries covering a path,
   and `sh record.sh next T` gives the next free ID of a prefix.
 - Read an entry when the work needs it:
   `Next action` or the current task names it,
   or its `applies:` covers what the work changes.
   `applies:` paths are relative to the repository root.
-- Headers hold one `key: value` per line.
+- Entries start with `---`, `id:`, `status:`, `summary:`,
+  and for tasks `objective:`, in that order;
+  other keys follow, one `key: value` per line.
   Write IDs in full wherever they appear, never as ranges.
 - New IDs come from `sh record.sh next`;
   create a file only if none exists.

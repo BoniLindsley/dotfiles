@@ -106,7 +106,8 @@ Records start at 5.1.0; earlier reasons were not kept.
     tasks, can they be kept without an objective ID prefix for now?"
     Studied: git-issue (one directory per issue, status as a tag,
     no stored index); not copied: identity and dates from git history.
-- **D-9** `[accepted]` 6.1.0: `record.sh` replaces `list.awk`.
+- **D-9** `[superseded]` 6.1.0, narrowed by D-12 in 6.2.0:
+  `record.sh` replaces `list.awk`.
   - Change: one POSIX shell helper per record with `list`, `update`
     (rewrites `Open entries` in place), `check` (the invariants a
     script can check), `applies <path>` (entries naming the path or a
@@ -135,4 +136,25 @@ Records start at 5.1.0; earlier reasons were not kept.
   - Reason: the test session's friction report (2026-10-30): SKILL.md
     was the largest fixed cost at session start; the other points were
     guesses it had to make.
+- **D-12** `[accepted]` 6.2.0: A fixed entry start instead of a checker.
+  - Change: every entry starts with `---`, `id:`, `status:`,
+    `summary:`, and for tasks `objective:`, so `record.sh` reads them
+    by position; the index holds no `Open entries` (agents run
+    `sh record.sh list`), so nothing can drift; `record.sh` keeps
+    `list`, `applies`, `next` and a `check` of the fixed lines,
+    task objectives, ID ranges and log line format (154 to 78 lines);
+    `update` and the other checks go; monthly log files are split into
+    daily files on conversion instead of being kept; conversion paths
+    from 5.3.0, 6.0.0 and 6.1.0 are dropped, since those versions were
+    never used outside the session that made them.
+  - Reason: user, 2026-10-30: "The `record.sh` script is complicated.
+    Can record format be enforced better to make it simpler?" and
+    "You may assume version migration is not necessary for versions
+    created by this session."
+  - Rejected: rules for marking a task done without meeting
+    `Done when`, for answers that pick no option, and for
+    `Last verified` after partial checks. They came from a test that
+    staged those situations. User, 2026-10-30: "Are those really worth
+    putting in the instructions? Feels adversarial if an agent wants to
+    do that."
 
