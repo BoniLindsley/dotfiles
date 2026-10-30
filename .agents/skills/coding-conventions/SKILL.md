@@ -4,7 +4,9 @@ description: >
   General code annotation preferences, language-agnostic.
   Apply when writing or reviewing code in any language.
   Covers when to add explanatory comments for non-obvious decisions,
-  and when to add TODO markers for uncertain choices.
+  when to add TODO markers for uncertain choices,
+  and how to weigh designs: subclassing over forwarding wrappers,
+  responsibilities over length.
   Passive by default
   -- no action needed on load unless file paths are provided.
 ---
@@ -73,3 +75,11 @@ if (data.size() > 0) { ... }
 
 This signals to the reader:
 *a choice was made here, but it deserves a second look.*
+
+## Weighing Designs
+
+- Prefer subclassing or a mixin over a wrapper
+  whose methods mostly forward calls unchanged;
+  wrap only to narrow or adapt an interface,
+  or when the object is supplied at run time.
+- Weigh designs by responsibilities and clarity, not by length.
