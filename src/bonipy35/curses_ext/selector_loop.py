@@ -18,7 +18,6 @@ import collections
 import contextlib
 import curses
 import math
-import os
 import selectors
 import signal
 import sys
@@ -31,6 +30,7 @@ from typing import Iterator, List, Mapping, Tuple, Union
 # Internal modules.
 from .. import asyncio_ext
 from . import raii
+from .input_loop import _resize, keep_resize_handler
 
 _T = typing.TypeVar("_T")
 
@@ -294,7 +294,7 @@ class EventLoop(asyncio.SelectorEventLoop):
         if self._console is None:
             self.add_reader(input_fd, self._read_keys)
             if hasattr(signal, "SIGWINCH"):
-                self.add_signal_handler(signal.SIGWINCH, self._resize)
+                self.add_signal_handler(signal.SIGWINCH, _resize)
         else:
             self._previous_wakeup_fd = signal.set_wakeup_fd(
                 self._csock.fileno()  # type: ignore[attr-defined]
@@ -346,14 +346,6 @@ class EventLoop(asyncio.SelectorEventLoop):
             else:
                 self._keys.append(key)
 
-    def _resize(self) -> None:
-        try:
-            columns, lines = os.get_terminal_size()
-        except OSError:
-            return
-        # Queues KEY_RESIZE if the size changed.
-        curses.resizeterm(lines, columns)
-
     def close(self) -> None:
         if self.is_running():
             raise RuntimeError("Cannot close a running event loop")
@@ -396,31 +388,6 @@ def use_event_loop_policy(
         yield policy
     finally:
         asyncio.set_event_loop_policy(previous)
-
-
-def _ignore_signal(signum: int, frame: typing.Any) -> None:
-    del signum, frame
-
-
-@contextlib.contextmanager
-def keep_resize_handler() -> Iterator[None]:
-    """Hold a Python SIGWINCH handler while curses is initialised.
-
-    Ncurses then leaves SIGWINCH to the loop,
-    and the previous handler is restored afterwards.
-    """
-    if not hasattr(signal, "SIGWINCH"):
-        yield
-        return
-    previous = signal.signal(signal.SIGWINCH, _ignore_signal)
-    try:
-        yield
-    finally:
-        # Python cannot restore a handler installed outside it.
-        signal.signal(
-            signal.SIGWINCH,
-            signal.SIG_DFL if previous is None else previous,
-        )
 
 
 def run(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:

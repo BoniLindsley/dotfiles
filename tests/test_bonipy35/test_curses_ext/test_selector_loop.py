@@ -26,7 +26,6 @@ from bonipy35.curses_ext.selector_loop import (
     EventLoop,
     _ConsoleSelector,
     EventLoopPolicy,
-    keep_resize_handler,
     run,
     use_event_loop_policy,
 )
@@ -436,17 +435,6 @@ class TestEventLoop:
             100,
         )
 
-    def test_resize_without_terminal(
-        self, descriptor_loop: EventLoop, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        loop = descriptor_loop
-        monkeypatch.setattr(curses, "resizeterm", Mock())
-        monkeypatch.setattr(
-            os, "get_terminal_size", Mock(side_effect=OSError)
-        )
-        loop._resize()  # pylint: disable=protected-access
-        curses.resizeterm.assert_not_called()  # type: ignore[attr-defined]
-
     @needs_sigwinch
     def test_without_sigwinch(
         self,
@@ -623,38 +611,6 @@ class TestConsoleSelector:
             assert current == loop._csock.fileno()  # type: ignore[attr-defined]
         assert signal.set_wakeup_fd(previous) == previous
         assert console.closed
-
-
-class TestKeepResizeHandler:
-    @needs_sigwinch
-    def test_restores(self) -> None:
-        previous = signal.getsignal(signal.SIGWINCH)
-        with keep_resize_handler():
-            # A Python handler, so ncurses does not install its own.
-            assert callable(signal.getsignal(signal.SIGWINCH))
-            os.kill(os.getpid(), signal.SIGWINCH)
-        assert signal.getsignal(signal.SIGWINCH) == previous
-
-    @needs_sigwinch
-    def test_unknown_previous(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        handlers = []
-
-        # Handlers installed outside Python are reported as None.
-        def set_handler(signum: int, handler: typing.Any) -> None:
-            assert signum == signal.SIGWINCH
-            handlers.append(handler)
-
-        monkeypatch.setattr(signal, "signal", set_handler)
-        with keep_resize_handler():
-            pass
-        assert handlers[-1] == signal.SIG_DFL
-
-    def test_without_sigwinch(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.delattr(signal, "SIGWINCH", raising=False)
-        monkeypatch.setattr(signal, "signal", Mock())
-        with keep_resize_handler():
-            pass
-        signal.signal.assert_not_called()  # type: ignore[attr-defined]
 
 
 class TestPolicy:
