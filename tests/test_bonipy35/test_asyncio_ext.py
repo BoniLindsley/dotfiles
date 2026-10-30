@@ -5,7 +5,7 @@ import ast
 import asyncio
 import os
 from pathlib import Path
-from typing import Iterator, Tuple
+from typing import Iterator, List, Tuple
 
 # External dependencies.
 import pytest
@@ -325,4 +325,45 @@ class TestRun:
 
         with pytest.raises(ValueError, match="application failed"):
             run(app())
+        assert cleaned == [True]
+
+
+class TestRunLoopFactory:
+    @pytest.fixture(autouse=True, params=["runner", "legacy"])
+    def fixture_runner(
+        self, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        if request.param == "legacy":
+            monkeypatch.delattr(asyncio, "Runner", raising=False)
+
+    def test_uses_factory(self) -> None:
+        created = []  # type: List[asyncio.AbstractEventLoop]
+
+        def factory() -> asyncio.AbstractEventLoop:
+            created.append(asyncio.SelectorEventLoop())
+            return created[-1]
+
+        async def app() -> asyncio.AbstractEventLoop:
+            return asyncio.get_event_loop()
+
+        assert run(app(), loop_factory=factory) is created[0]
+        assert len(created) == 1
+        assert created[0].is_closed()
+
+    def test_task_cleanup_and_failure(self) -> None:
+        cleaned = []
+
+        async def background() -> None:
+            try:
+                await asyncio.sleep(100)
+            finally:
+                cleaned.append(True)
+
+        async def app() -> None:
+            asyncio.get_event_loop().create_task(background())
+            await asyncio.sleep(0)
+            raise ValueError("application failed")
+
+        with pytest.raises(ValueError, match="application failed"):
+            run(app(), loop_factory=asyncio.SelectorEventLoop)
         assert cleaned == [True]
