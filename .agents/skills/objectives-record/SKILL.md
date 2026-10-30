@@ -15,7 +15,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.2.0
+  version: 5.3.0
 ---
 
 # Objectives record
@@ -33,7 +33,8 @@ where work stands, the open objectives and how each is verified,
 the open tasks, and the decisions and constraints that still apply.
 Detail files hold the rest:
 finished objectives with their tasks and evidence,
-long decision records, and older log lines.
+and long decision records.
+Log files hold one line per material change, one file per day.
 Like skills, they are listed in the index with a one-line summary
 and read only when the work at hand needs them.
 Data files hold what a task needs that is not code,
@@ -62,7 +63,7 @@ objectives/
   OBJECTIVES.md      Index: always read in full.
   details/O-002.md   A finished objective, with its tasks and evidence.
   details/D-012.md   A decision whose record is too long for the index.
-  log/2026-10.md     Log lines of one month.
+  log/2026-10-18.md  Log lines of one day.
   data/T-028/        Files a task or decision needs that are not code.
 ```
 
@@ -75,7 +76,9 @@ objectives/
   with a summary of it in the index.
   An objective's file can exist while the objective is active,
   holding its finished tasks.
-- **`log/<YYYY-MM>.md`** holds the log lines of one month.
+- **`log/<YYYY-MM-DD>.md`** holds the log lines of one day.
+  Log lines go only there, never into the index:
+  `Status` and `Handoff` carry what the next session needs.
 - **`data/<ID>/`** holds files that the entry `<ID>` needs
   and that are not part of the code base:
   spikes, scripts to run by hand, raw outputs, measurements.
@@ -168,6 +171,18 @@ git -C .meta/objectives/<branch> commit -m "Record T-053 done for O-008."
   ```sh
   git restore --source=<completing-commit> --staged --worktree -- . ':!objectives'
   ```
+
+### Archive in a commit of its own
+
+When an update marks a task `done`,
+or an objective `completed` or `cancelled`,
+move the entry out of the index in the next commit,
+as in "Keeping the index short",
+changing nothing else,
+for example `Archive T-053 to details/O-008.md.`
+When the marking is a merge with code, the archive comes after the merge.
+The index at the marking commit then shows the entry's last state
+in context, and the archive commit is only a move.
 
 ### Commit updates without code
 
@@ -369,13 +384,11 @@ Updated: <YYYY-MM-DD>. Recheck assumptions after: <N> days.
 ## Artifacts
 
 ## Details
-
-## Log
 ```
 
 `Status` comes first because it is what every session needs first.
 `Position` says where work stands now, not how it got there:
-the story belongs in the log and in detail files.
+the story belongs in the log files and in detail files.
 The sections after `Status` hold longer-lived knowledge.
 
 ### Entries
@@ -510,13 +523,17 @@ the paths it delivered.
   Applies: `src/flipbot/mix/`. `details/O-002.md`
 - **D-004** `[superseded]` Flip on a fixed timer;
   replaced by D-012. `details/D-004.md`
-- Log: `log/2026-10.md` (2026-10-22 to 2026-10-27).
+- Log: `log/`, one file per day (2026-10-22 to 2026-10-27).
 ```
 
-**Log** has one line per material change, newest last:
+**Log files** have one line per material change, newest last,
+in `log/<YYYY-MM-DD>.md` for the day of the change.
+The index has no log section.
 
 ```markdown
-- 2026-10-18: O-008: T-053 done;
+# Log: 2026-10-18
+
+- O-008: T-053 done;
   flips when the bubbles stop rising, `flipbot.flip.watch_bubbles`.
   Code: up to `ae1950b`.
 ```
@@ -552,6 +569,12 @@ After every substantial update:
 14. Every directory under `data/` belongs to an existing ID,
     every file in it is named by that entry,
     and every named file exists.
+15. A `done` task, or a `completed` or `cancelled` objective,
+    has no entry in the index's `Tasks` or `Objectives`,
+    except in the commit that marked it;
+    only its one-line pointer remains.
+16. The index has no log lines;
+    they are in `log/<YYYY-MM-DD>.md`.
 
 Fix violations when found and log material repairs.
 
@@ -560,8 +583,11 @@ Fix violations when found and log material repairs.
 The index is read at the start of every session, so keep it short.
 Move entries out of it instead of deleting them,
 so the record keeps its own history.
-Move them when an objective finishes,
-at a handoff, or when the index passes about 500 lines.
+Archive finished tasks and objectives always,
+each in a commit of its own right after the one that marks it
+(see "Archive in a commit of its own").
+Move other entries at a handoff,
+or when the index passes about 500 lines.
 
 - **A completed or cancelled objective**
   moves to `details/O-xxx.md` with its criteria, evidence,
@@ -571,11 +597,13 @@ at a handoff, or when the index passes about 500 lines.
   and what was left out or not verified.
   The index keeps one line in `Details`, with what it applies to.
   Decisions it settled stay in the index while they still apply.
-- **Done tasks of an active objective**
-  move to that objective's detail file
-  once their notes are no longer needed for the next work.
+- **Done tasks**
+  move to their objective's detail file,
+  even while the objective is active.
   The objective's index entry says which tasks are done
-  and where they are.
+  and where they are,
+  and keeps any evidence an open criterion still needs.
+  Notes the next work still needs go to `Status` or `Handoff`.
 - **A decision that still applies**
   moves to `details/D-xxx.md` once its record passes about five lines.
   The index keeps a summary of one or two lines
@@ -584,9 +612,6 @@ at a handoff, or when the index passes about 500 lines.
   (superseded, or about finished work only)
   moves whole to its detail file,
   or to its objective's file when it only concerned that objective.
-- **Log lines** older than the current month
-  move to `log/<YYYY-MM>.md`.
-  Keep the last few lines in the index if they help the next session.
 - **`Status` and `Handoff`** lose items that the next work no longer needs.
 
 Keep in the index everything needed to resume:

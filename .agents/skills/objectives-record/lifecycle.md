@@ -26,14 +26,15 @@ Before marking the work complete:
 1. Check the actual artifacts and every acceptance criterion.
 2. Resolve or explicitly close remaining blockers and decisions.
 3. Record the final evidence and mark the objectives `completed`.
-4. Move them to detail files
-   as in "Keeping the index short" in [SKILL.md](SKILL.md).
-   For each of their `data/` directories,
-   keep or delete it, and log which.
-5. Set `Current task: none`,
+4. Set `Current task: none`,
    and replace `Next action` with follow-up or maintenance guidance,
    if any.
-6. Record it in a merge of the code branch up to the final commit.
+5. Record it in a merge of the code branch up to the final commit.
+6. In the next commit, move the objectives to detail files
+   as in "Keeping the index short" in [SKILL.md](SKILL.md),
+   changing nothing else.
+   For each of their `data/` directories,
+   keep or delete it, and log which.
 
 A finished objectives branch stays as the audit trail
 and the starting point for later maintenance.
@@ -45,6 +46,19 @@ conversion moves the worktree and rewrites the rules block.
 Until then, keep working with the record as it is,
 following its own rules block,
 and mention in the briefing that it can be converted.
+
+From version 5.0 to 5.2
+(already at `.meta/objectives/<branch>`; no worktree moves):
+
+1. Replace the rules block with the one in [rules-block.md](rules-block.md).
+2. Move the index's `## Log` lines into `log/<YYYY-MM-DD>.md`
+   by their dates, and remove the section.
+   Monthly files such as `log/2026-10.md` stay as they are;
+   `Details` names `log/` once.
+3. Commit, for example `Convert the record to objectives-record 5.3.0.`,
+   and log the conversion.
+4. In a separate commit, move done tasks and finished objectives
+   still in the index to their detail files.
 
 From version 4
 (checked out at `.objectives/<branch>`):

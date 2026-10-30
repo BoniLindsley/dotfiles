@@ -39,3 +39,24 @@ Records start at 5.1.0; earlier reasons were not kept.
     but should not be part of the code base, as in this case."
     Rejected: listing data files in `Artifacts`;
     keeping them outside the record.
+- **D-4** `[accepted]` 5.3.0: Log lines only in daily files.
+  - Change: `log/<YYYY-MM-DD>.md`, one file per day;
+    no `## Log` section in the index; invariant 16;
+    the rules block changes; conversion from 5.0 to 5.2.
+  - Reason: an index log of about 85 lines was read every session
+    and used for no decision. User, 2026-10-30:
+    "Is the log usually used? Consider splitting the logs by day
+    instead, and may be always write logs outside of the index."
+- **D-5** `[accepted]` 5.3.0: Always archive finished tasks
+  and objectives, each in a commit of its own.
+  - Change: done tasks and completed or cancelled objectives move
+    to detail files in the commit right after the one that marks them,
+    changing nothing else; invariant 15; the rules block changes;
+    "Finishing" archives after the final merge.
+  - Reason: an index reached 563 lines with done tasks still in it,
+    since they moved only "once their notes are no longer needed".
+    User, 2026-10-30: "Consider changing the skill to always archive
+    completed tasks and objectives." And: "Consider having task and
+    objective update commits, such ask marking as completed,
+    as separate commit from archiving them,
+    so the last update before archiving is easily seen."

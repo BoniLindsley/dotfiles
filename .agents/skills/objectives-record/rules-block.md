@@ -11,14 +11,16 @@ The version in the block is the last one that changed it.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 5.2.0.
+It follows the objectives-record skill, version 5.3.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
-- Files under `details/` and `log/` are listed in `Details`
+- Files under `details/` are listed in `Details`
   or named by the decision they hold;
   files under `data/<ID>/` are named by that entry.
   Read one only when the work needs it.
+  Log lines go only to `log/<YYYY-MM-DD>.md`, one file per day,
+  never into this file.
   Never delete record content: move it into a detail file instead;
   only data no longer needed may be deleted, with a log line.
 - This record exists only under `objectives/`
@@ -38,6 +40,9 @@ It follows the objectives-record skill, version 5.2.0.
   The message describes only the update,
   such as "Record T-053 done for O-008."
   Other updates are ordinary commits that change only `objectives/`.
+- When an update marks a task done, or an objective completed
+  or cancelled, the next commit moves it into its detail file
+  and changes nothing else.
 - IDs (O-, AC-, T-, D-, C-, A-) are permanent.
   Never reuse them.
 - A task is done only with evidence.
