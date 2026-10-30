@@ -15,7 +15,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.1.2
+  version: 5.2.0
 ---
 
 # Objectives record
@@ -36,7 +36,10 @@ finished objectives with their tasks and evidence,
 long decision records, and older log lines.
 Like skills, they are listed in the index with a one-line summary
 and read only when the work at hand needs them.
-Nothing is deleted from the record, so its history does not depend on git.
+Data files hold what a task needs that is not code,
+such as a spike or raw measurements.
+Nothing but data no longer needed is deleted from the record,
+so its history does not depend on git.
 ## When to use
 
 Use this skill when any of the following is true:
@@ -60,6 +63,7 @@ objectives/
   details/O-002.md   A finished objective, with its tasks and evidence.
   details/D-012.md   A decision whose record is too long for the index.
   log/2026-10.md     Log lines of one month.
+  data/T-028/        Files a task or decision needs that are not code.
 ```
 
 - **`OBJECTIVES.md`** is the index.
@@ -72,6 +76,22 @@ objectives/
   An objective's file can exist while the objective is active,
   holding its finished tasks.
 - **`log/<YYYY-MM>.md`** holds the log lines of one month.
+- **`data/<ID>/`** holds files that the entry `<ID>` needs
+  and that are not part of the code base:
+  spikes, scripts to run by hand, raw outputs, measurements.
+  The entry names each file, for example in its `Evidence`.
+  Nothing in the code imports or tests them;
+  a spike that becomes code is rewritten on the code branch.
+
+Data files are read only when the work needs them.
+Keep them small text files, up to about 1 MB;
+larger or private data stays outside the record,
+and the entry says where it is and how to recreate it.
+Redact real data before storing it.
+Data no longer needed may be deleted,
+with a log line naming the files
+and where their results are summarized:
+the record's summary is the authority, the data only a backup.
 
 Detail files start with a header of fixed keys and use fixed body headings:
 see [details.md](details.md).
@@ -529,6 +549,9 @@ After every substantial update:
 12. Every decision that applies, constraint, assumption,
     rejected approach and completed objective says what it applies to.
 13. No secrets or credentials appear.
+14. Every directory under `data/` belongs to an existing ID,
+    every file in it is named by that entry,
+    and every named file exists.
 
 Fix violations when found and log material repairs.
 

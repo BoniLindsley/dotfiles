@@ -11,14 +11,16 @@ The version in the block is the last one that changed it.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 5.1.0.
+It follows the objectives-record skill, version 5.2.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
 - Files under `details/` and `log/` are listed in `Details`
-  or named by the decision they hold.
+  or named by the decision they hold;
+  files under `data/<ID>/` are named by that entry.
   Read one only when the work needs it.
-  Never delete record content: move it into a detail file instead.
+  Never delete record content: move it into a detail file instead;
+  only data no longer needed may be deleted, with a log line.
 - This record exists only under `objectives/`
   on branch `meta/<branch>/objectives`,
   and tracks the code branch `<branch>`.

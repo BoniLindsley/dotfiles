@@ -28,6 +28,8 @@ Before marking the work complete:
 3. Record the final evidence and mark the objectives `completed`.
 4. Move them to detail files
    as in "Keeping the index short" in [SKILL.md](SKILL.md).
+   For each of their `data/` directories,
+   keep or delete it, and log which.
 5. Set `Current task: none`,
    and replace `Next action` with follow-up or maintenance guidance,
    if any.

@@ -24,3 +24,18 @@ Records start at 5.1.0; earlier reasons were not kept.
     and invariant 9 accepted any concrete, executable step.
     User, 2026-10-30: "Why was "Next Action" not updated?
     Does `objectives-record` need updating for this?"
+- **D-3** `[accepted]` 5.2.0: Data files under `data/<ID>/`.
+  - Change: a `data/` directory per ID for files a task needs
+    that are not code, named by their entry; invariant 14;
+    small text only, large or private data stays outside;
+    data no longer needed may be deleted with a log line;
+    finishing an objective decides keep or delete;
+    the rules block changes.
+  - Reason: a Windows spike and its outputs were kept
+    in an uncommitted drafts folder, which is meant for drafts
+    under review, and a cited output file went missing unnoticed.
+    User, 2026-10-30: "Suggest changes to the `objectives-record`
+    skill to accomodate for data files needed for tasks,
+    but should not be part of the code base, as in this case."
+    Rejected: listing data files in `Artifacts`;
+    keeping them outside the record.
