@@ -106,3 +106,33 @@ Records start at 5.1.0; earlier reasons were not kept.
     tasks, can they be kept without an objective ID prefix for now?"
     Studied: git-issue (one directory per issue, status as a tag,
     no stored index); not copied: identity and dates from git history.
+- **D-9** `[accepted]` 6.1.0: `record.sh` replaces `list.awk`.
+  - Change: one POSIX shell helper per record with `list`, `update`
+    (rewrites `Open entries` in place), `check` (the invariants a
+    script can check), `applies <path>` (entries naming the path or a
+    directory above it) and `next <prefix>`; the rules block and
+    session loop use it.
+  - Reason: a test session had to write its own loops to check the
+    record and to splice the list into the index, and four searches to
+    find what applied to one file (backlog, 2026-10-30, after a test
+    report). User, 2026-10-30: "Draft the change." The checker found a
+    real ID range left by the 6.0.0 conversion.
+- **D-10** `[accepted]` 6.1.0: Log events take one physical line.
+  - Change: never wrapped, as data rather than prose,
+    so `grep` shows whole events; the date stays in the file name.
+  - Reason: wrapped log entries showed only their first line in
+    `grep -H T-029 log/*.md` in the test session.
+- **D-11** `[accepted]` 6.1.0: Smaller SKILL.md; clarified entries.
+  - Change: IDs, data files and invariants move to `entries.md`,
+    commits and merges to `git-setup.md` (SKILL.md 515 to about 300
+    lines); tasks gain `## Scope`; a decision's lifecycle
+    (`## Question` stays, summary from question to answer, task
+    `blocked` only if no other work is possible); `applies:` paths
+    relative to the repository root; `Current task` only an ID or
+    `none`; `Waiting on the user` allows reviews and answers owed;
+    conventions such as skills to load are constraints; tests rerun
+    at start only when something changed; conversion from 6.0.
+  - Reason: the test session's friction report (2026-10-30): SKILL.md
+    was the largest fixed cost at session start; the other points were
+    guesses it had to make.
+

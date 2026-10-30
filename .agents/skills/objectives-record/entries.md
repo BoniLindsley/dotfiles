@@ -22,12 +22,14 @@ applies: src/flipbot/flip/
 
 - `id`, `status`, `summary`: always.
   `id` matches the file name.
-  `summary` is one sentence; `list.awk` shows it in `Open entries`.
+  `summary` is one sentence; `record.sh list` shows it.
 - `objective`: the parent of a task. Exactly one ID.
 - `depends`: for a task, the IDs or external items it waits for.
 - `size`: for a task, `XS`, `S`, `M` or `L` (split before starting).
 - `applies`: the paths, modules or topics the entry constrains
   or delivered, so that an agent can tell whether its work touches them.
+  Paths are relative to the repository root;
+  a directory ends with `/` and covers everything below it.
   Required for objectives, decisions, constraints and assumptions;
   optional for tasks.
 - `related`: other IDs, when no more specific key fits.
@@ -48,10 +50,37 @@ Rules, so that line-based searches find every entry:
 - `status` takes only the values of the entry's type, below.
 - Leave out keys that do not apply.
 
-Examples:
-`grep -l '^objective: O-008$' entries/T-*.md` lists the tasks of O-008;
-`grep -l '^applies:.*flipbot/flip' entries/*.md`
-lists entries that cover a path.
+`grep -l '^objective: O-008$' entries/T-*.md` lists the tasks of O-008.
+`sh record.sh applies src/flipbot/flip/watch.py` lists the entries
+whose `applies` names that path or a directory above it.
+
+## IDs
+
+- IDs are unique within the record:
+  `O-`, `T-`, `D-`, `C-`, `A-` for entries,
+  and `AC-` for acceptance criteria,
+  three digits, never reused.
+  `sh record.sh next T` gives the next one:
+  the highest of the prefix in `entries/` and `log/`, plus one.
+  Create the file only if none exists,
+  for example with `set -o noclobber` in the shell,
+  so that a collision fails instead of overwriting.
+- Acceptance criteria have no files,
+  so nothing on disk keeps their IDs unique.
+  Define each once, as `- AC-020:` at the start of a line
+  in its objective's `## Acceptance criteria`;
+  `grep -l '^- AC-020:' entries/O-*.md` finds its objective,
+  and `record.sh check` catches duplicates.
+  Elsewhere, such as in evidence, do not start a line with `AC-020:`.
+- IDs do not name their parent.
+  Tasks and criteria keep their IDs if they move to another objective:
+  code comments, commit messages and logs refer to them.
+- One session writes the record at a time.
+  Sequential IDs depend on it.
+  If parallel writers become normal,
+  give each its own range of numbers.
+- Write IDs in full, never as ranges such as `T-028 to T-031`,
+  so that a search for any of them finds every mention.
 
 ## Types
 
@@ -71,6 +100,8 @@ The robot cooks a stack of pancakes without anyone touching the pan.
 - AC-021: No pancake leaves the pan raw in the middle.
   Check: user eats the third pancake.
 
+Evidence: AC-020 by T-053.
+
 ## Tasks
 - T-052: Heat the pan evenly.
 - T-053: Flip when the bubbles stop rising.
@@ -86,19 +117,19 @@ what was left out or not verified, and the evidence for each criterion.
 `## Tasks` lists the objective's tasks in their planned order,
 with what each is for, but without statuses:
 the task files hold those.
-Criteria take record-wide IDs, like entries,
-each defined once in this form, at the start of a line,
-so that searches find it.
 A criterion that moves to another objective keeps its ID;
 log the move.
 
 ### Tasks (`T-`)
 
 An ordered, independently checkable step toward one objective.
-Statuses: `todo`, `in_progress`, `blocked` (name the blocker in `depends`
-or `## Notes`), `done` (with evidence), `cancelled` (with the reason).
+Statuses: `todo`, `in_progress`, `blocked` (name the blocker in `depends`),
+`done` (with evidence), `cancelled` (with the reason).
 
 ```markdown
+## Scope
+What the task covers, when the summary cannot say it in one sentence.
+
 ## Done when
 Tests on recorded videos flip at the right frame, and never twice.
 
@@ -112,6 +143,9 @@ such as "From T-052: the pan needs two minutes to heat."
 Code: `ae1950b`.
 ```
 
+A task stays `in_progress` while one of its decisions awaits the user,
+unless no other work on it is possible;
+then it is `blocked`, with the decision in `depends`.
 A task that moves to another objective keeps its ID:
 change `objective`, update both objectives' `## Tasks`, and log it.
 
@@ -128,7 +162,7 @@ Statuses: `proposed`, `awaiting_user` (with the question and `asked`),
 
 ```markdown
 ## Question
-While `awaiting_user`: the question as asked, with the recommendation.
+The question as asked, with the recommendation.
 
 ## Context
 What forced the choice; constraints in play.
@@ -149,6 +183,11 @@ What this commits the code to; open risks.
 Spikes, measurements, commands and results.
 ```
 
+While `awaiting_user`, the `summary` states the question.
+Once decided, `## Question` stays as asked,
+the `summary` states the answer,
+and the log says the summary was rewritten.
+
 ### Constraints (`C-`)
 
 A rule the work must follow.
@@ -156,9 +195,11 @@ Statuses: `active`, `retired` (with the reason).
 The body states the rule;
 `source` says where it comes from.
 Project conventions the user states,
-such as how to split commits,
+such as how to split commits or which skill to load for some tasks,
 are constraints, or belong in `AGENTS.md`,
-not in `Handoff`.
+not in `Handoff` or `Next action`.
+Retire a constraint when an `AGENTS.md` file or skill
+takes over the same rule.
 
 ### Assumptions (`A-`)
 
@@ -187,9 +228,69 @@ Bubble watching (T-053) needs all four edges.
 | Current state and what was learned | The entry it describes, edited in place |
 | Evidence, quoted user decisions | The entry they justify |
 | A finding one task makes for another | The entry that will use it, citing its source |
-| Events: status changes, decisions taken, renames, runs | `log/<YYYY-MM-DD>.md` |
+| Events: status changes, decisions taken, renames, runs | `log/<YYYY-MM-DD>.md`, one line each |
 | Where work stands, the next step | `Status` and `Next action` in the index |
 
 When an edit rewrites something meaningful,
 log what changed,
 so that the record keeps its history without git.
+
+Log files are data, not prose:
+each event is one physical line, never wrapped,
+so that `grep -H T-053 log/*.md` shows whole events,
+with the date in the file name.
+Monthly files such as `log/2026-10.md`,
+kept from versions before 5.3.0, stay as they are.
+
+## Data files
+
+`data/<ID>/` holds files that the entry `<ID>` needs
+and that are not part of the code base:
+spikes, scripts to run by hand, raw outputs, measurements.
+The entry names each file, for example in its `## Evidence`.
+Nothing in the code imports or tests them;
+a spike that becomes code is rewritten on the code branch.
+Keep them small text files, up to about 1 MB;
+larger or private data stays outside the record,
+and the entry says where it is and how to recreate it.
+Redact real data before storing it.
+Data no longer needed may be deleted,
+with a log line naming the files
+and where their results are summarized:
+the record's summary is the authority, the data only a backup.
+
+## Invariants
+
+After every substantial update.
+`sh record.sh check` checks those marked (c);
+check the rest by reading.
+
+1. (c) Every entry file's name is its `id`,
+   and its `status` is one of its type's values.
+2. Every active objective has acceptance criteria (c),
+   each with a check.
+3. (c) Every task names one existing objective in `objective`,
+   and appears in that objective's `## Tasks`.
+4. (c) Every `depends` names an existing entry or an external item.
+5. (c) Every `done` task and `completed` objective has evidence.
+6. (c) Every `blocked` task names its blocker in `depends`.
+7. Every `deferred` decision has `revisit`,
+   every `superseded` one `superseded_by`,
+   and every `awaiting_user` one `asked` and `## Question` (c);
+   every `rejected` one says why.
+8. `Current task` is `none` or a task that is `in_progress`,
+   and `Next action` belongs to it or to the task that comes next.
+9. `Next action` is one concrete, executable step
+   that has not been done yet.
+10. The rules block is unchanged apart from the branch name,
+    and `record.sh` matches this skill's.
+11. (c) `Open entries` matches `sh record.sh list`.
+12. (c) Every objective, decision, constraint and assumption
+    has `applies`.
+13. (c) IDs are written in full everywhere, never as ranges,
+    and every ID mentioned in an entry has a file.
+14. Log lines are only in `log/`, one physical line each.
+15. (c) Every directory under `data/` belongs to an existing ID,
+    and every file in it is named by that entry.
+16. No secrets or credentials appear.
+17. (c) Every acceptance criterion ID is defined once.

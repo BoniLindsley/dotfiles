@@ -12,7 +12,7 @@ When no record exists:
    then the exclusion, worktree and sparse-checkout commands.
    Without git, create `.meta/objectives/` in the working directory.
 3. In `objectives/`, create `entries/` and `log/`,
-   and copy [list.awk](list.awk) from this skill.
+   and copy [record.sh](record.sh) from this skill.
 4. Write the entries ([entries.md](entries.md)):
    at least one objective with its criteria
    and an ordered first plan in its `## Tasks`,
@@ -20,7 +20,8 @@ When no record exists:
    and known decisions, constraints and assumptions.
 5. Write `objectives/OBJECTIVES.md` with the layout in [SKILL.md](SKILL.md):
    the rules block, `Status` with an exact next action,
-   and `Open entries` from `list.awk`.
+   and an empty `## Open entries`;
+   run `sh record.sh update` and `sh record.sh check`.
 6. Log the start, and commit, for example `Add O-001: <outcome>.`,
    before doing substantial project work.
 
@@ -42,7 +43,7 @@ Before marking an objective complete:
    keep or delete it, and log which.
 5. Set `Current task: none`,
    replace `Next action` with follow-up or maintenance guidance,
-   if any, and rebuild `Open entries`.
+   if any, and run `sh record.sh update` and `sh record.sh check`.
 6. Record it in a merge of the code branch up to the final commit,
    and log it.
 
@@ -60,6 +61,23 @@ Until then, keep working with the record as it is,
 following its own rules block,
 and mention in the briefing that it can be converted.
 
+### From version 6.0
+
+1. Copy [record.sh](record.sh) and delete `list.awk`.
+2. Replace the rules block with the one in [rules-block.md](rules-block.md).
+3. Make `applies:` paths relative to the repository root,
+   if they were not.
+4. Run `sh record.sh check` and fix what it reports;
+   `sh record.sh update` rewrites `Open entries`.
+5. Move conventions out of `Next action` and `Handoff` into constraints,
+   keep `Current task` to a task ID or `none`,
+   and add `completed:` to done tasks that lack it,
+   taking the date from the log.
+6. Commit, for example `Convert the record to objectives-record 6.1.0.`,
+   and log the conversion.
+
+Existing log lines may stay wrapped; new ones take one line each.
+
 ### From version 5
 
 Version 5 keeps open entries in the index
@@ -68,7 +86,7 @@ Conversion gives every entry its own file;
 nothing is summarized or dropped.
 Prefer one commit per step, so each is easy to review.
 
-1. Create `entries/` and copy [list.awk](list.awk).
+1. Create `entries/` and copy [record.sh](record.sh).
 2. Move decision files: `git mv details/D-xxx.md entries/D-xxx.md`,
    adjusting their headers to [entries.md](entries.md).
    Decisions that are only in the index become new files,
@@ -79,6 +97,11 @@ Prefer one commit per step, so each is easy to review.
    then give each task inside them a file of its own,
    leaving the objective's `## Tasks` as an ordered list of IDs.
    Open objectives and tasks in the index become files too.
+   A task title too long for a one-sentence `summary`
+   goes whole into `## Scope`.
+   Evidence kept in dated progress notes moves under `## Evidence`,
+   or `## Evidence` says it is in the notes above.
+   Take each done task's `completed:` date from the log.
 4. Keep acceptance criteria IDs,
    written as `- AC-016:` at the start of a line
    in their objective's `## Acceptance criteria`.
@@ -91,10 +114,10 @@ Prefer one commit per step, so each is easy to review.
 8. Replace the rules block with the one in [rules-block.md](rules-block.md),
    replace the sections `Objectives`, `Tasks`, `Decisions`,
    `Constraints and assumptions`, `Rejected approaches` and `Details`
-   with `Open entries` from `list.awk`,
+   with `## Open entries`, filled by `sh record.sh update`,
    and keep `Status`, `Handoff` and `Artifacts`.
-9. Check the invariants; `details/` is then empty.
-10. Commit, for example `Convert the record to objectives-record 6.0.0.`,
+9. Run `sh record.sh check`; `details/` is then empty.
+10. Commit, for example `Convert the record to objectives-record 6.1.0.`,
     and log the conversion.
 
 ### From version 4
