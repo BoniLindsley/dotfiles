@@ -11,99 +11,116 @@ When no record exists:
    `git branch meta/<branch>/objectives <branch>`,
    then the exclusion, worktree and sparse-checkout commands.
    Without git, create `.meta/objectives/` in the working directory.
-3. Write `objectives/OBJECTIVES.md` with the layout in [SKILL.md](SKILL.md):
-   the rules block, at least one objective,
-   an ordered first plan with task IDs,
-   known decisions and assumptions,
-   and an exact next action.
-4. Commit it, for example `Add O-001: <outcome>.`,
+3. In `objectives/`, create `entries/` and `log/`,
+   and copy [list.awk](list.awk) from this skill.
+4. Write the entries ([entries.md](entries.md)):
+   at least one objective with its criteria
+   and an ordered first plan in its `## Tasks`,
+   a file for each of those tasks,
+   and known decisions, constraints and assumptions.
+5. Write `objectives/OBJECTIVES.md` with the layout in [SKILL.md](SKILL.md):
+   the rules block, `Status` with an exact next action,
+   and `Open entries` from `list.awk`.
+6. Log the start, and commit, for example `Add O-001: <outcome>.`,
    before doing substantial project work.
 
 ## Finishing
 
-Before marking the work complete:
+Before marking an objective complete:
 
 1. Check the actual artifacts and every acceptance criterion.
-2. Resolve or explicitly close remaining blockers and decisions.
-3. Record the final evidence and mark the objectives `completed`.
-4. Set `Current task: none`,
-   and replace `Next action` with follow-up or maintenance guidance,
-   if any.
-5. Record it in a merge of the code branch up to the final commit.
-6. In the next commit, move the objectives to detail files
-   as in "Keeping the index short" in [SKILL.md](SKILL.md),
-   changing nothing else.
-   For each of their `data/` directories,
+2. Resolve or explicitly close remaining blockers and decisions,
+   and cancel tasks that are no longer needed, with the reason.
+3. In the objective's entry, set `status: completed`
+   and `completed: <date>`,
+   and write `## Delivered`:
+   what was delivered, where (paths, commits),
+   what was left out or not verified,
+   and the evidence for each criterion.
+   Make sure `applies` names the delivered paths.
+4. For each of its `data/` directories,
    keep or delete it, and log which.
+5. Set `Current task: none`,
+   replace `Next action` with follow-up or maintenance guidance,
+   if any, and rebuild `Open entries`.
+6. Record it in a merge of the code branch up to the final commit,
+   and log it.
 
+Nothing moves: the entry stays where it is,
+and leaves `Open entries` because of its status.
 A finished objectives branch stays as the audit trail
 and the starting point for later maintenance.
 
 ## Converting an older record
 
 Convert only with the user's approval:
-conversion moves the worktree and rewrites the rules block.
+conversion rewrites the rules block and the layout,
+and older versions may also move the worktree.
 Until then, keep working with the record as it is,
 following its own rules block,
 and mention in the briefing that it can be converted.
 
-From version 5.0 to 5.2
-(already at `.meta/objectives/<branch>`; no worktree moves):
+### From version 5
 
-1. Replace the rules block with the one in [rules-block.md](rules-block.md).
-2. Move the index's `## Log` lines into `log/<YYYY-MM-DD>.md`
-   by their dates, and remove the section.
-   Monthly files such as `log/2026-10.md` stay as they are;
-   `Details` names `log/` once.
-3. Commit, for example `Convert the record to objectives-record 5.3.0.`,
-   and log the conversion.
-4. In a separate commit, move done tasks and finished objectives
-   still in the index to their detail files.
+Version 5 keeps open entries in the index
+and finished ones in `details/`.
+Conversion gives every entry its own file;
+nothing is summarized or dropped.
+Prefer one commit per step, so each is easy to review.
 
-From version 4
-(checked out at `.objectives/<branch>`):
+1. Create `entries/` and copy [list.awk](list.awk).
+2. Move decision files: `git mv details/D-xxx.md entries/D-xxx.md`,
+   adjusting their headers to [entries.md](entries.md).
+   Decisions that are only in the index become new files,
+   their index text under `## Decision`.
+   Rejected approaches become decisions with status `rejected`,
+   with new IDs.
+3. Move objective files the same way,
+   then give each task inside them a file of its own,
+   leaving the objective's `## Tasks` as an ordered list of IDs.
+   Open objectives and tasks in the index become files too.
+4. Keep acceptance criteria IDs,
+   written as `- AC-016:` at the start of a line
+   in their objective's `## Acceptance criteria`.
+5. Give each constraint and assumption a file.
+   Conventions in `Handoff` become constraints.
+6. Write every ID range in full, in entries and in the index.
+7. Move the index's `## Log` lines, if any,
+   to `log/<YYYY-MM-DD>.md` by date;
+   monthly log files stay as they are.
+8. Replace the rules block with the one in [rules-block.md](rules-block.md),
+   replace the sections `Objectives`, `Tasks`, `Decisions`,
+   `Constraints and assumptions`, `Rejected approaches` and `Details`
+   with `Open entries` from `list.awk`,
+   and keep `Status`, `Handoff` and `Artifacts`.
+9. Check the invariants; `details/` is then empty.
+10. Commit, for example `Convert the record to objectives-record 6.0.0.`,
+    and log the conversion.
 
-1. Move the worktree under `.meta/`:
+### From version 4
 
-   ```sh
-   exclude="$(git rev-parse --git-common-dir)/info/exclude"
-   grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
-   mkdir -p .meta/objectives
-   git worktree move .objectives/<branch> .meta/objectives/<branch>
-   ```
+Version 4 is checked out at `.objectives/<branch>`.
+First move the worktree under `.meta/`:
 
-   When no worktrees are left in `.objectives/`,
-   remove the empty directory and the `/.objectives/` exclusion.
-2. Replace the rules block with the one in [rules-block.md](rules-block.md).
-3. Move decisions that still apply and take more than about five lines
-   into detail files, leaving summaries,
-   as in "Keeping the index short" in [SKILL.md](SKILL.md).
-   Remove their lines from `Details`.
-4. Add `Applies` to the entries that need it (invariant 12),
-   and the new header keys and body headings to detail files.
-   Remove files from `Artifacts` once an `Applies` line names them.
-5. Commit, for example `Convert the record to objectives-record 5.1.0.`,
-   and log the conversion.
+```sh
+exclude="$(git rev-parse --git-common-dir)/info/exclude"
+grep -qxF '/.meta/' "$exclude" || echo '/.meta/' >> "$exclude"
+mkdir -p .meta/objectives
+git worktree move .objectives/<branch> .meta/objectives/<branch>
+```
 
-From version 3, named resumable-objective
-(`OBJECTIVES.md` at the root of the objectives branch,
-checked out at `../<repository>.objectives/<branch>`):
+When no worktrees are left in `.objectives/`,
+remove the empty directory and the `/.objectives/` exclusion.
+Then follow "From version 5".
+
+### From version 3, named resumable-objective
+
+Version 3 keeps `OBJECTIVES.md` at the root of the objectives branch,
+checked out at `../<repository>.objectives/<branch>`.
 
 1. On the objectives branch, move the file into the directory:
    `mkdir objectives`, then `git mv OBJECTIVES.md objectives/OBJECTIVES.md`.
-2. Move completed and cancelled objectives, finished tasks,
-   long decision records and old log lines into detail files,
-   as in "Keeping the index short" in [SKILL.md](SKILL.md),
-   and add the `Details` section.
-   Rename the section `How to maintain this file`
-   to `How to maintain this record`,
-   rename `Progress` in `Status` to `Position`
-   and shorten it to the current position.
-3. Replace the rules block with the one in [rules-block.md](rules-block.md).
-4. Commit, for example `Convert the record to objectives-record 5.1.0.`,
-   and log the conversion.
-5. Move the worktree into the code checkout
-   and make it sparse:
+2. Move the worktree into the code checkout and make it sparse:
 
    ```sh
    exclude="$(git rev-parse --git-common-dir)/info/exclude"
@@ -113,8 +130,14 @@ checked out at `../<repository>.objectives/<branch>`):
    git -C .meta/objectives/<branch> sparse-checkout set --no-cone '/objectives/'
    ```
 
-From an older state file, such as `PROJECT_STATE.md`,
+3. Follow "From version 5", taking every entry from the index.
+   Rename `Progress` in `Status` to `Position`
+   and shorten it to the current position.
+
+### From an older state file
+
+From a file such as `PROJECT_STATE.md`,
 keep its objectives, tasks, decisions, assumptions,
 evidence and log with their IDs,
-arrange them as [SKILL.md](SKILL.md) describes,
+arrange them as entries and an index as [SKILL.md](SKILL.md) describes,
 and drop the old embedded protocol.

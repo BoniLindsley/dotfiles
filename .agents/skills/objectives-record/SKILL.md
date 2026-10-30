@@ -4,7 +4,8 @@ description: >
   Keep long-running work resumable across infrequent or interrupted sessions
   by tracking objectives, tasks and decisions in an objectives directory:
   a short OBJECTIVES.md index read every session,
-  and detail files loaded only when needed.
+  and one file per objective, task, decision, constraint and assumption,
+  read when the work needs it.
   In git it lives on a meta/BRANCH/objectives branch
   that runs parallel to a code branch and merges it in as work completes,
   checked out at .meta/objectives/BRANCH inside the code checkout.
@@ -15,7 +16,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.3.0
+  version: 6.0.0
 ---
 
 # Objectives record
@@ -24,23 +25,24 @@ Use this skill for work that spans several sessions,
 especially projects worked on irregularly.
 The aim is that any later session,
 by any capable agent or person,
-can start useful work after reading one short file,
+can start useful work after reading one short file
+and the few entries that file points to,
 without reconstructing earlier reasoning.
 
-The durable record is an objectives directory.
-Its index, `OBJECTIVES.md`, holds what every session needs:
-where work stands, the open objectives and how each is verified,
-the open tasks, and the decisions and constraints that still apply.
-Detail files hold the rest:
-finished objectives with their tasks and evidence,
-and long decision records.
-Log files hold one line per material change, one file per day.
-Like skills, they are listed in the index with a one-line summary
-and read only when the work at hand needs them.
+The durable record is an objectives directory,
+kept like a small database of plain text files.
+Each objective, task, decision, constraint and assumption
+is an entry file, which is authoritative.
+The index, `OBJECTIVES.md`, holds what every session needs:
+where work stands, the next step,
+and a list of the open entries that can be rebuilt from their files.
+Log files record events, one file per day.
 Data files hold what a task needs that is not code,
 such as a spike or raw measurements.
-Nothing but data no longer needed is deleted from the record,
-so its history does not depend on git.
+Nothing moves when work finishes: an entry's status changes in place.
+Nothing but data no longer needed is deleted,
+so the record's history does not depend on git.
+
 ## When to use
 
 Use this skill when any of the following is true:
@@ -60,29 +62,39 @@ unless the user asks for it.
 
 ```text
 objectives/
-  OBJECTIVES.md      Index: always read in full.
-  details/O-002.md   A finished objective, with its tasks and evidence.
-  details/D-012.md   A decision whose record is too long for the index.
-  log/2026-10-18.md  Log lines of one day.
-  data/T-028/        Files a task or decision needs that are not code.
+  OBJECTIVES.md       Index: always read in full.
+  list.awk            Lists open entries from their headers.
+  entries/O-008.md    One objective: outcome, criteria, ordered tasks.
+  entries/T-053.md    One task.
+  entries/D-027.md    One decision.
+  entries/C-002.md    One constraint.
+  entries/A-006.md    One assumption.
+  log/2026-10-18.md   Events of one day.
+  data/T-053/         Files a task or decision needs that are not code.
 ```
 
 - **`OBJECTIVES.md`** is the index.
-  Keep it short enough to read at the start of every session:
-  aim for under about 500 lines.
-- **`details/<ID>.md`** holds one objective or one decision
-  in full.
-  A decision that still applies can have a detail file too,
-  with a summary of it in the index.
-  An objective's file can exist while the objective is active,
-  holding its finished tasks.
-- **`log/<YYYY-MM-DD>.md`** holds the log lines of one day.
-  Log lines go only there, never into the index:
-  `Status` and `Handoff` carry what the next session needs.
+  Only `Status`, `Next action`, `Handoff` and `Artifacts`
+  are written by hand;
+  `Open entries` is the output of `list.awk`.
+  It stays short because finished entries drop out of that list.
+- **`entries/<ID>.md`** holds one entry,
+  with a header of fixed keys and fixed body headings per type:
+  see [entries.md](entries.md).
+  Entries are authoritative:
+  where the index and an entry disagree, the entry wins,
+  and the index is corrected.
+- **`list.awk`** is copied from this skill when the record starts,
+  so the record does not need the skill to list itself.
+- **`log/<YYYY-MM-DD>.md`** holds the events of one day:
+  status changes, decisions taken, renames, runs.
+  Each line names the full IDs it concerns,
+  so `grep -H 'T-053' log/*.md` gives an entry's history.
+  Log lines go nowhere else.
 - **`data/<ID>/`** holds files that the entry `<ID>` needs
   and that are not part of the code base:
   spikes, scripts to run by hand, raw outputs, measurements.
-  The entry names each file, for example in its `Evidence`.
+  The entry names each file, for example in its `## Evidence`.
   Nothing in the code imports or tests them;
   a spike that becomes code is rewritten on the code branch.
 
@@ -96,11 +108,36 @@ with a log line naming the files
 and where their results are summarized:
 the record's summary is the authority, the data only a backup.
 
-Detail files start with a header of fixed keys and use fixed body headings:
-see [details.md](details.md).
+### IDs
 
-The index names every detail file with its ID, status and summary,
-so a session can tell which ones it needs.
+- **IDs are unique within the record:**
+  `O-`, `T-`, `D-`, `C-`, `A-` for entries,
+  and `AC-` for acceptance criteria,
+  three digits, never reused.
+  A new ID is the highest of its prefix in `entries/` and `log/`, plus one:
+
+  ```sh
+  grep -rohwE 'T-[0-9]+' entries log | sort -t- -k2 -n | tail -1
+  ```
+
+  Create the file only if none exists,
+  for example with `set -o noclobber` in the shell,
+  so that a collision fails instead of overwriting.
+- **Acceptance criteria have no files**,
+  so nothing on disk keeps their IDs unique.
+  Define each once, as `- AC-020:` at the start of a line
+  in its objective's `## Acceptance criteria`;
+  `grep -l '^- AC-020:' entries/O-*.md` finds its objective,
+  and invariant 17 catches duplicates.
+- **IDs do not name their parent.**
+  Tasks and criteria keep their IDs if they move to another objective:
+  code comments, commit messages and logs refer to them.
+- **One session writes the record at a time.**
+  Sequential IDs depend on it.
+  If parallel writers become normal,
+  give each its own range of numbers.
+- **Write IDs in full**, never as ranges such as `T-028 to T-031`,
+  so that a search for any of them finds every mention.
 
 ### Where it lives
 
@@ -126,7 +163,8 @@ are in [git-setup.md](git-setup.md).
 In git, every change to the record is a commit on its objectives branch.
 Each commit describes the change to objectives, tasks or decisions,
 not the code.
-The record itself keeps the history:
+The record itself keeps the history,
+in its entries and its log:
 git makes it easy to share and to see when things changed,
 but nothing should be recoverable only from git.
 
@@ -172,26 +210,13 @@ git -C .meta/objectives/<branch> commit -m "Record T-053 done for O-008."
   git restore --source=<completing-commit> --staged --worktree -- . ':!objectives'
   ```
 
-### Archive in a commit of its own
-
-When an update marks a task `done`,
-or an objective `completed` or `cancelled`,
-move the entry out of the index in the next commit,
-as in "Keeping the index short",
-changing nothing else,
-for example `Archive T-053 to details/O-008.md.`
-When the marking is a merge with code, the archive comes after the merge.
-The index at the marking commit then shows the entry's last state
-in context, and the archive commit is only a move.
-
 ### Commit updates without code
 
 Use an ordinary commit on the objectives branch,
 changing only files under `objectives/`, for updates without new code:
 a new objective, a decision asked or answered,
 a checkpoint in the middle of a task,
-a handoff at the end of a session,
-or moving entries into detail files.
+or a handoff at the end of a session.
 
 ### Find what has not been recorded
 
@@ -226,47 +251,56 @@ Published ones may not.
 2. Read the whole of `OBJECTIVES.md` before planning or acting,
    and again after compaction,
    since a summary can drop the position and the decisions.
-   Do not read detail files yet.
-3. Compare it with the project:
+3. Rebuild the open entries
+   (`awk -f list.awk entries/*.md | sort | cut -f 2-`)
+   and compare them with `Open entries`.
+   Where they differ, the entries are right: correct the index.
+4. Compare the record with the project:
    unrecorded code commits (see above), the working tree,
    test results, and current user instructions.
-4. Repair contradictions before relying on the record:
-   statuses that disagree, done tasks without evidence,
+5. Repair contradictions before relying on the record,
+   checking the invariants below:
+   statuses that disagree with evidence,
    references to IDs that do not exist,
    decisions still open that were answered,
-   deferred decisions whose trigger has fired,
-   detail files missing from the index or listed but missing.
+   deferred decisions whose trigger has fired.
    Log material repairs.
-5. If the revalidation interval has passed,
+6. If the revalidation interval has passed,
    or the next action depends on something that may have changed
    (dependencies, services, external facts),
    recheck only what could change the next work.
    Do not redo stable work because time has passed.
-6. When useful, brief the user:
+7. When useful, brief the user:
    current objective, where work stopped,
    open decisions or blockers, and the recommended next task.
 
-### 2. Load details only when needed
+### 2. Read the entries the work needs
 
-Read a detail file when the work at hand needs what it holds:
+Read an entry when the work at hand needs it:
 
-- the next task names its ID, or depends on it;
-- the work changes something its `Applies` line or `applies:` key names,
-  such as code a finished objective delivered;
-- a decision summary in the index is not enough to apply it,
+- `Next action` or the current task names it;
+- it is the current task's objective, or a task it depends on;
+- its `applies:` covers what the work changes:
+  `grep -l '^applies:.*<path>' entries/*.md`,
+  including finished objectives that delivered that code;
+- its summary is not enough to apply it,
   or the work may contradict it;
 - the user asks about it;
 - reconciling needs its evidence.
 
-Read only the files that apply.
-The index summary is enough to know that something exists
-and roughly what it decided.
+Read only the entries that apply.
+A summary in `Open entries` is enough to know that something exists
+and roughly what it says.
+Entries not listed there are finished;
+find them with `grep` when the work touches what they cover.
 
 ### 3. Choose work
 
 Pick the most valuable ready task:
 dependencies met, no open decision blocking it,
 and small enough to reach a clean checkpoint in the session.
+Follow the order in its objective's `## Tasks`
+unless a reason to change it is recorded.
 If the user gives a time budget, use it to choose;
 otherwise do not ask unless it would change the choice.
 Normally keep one task `in_progress`.
@@ -279,7 +313,8 @@ For choices that belong to the user:
 
 - Ask one decision at a time, in plain text,
   with a recommendation first and the main alternatives.
-- Record it as `awaiting_user` with the question and the date asked.
+- Record it as a decision entry, `awaiting_user`,
+  with the question under `## Question` and the date in `asked`.
 - Continue with unrelated ready work while waiting.
 - Record the answer in the user's own words, with the date.
 
@@ -295,8 +330,18 @@ changing an objective,
 and before risky, long or interruption-prone work.
 A checkpoint should let someone resume
 even if the session stops without warning.
-When a task changes status,
-update `Current task`, `Position` and `Next action` together.
+
+An update changes the entries it concerns,
+adds a line to today's log for each event,
+and, when a task changes status,
+updates `Current task`, `Position`, `Next action`
+and `Open entries` in the index together.
+
+Put each piece of content where [entries.md](entries.md) says:
+state and findings in the entry they describe,
+or in the entry that will use them, citing their source;
+events in the log;
+where work stands in `Status`.
 
 If someone else may edit the record,
 re-read it just before writing and merge their changes.
@@ -322,8 +367,7 @@ An empty task list is not enough.
 If all tasks are done but a criterion fails,
 add tasks to fix it.
 If later evidence contradicts a `done` task,
-reopen it and say why,
-moving it back into the index if it had been moved out.
+reopen it, say why in the entry, and log it.
 
 ### 7. Hand off
 
@@ -371,261 +415,101 @@ Updated: <YYYY-MM-DD>. Recheck assumptions after: <N> days.
 - Do not redo: <...>
 - Recheck after a long gap: <A-xxx, ...>
 
-## Objectives
+## Open entries
 
-## Tasks
-
-## Decisions
-
-## Constraints and assumptions
-
-## Rejected approaches
+<The output of awk -f list.awk entries/*.md | sort | cut -f 2-.>
 
 ## Artifacts
-
-## Details
 ```
 
 `Status` comes first because it is what every session needs first.
 `Position` says where work stands now, not how it got there:
-the story belongs in the log files and in detail files.
-The sections after `Status` hold longer-lived knowledge.
+the story belongs in the log.
+`Handoff` holds only what the next work needs;
+lasting conventions are constraints.
 
-### Entries
-
-Every entry has a permanent ID and a status in backticks.
-Use the fields below.
-Leave out fields that do not apply,
-rather than filling them with "n/a".
-
-**Objectives** state an outcome
-with observable acceptance criteria and how each is checked.
+`Open entries` lists, one line each,
+objectives that are `proposed`, `active`, `paused` or `long-term`;
+tasks that are `todo`, `in_progress` or `blocked`, with their objective;
+decisions that are `proposed`, `awaiting_user`, `accepted` or `deferred`;
+constraints that are `active`;
+and assumptions that are `unverified` or `holds`:
 
 ```markdown
-- **O-008** `[active]` The robot cooks a stack of pancakes
-  without anyone touching the pan.
-  - AC-020: Each pancake is flipped exactly once.
-    Check: `pytest tests/test_flip`; flip count in the log.
-  - AC-021: No pancake leaves the pan raw in the middle.
-    Check: user eats the third pancake.
-  - Evidence: none yet.
-  - Notes: Resolves D-022.
-```
-
-Statuses: `proposed`, `active`, `paused`, `long-term` (not scheduled),
-`completed`, `cancelled` (with the reason).
-If scope changes,
-update the objective, its criteria, dependent tasks and decisions together.
-
-**Tasks** are ordered, independently checkable steps toward an objective.
-
-```markdown
-- **T-053** `[done]` Watch the batter through the camera;
-  flip when the bubbles stop rising.
-  - Objective: O-008. Depends on: T-052. Size: M.
-  - Done when: tests on recorded videos flip at the right frame,
-    and never flip twice.
-  - Evidence: 2026-10-16, sandbox without the camera:
-    `pytest tests/test_flip` 31 passed on recorded videos.
-    Code: `ae1950b`.
-```
-
-Statuses: `todo`, `in_progress`, `blocked` (name the blocker),
-`done` (with evidence), `cancelled` (with the reason).
-Sizes: `XS` (quick check), `S` (focused), `M` (normal),
-`L` (split it before starting).
-Add, reorder, cancel or reopen tasks as evidence changes.
-Dependencies point to existing tasks or name something outside the project.
-Keep progress notes to what the next session needs;
-long notes belong in the objective's detail file.
-
-**Decisions** record material choices,
-including the ones rejected,
-so that later sessions do not rediscover dead ends.
-
-```markdown
-- **D-027** `[accepted]` The first pancake of a batch goes to the cook.
-  - Applies: `src/flipbot/serve/`, plating order.
-  - Context: the first pancake comes out pale while the pan heats up;
-    nobody wants it on the plate.
-  - Decision: user, 2026-10-16:
-    "The cook eats the first one. That's the rule."
-    Rejected: throwing it away.
-  - Revisit when: the pan gets a preheat step.
-```
-
-A decision that still applies
-can instead be summarized in the index in at most three lines,
-with its full record in `details/D-xxx.md`:
-what was decided, its status, what it applies to,
-what was rejected, the revisit trigger if any, and the file.
-Do this once the full record passes about five lines,
-and always for spikes, measurements and alternatives in depth.
-
-```markdown
-- **D-027** `[accepted]` The first pancake of a batch goes to the cook.
-  Applies: `src/flipbot/serve/`, plating order.
-  Rejected: throwing it away. Revisit: preheat step. `details/D-027.md`
-```
-
-`Applies` is what lets a session tell,
-from the index alone,
-whether a decision constrains the work at hand.
-
-Keep in the index, in full,
-what a session needs to act without opening the file:
-the question and date of an `awaiting_user` decision,
-and anything a rule of the record refers to.
-
-Statuses: `proposed`, `awaiting_user` (with the question and the date asked),
-`accepted`, `rejected` (with the reason),
-`deferred` (with a revisit trigger),
-`superseded` (naming the decision that replaces it).
-When a deferred decision's trigger fires,
-reopen it or turn it into a task or constraint.
-
-**Constraints and assumptions:**
-constraints (`C-xxx`) are rules the work must follow.
-Assumptions (`A-xxx`) are beliefs the plan depends on.
-Each says what it applies to;
-an assumption also says why it matters, how to check it,
-and when it was last checked.
-
-```markdown
-- **C-002** The spatula never leaves the pan while the burner is on.
-  Applies: `src/flipbot/flip/`, `spatula.py`. From `AGENTS.md`.
-- **A-006** The camera sees the whole pan from above.
-  Applies: bubble watching (T-053). Check: `flipbot camera --snapshot`
-  shows all four edges. Last checked: 2026-10-26.
-```
-
-**Rejected approaches** lists what not to try again, why,
-and what it applies to,
-including approaches dropped without a formal decision.
-
-```markdown
-- Tossing pancakes in the air to flip them: impressive,
-  but one in five lands on the floor. Applies: flip motion.
+- O-008 `[active]` The robot cooks pancakes without help.
+- T-053 `[todo]` O-008: Flip when the bubbles stop rising.
+- D-027 `[accepted]` The first pancake of a batch goes to the cook.
+- C-002 `[active]` The spatula never leaves the pan while the burner is on.
+- A-006 `[holds]` The camera sees the whole pan from above.
 ```
 
 **Artifacts** lists commands and external resources
-that no entry's `Applies` names,
+that no entry's `applies` names,
 such as a service, a dashboard, or a script to check the environment.
-Files are found through `Applies`, not listed here again.
-
-**Details** lists every other detail file, one line each:
-those not named by a summary in `Decisions`.
-A completed objective's line says what it applies to:
-the paths it delivered.
-
-```markdown
-- **O-002** `[completed]` Batter is mixed without lumps.
-  Applies: `src/flipbot/mix/`. `details/O-002.md`
-- **D-004** `[superseded]` Flip on a fixed timer;
-  replaced by D-012. `details/D-004.md`
-- Log: `log/`, one file per day (2026-10-22 to 2026-10-27).
-```
-
-**Log files** have one line per material change, newest last,
-in `log/<YYYY-MM-DD>.md` for the day of the change.
-The index has no log section.
-
-```markdown
-# Log: 2026-10-18
-
-- O-008: T-053 done;
-  flips when the bubbles stop rising, `flipbot.flip.watch_bubbles`.
-  Code: up to `ae1950b`.
-```
 
 ### Invariants
 
 After every substantial update:
 
-1. Every ID is unique and has a status.
+1. Every entry file's name is its `id`,
+   and its `status` is one of its type's values ([entries.md](entries.md)).
 2. Every active objective has acceptance criteria, each with a check.
-3. Every task names an existing objective.
-4. Every dependency names an existing task or an external item.
-5. Every `done` task and `completed` objective has evidence,
-   in the index or in its detail file.
+3. Every task names one existing objective in `objective`,
+   and appears in that objective's `## Tasks`.
+4. Every `depends` names an existing entry or an external item.
+5. Every `done` task and `completed` objective has evidence.
 6. Every `blocked` task names its blocker.
 7. Every `rejected` decision has a reason,
-   every `deferred` one a revisit trigger,
-   and every `awaiting_user` one its question.
+   every `deferred` one a `revisit` trigger,
+   every `superseded` one its `superseded_by`,
+   and every `awaiting_user` one its question and `asked`.
 8. `Current task` is `none` or a task that is `in_progress`,
    and `Next action` belongs to it or to the task that comes next.
 9. `Next action` is one concrete, executable step
    that has not been done yet.
 10. The rules block is present and unchanged apart from the branch name
-    (compare with [rules-block.md](rules-block.md)).
-11. Every detail file is listed in `Details`
-    or named by its summary in `Decisions`,
-    every listed file exists,
-    and its header's ID, status, `applies` and `revisit`
-    match the index.
-12. Every decision that applies, constraint, assumption,
-    rejected approach and completed objective says what it applies to.
-13. No secrets or credentials appear.
-14. Every directory under `data/` belongs to an existing ID,
+    (compare with [rules-block.md](rules-block.md)),
+    and `list.awk` matches this skill's.
+11. `Open entries` matches the output of `list.awk`.
+12. Every objective, decision, constraint and assumption
+    says what it applies to.
+13. IDs are written in full everywhere, never as ranges.
+14. Log lines are only in `log/<YYYY-MM-DD>.md`.
+15. Every directory under `data/` belongs to an existing ID,
     every file in it is named by that entry,
     and every named file exists.
-15. A `done` task, or a `completed` or `cancelled` objective,
-    has no entry in the index's `Tasks` or `Objectives`,
-    except in the commit that marked it;
-    only its one-line pointer remains.
-16. The index has no log lines;
-    they are in `log/<YYYY-MM-DD>.md`.
+16. No secrets or credentials appear.
+17. Every acceptance criterion ID is defined once:
+    `grep -ohE '^- AC-[0-9]+' entries/O-*.md | sort | uniq -d`
+    prints nothing.
 
 Fix violations when found and log material repairs.
 
 ## Keeping the index short
 
-The index is read at the start of every session, so keep it short.
-Move entries out of it instead of deleting them,
-so the record keeps its own history.
-Archive finished tasks and objectives always,
-each in a commit of its own right after the one that marks it
-(see "Archive in a commit of its own").
-Move other entries at a handoff,
-or when the index passes about 500 lines.
+Finished entries leave `Open entries` by themselves,
+so the index grows only with open work.
+Keep the hand-written parts short too:
 
-- **A completed or cancelled objective**
-  moves to `details/O-xxx.md` with its criteria, evidence,
-  tasks and progress notes, unchanged,
-  under `## Delivered`:
-  what was delivered, where (paths, commits),
-  and what was left out or not verified.
-  The index keeps one line in `Details`, with what it applies to.
-  Decisions it settled stay in the index while they still apply.
-- **Done tasks**
-  move to their objective's detail file,
-  even while the objective is active.
-  The objective's index entry says which tasks are done
-  and where they are,
-  and keeps any evidence an open criterion still needs.
-  Notes the next work still needs go to `Status` or `Handoff`.
-- **A decision that still applies**
-  moves to `details/D-xxx.md` once its record passes about five lines.
-  The index keeps a summary of one or two lines
-  that points to the file (see "Entries").
-- **A decision that no longer applies**
-  (superseded, or about finished work only)
-  moves whole to its detail file,
-  or to its objective's file when it only concerned that objective.
 - **`Status` and `Handoff`** lose items that the next work no longer needs.
+- **Notes that outlast the next task** go to the entry they concern.
+- **Conventions** go to constraints, or to `AGENTS.md`.
+- **An objective with too many open tasks** to read at a glance
+  is usually several objectives.
 
 Keep in the index everything needed to resume:
-open objectives and their criteria, the active plan,
-decisions, constraints and rejections that still apply,
-assumptions, blockers, recent evidence and the next action.
+the position, blockers, the next action,
+and what not to redo.
 
 ## Reference files
 
 Read these only when the work needs them:
 
+- [entries.md](entries.md): header keys, statuses and body headings
+  of each entry type, and what content goes where.
 - [git-setup.md](git-setup.md): where the record lives in git and why,
   the worktree commands, new code branches, the record without git.
 - [rules-block.md](rules-block.md): the rules block every index carries.
-- [details.md](details.md): detail-file header keys and body headings.
+- [list.awk](list.awk): the listing script every record carries.
 - [lifecycle.md](lifecycle.md): starting a record,
   finishing an objective, converting an older record.

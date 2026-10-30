@@ -47,7 +47,8 @@ Records start at 5.1.0; earlier reasons were not kept.
     and used for no decision. User, 2026-10-30:
     "Is the log usually used? Consider splitting the logs by day
     instead, and may be always write logs outside of the index."
-- **D-5** `[accepted]` 5.3.0: Always archive finished tasks
+- **D-5** `[superseded]` 5.3.0, replaced by D-6 in 6.0.0:
+  Always archive finished tasks
   and objectives, each in a commit of its own.
   - Change: done tasks and completed or cancelled objectives move
     to detail files in the commit right after the one that marks them,
@@ -60,3 +61,48 @@ Records start at 5.1.0; earlier reasons were not kept.
     objective update commits, such ask marking as completed,
     as separate commit from archiving them,
     so the last update before archiving is easily seen."
+- **D-6** `[accepted]` 6.0.0: One file per entry; the index lists
+  open entries rebuilt from their headers.
+  - Change: `entries/<ID>.md` for every objective, task, decision,
+    constraint and assumption, authoritative over the index;
+    `list.awk` rebuilds `Open entries`; only `Status`, `Next action`,
+    `Handoff` and `Artifacts` are hand-written; objectives list their
+    tasks in order without statuses; rejected approaches are
+    decisions; header rules for searching (one key per line,
+    a parent key `objective`, IDs in full, never ranges);
+    nothing moves when work finishes, replacing D-5's archive commits;
+    `details.md` becomes `entries.md`; invariants rewritten.
+  - Reason: a 413-line index was about half irrelevant to the next
+    task, and archiving still moved entries. User, 2026-10-30:
+    "what about always storing objective information in the details
+    directory? This avoids moving." Then: "Objectives and tasks all get
+    their own files. [...] If status drift apart, I would expect the
+    details files to be more up to date." And: "This looks more and
+    more like a database than a document, which is fine."
+    Rejected: one file per objective holding its tasks
+    (done tasks accumulate; still moves); a stored index of tasks by
+    parent (searchable from headers, and would drift).
+- **D-7** `[accepted]` 6.0.0: Logs hold events; entries hold state.
+  - Change: log lines record events naming full IDs, in daily files;
+    entries hold current state and findings, edited in place,
+    with meaningful rewrites logged; a finding goes to the entry
+    that will use it, citing its source; conventions become
+    constraints, not `Handoff` items.
+  - Reason: an earlier proposal appended dated notes to entry files.
+    User, 2026-10-30: "Not sure about keeping logs in decision or
+    details file. Are logs not mostly events that happened?"
+- **D-8** `[accepted]` 6.0.0: ID allocation.
+  - Change: entries with files get record-wide IDs, the next from
+    `entries/` and `log/`, created only if no file exists; acceptance
+    criteria keep record-wide IDs (`AC-020`), defined once as
+    `- AC-020:` in their objective, with an invariant for duplicates;
+    one session writes the record at a time.
+  - Reason: user, 2026-10-30: "How would IDs be kept unique for other
+    types such as AC?" and "Is a similar numbering pattern relevant
+    for tasks?" Tasks are referenced in code and commits and may
+    change objective, so parent-qualified task IDs were rejected.
+    Parent-qualified criteria (`O-008.AC-1`) were drafted, then
+    dropped; user, 2026-10-30: "If AC can be searched easily as with
+    tasks, can they be kept without an objective ID prefix for now?"
+    Studied: git-issue (one directory per issue, status as a tag,
+    no stored index); not copied: identity and dates from git history.
