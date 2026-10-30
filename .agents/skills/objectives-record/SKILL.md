@@ -15,7 +15,7 @@ description: >
   is in the project or mentioned in the conversation.
   Formerly named resumable-objective.
 metadata:
-  version: 5.1.1
+  version: 5.1.2
 ---
 
 # Objectives record
@@ -260,6 +260,8 @@ changing an objective,
 and before risky, long or interruption-prone work.
 A checkpoint should let someone resume
 even if the session stops without warning.
+When a task changes status,
+update `Current task`, `Position` and `Next action` together.
 
 If someone else may edit the record,
 re-read it just before writing and merge their changes.
@@ -513,8 +515,10 @@ After every substantial update:
 7. Every `rejected` decision has a reason,
    every `deferred` one a revisit trigger,
    and every `awaiting_user` one its question.
-8. `Current task` is `none` or a task that is `in_progress`.
-9. `Next action` is one concrete, executable step.
+8. `Current task` is `none` or a task that is `in_progress`,
+   and `Next action` belongs to it or to the task that comes next.
+9. `Next action` is one concrete, executable step
+   that has not been done yet.
 10. The rules block is present and unchanged apart from the branch name
     (compare with [rules-block.md](rules-block.md)).
 11. Every detail file is listed in `Details`
