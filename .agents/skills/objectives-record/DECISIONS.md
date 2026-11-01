@@ -157,4 +157,44 @@ Records start at 5.1.0; earlier reasons were not kept.
     staged those situations. User, 2026-10-30: "Are those really worth
     putting in the instructions? Feels adversarial if an agent wants to
     do that."
-
+- **D-13** `[accepted]` 6.2.1: The description says only when to load.
+  - Change: the description names only what the skill keeps
+    and when to load it: an objective unlikely to finish
+    in one session, work stopping to be resumed later,
+    or an existing record, by the names that show one:
+    OBJECTIVES.md, `.meta/objectives`, `.objectives`
+    and `meta/*/objectives`.
+    It drops the index and entry files, the git branch,
+    its merges and its checkout location, long gaps between sessions,
+    and the former name.
+    `When to use` goes, as does the opening sentence
+    repeating the description; the body opens with the aim.
+    The overview states as "when X, do Y" that finished entries
+    stay in place and only unneeded data is deleted.
+  - Reason: user, 2026-10-30: "There is a lot of implementation detail
+    in its description." The former name only mattered for conversion,
+    which is started on purpose and reads `lifecycle.md`.
+    User, 2026-10-30: "Migration can be explicitly triggered
+    if necessary, which will necessitate reading related documents."
+    The body is read only after the description has matched,
+    so repeating when to use the skill there adds nothing.
+    User, 2026-10-30, on the opening paragraph:
+    "The whole paragraph largely repeats the header information."
+    The wording of the first two lines and the stop condition
+    are the user's, 2026-10-30: "Keep work resumable across
+    interrupted sessions with a record of objectives, tasks and
+    decisions. Use when an objective is unlikely to finish in one
+    session, a session is interrupted, or whenever OBJECTIVES.md [...]"
+    The overview kept its rule against moving and deleting,
+    since agents tidy finished items away by habit and D-5 once
+    archived them, but its double negative was hard to read.
+    User, 2026-10-30: "Conditional negative instructions feel harder
+    to follow. "When X, do Y" is probably simpler for agents."
+  - Rejected: "a session is interrupted" as worded; an agent learns
+    of a sudden interruption only once it can no longer write,
+    so the condition is work stopping to be resumed later.
+    Long gaps, costly context, and "the user asks for persistent
+    or resumable tracking" as reasons, and an exception for trivial
+    one-session work: long gaps imply several sessions,
+    costly context comes with them, asking for a skill's work
+    loads it anyway, and trivial work fails the first condition.

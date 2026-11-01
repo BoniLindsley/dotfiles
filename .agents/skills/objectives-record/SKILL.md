@@ -1,28 +1,16 @@
 ---
 name: objectives-record
 description: >
-  Keep long-running work resumable across infrequent or interrupted sessions
-  by tracking objectives, tasks and decisions in an objectives directory:
-  a short OBJECTIVES.md index read every session,
-  and one file per objective, task, decision, constraint and assumption,
-  read when the work needs it.
-  In git it lives on a meta/BRANCH/objectives branch
-  that runs parallel to a code branch and merges it in as work completes,
-  checked out at .meta/objectives/BRANCH inside the code checkout.
+  Keep work resumable across interrupted sessions
+  with a record of objectives, tasks and decisions.
   Use when an objective is unlikely to finish in one session,
-  when sessions may be separated by long gaps,
+  when work stops to be resumed later,
   or whenever OBJECTIVES.md, a .meta/objectives or .objectives directory
-  or a meta/BRANCH/objectives branch
-  is in the project or mentioned in the conversation.
-  Formerly named resumable-objective.
+  or a meta/*/objectives branch is in the project or mentioned.
 metadata:
-  version: 6.2.0
+  version: 6.2.1
 ---
 
-# Objectives record
-
-Use this skill for work that spans several sessions,
-especially projects worked on irregularly.
 The aim is that any later session,
 by any capable agent or person,
 can start useful work after reading one short file
@@ -35,24 +23,9 @@ is an entry file, which is authoritative.
 The index, `OBJECTIVES.md`, holds where work stands and the next step;
 `sh record.sh list` lists the open entries from their files.
 Log files record events, one file per day.
-Nothing moves when work finishes: an entry's status changes in place.
-Nothing but data no longer needed is deleted,
+When work finishes, only the entry's status changes, in place.
+Only data no longer needed may be deleted,
 so the record's history does not depend on git.
-
-## When to use
-
-Use this skill when any of the following is true:
-
-- The objective is unlikely to be completed in the current session.
-- Sessions are expected to be short, irregular or far apart.
-- The work has dependencies, open decisions,
-  or context that would be costly to rediscover.
-- `OBJECTIVES.md`, a `.meta/objectives` or `.objectives` directory
-  or a `meta/<branch>/objectives` branch already exists.
-- The user asks for persistent or resumable tracking.
-
-Do not use it for trivial one-session work
-unless the user asks for it.
 
 ## The objectives directory
 
