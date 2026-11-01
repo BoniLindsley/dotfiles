@@ -13,7 +13,7 @@ import typing
 from typing import Awaitable, Callable, Dict, Generator, List, Union
 
 # Internal modules.
-from ..curses_ext import selector_loop
+from ..curses_ext import input_loop
 from . import compare
 from . import rc
 from . import runner
@@ -225,17 +225,19 @@ class App:
         self.view.message = summary + " " + self.view.message
 
 
-async def run(daemon: rc.Daemon, left: str, right: str) -> None:
-    """Run the app in the curses event loop of ``curses_ext.run``."""
-    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
+async def run(
+    daemon: rc.Daemon, window: "curses.window", *, left: str, right: str
+) -> None:
+    """Run the app in ``window``, on an ``input_loop.EventLoop``."""
+    window_input = input_loop.WindowInput(window)
     app = App(
         view=screen.Screen(tree.Model(), left=left, right=right),
-        window=loop.window,
+        window=window,
         compare_files=functools.partial(compare.compare, daemon),
         copy_files=functools.partial(transfer.copy_files, daemon),
         styles=attributes(),
     )
-    await app.run(loop.getch)
+    await app.run(window_input.getch)
 
 
 def main(argv: Union[None, List[str]] = None) -> int:
@@ -250,7 +252,11 @@ def main(argv: Union[None, List[str]] = None) -> int:
     os.environ.setdefault("ESCDELAY", "25")
     try:
         with rc.Daemon(runner.runner_from_arguments(arguments)) as daemon:
-            selector_loop.run(run(daemon, arguments.left, arguments.right))
+            input_loop.run(
+                functools.partial(
+                    run, daemon, left=arguments.left, right=arguments.right
+                )
+            )
             return 0
     except (OSError, rc.RcError, runner.RcloneError) as error:
         print(error, file=sys.stderr)
