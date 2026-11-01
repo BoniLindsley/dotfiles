@@ -91,7 +91,8 @@ class FakeConsole:
     def reset(self) -> None:
         self.resets += 1
 
-    def wait(self, timeout: Optional[float]) -> None:
+    def wait(self, timeout: Optional[float], with_input: bool) -> None:
+        assert with_input
         self.waits.append(timeout)
         select.select(
             [self.input_socket]
@@ -403,9 +404,11 @@ class TestEventLoop:
         wait = getattr(waiter, name)
         timeouts = []  # type: List[Optional[float]]
 
-        def record(timeout: Optional[float] = None) -> typing.Any:
+        def record(
+            timeout: Optional[float] = None, **kwargs: typing.Any
+        ) -> typing.Any:
             timeouts.append(timeout)
-            return wait(timeout)
+            return wait(timeout, **kwargs)
 
         monkeypatch.setattr(waiter, name, record)
         loop.run_until_complete(asyncio.sleep(0.05))

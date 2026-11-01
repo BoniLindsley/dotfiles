@@ -13,13 +13,16 @@ import collections
 import contextlib
 import curses
 import os
+import select
 import selectors
 import signal
 import socket
 import sys
+import threading
+import time
 import typing
 
-from typing import Iterator, List
+from typing import Dict, Iterator, List, Optional, Tuple
 from unittest.mock import Mock
 
 # External dependencies.
@@ -28,6 +31,7 @@ import pytest
 # Internal modules.
 from bonipy35 import asyncio_ext
 from bonipy35.curses_ext.input_loop import (
+    ConsoleSelector,
     EventLoop,
     InputSelector,
     InputWaiter,
@@ -137,8 +141,75 @@ def fixture_stdin(terminal: Terminal) -> Iterator[Terminal]:
         os.close(saved)
 
 
-def is_registered(selector: InputSelector, terminal: Terminal) -> bool:
+class FakeConsole:
+    """Stand in for the Windows console, waiting with ``select``.
+
+    The terminal's input socket plays the console input handle;
+    bound descriptors play sockets bound to the console's event.
+    """
+
+    def __init__(self, terminal: Terminal) -> None:
+        self.input_fd = terminal.input_fd
+        self.bound = {}  # type: Dict[int, int]
+        self.resets = 0
+        self.waits = []  # type: List[Tuple[Optional[float], bool]]
+        self.closes = 0
+
+    def bind(self, fd: int, events: int) -> None:
+        self.bound[fd] = events
+
+    def unbind(self, fd: int) -> None:
+        del self.bound[fd]
+
+    def reset(self) -> None:
+        self.resets += 1
+
+    def wait(self, timeout: Optional[float], with_input: bool) -> None:
+        self.waits.append((timeout, with_input))
+        readers = [
+            fd
+            for fd, events in self.bound.items()
+            if events & selectors.EVENT_READ
+        ]
+        if with_input:
+            readers.append(self.input_fd)
+        writers = [
+            fd
+            for fd, events in self.bound.items()
+            if events & selectors.EVENT_WRITE
+        ]
+        select.select(readers, writers, [], timeout)
+
+    def close(self) -> None:
+        self.closes += 1
+
+
+@pytest.fixture(name="console")
+def fixture_console(terminal: Terminal) -> FakeConsole:
+    return FakeConsole(terminal)
+
+
+@pytest.fixture(name="console_selector")
+def fixture_console_selector(
+    window: Mock, terminal: Terminal, console: FakeConsole
+) -> Iterator[ConsoleSelector]:
+    with ConsoleSelector(
+        window=window, input_fd=terminal.input_fd, console=console
+    ) as selector:
+        yield selector
+
+
+def is_registered(
+    selector: selectors.BaseSelector, terminal: Terminal
+) -> bool:
     return terminal.input_fd in selector.get_map()
+
+
+def inner_map(
+    selector: ConsoleSelector,
+) -> typing.Mapping[typing.Any, selectors.SelectorKey]:
+    """Return the keys of the selector that the console mixin is over."""
+    return selectors.SelectSelector.get_map(selector)
 
 
 class TestInputSelectorMixin:
@@ -237,6 +308,283 @@ class TestInputSelectorMixin:
         terminal.queued.append(ord("a"))
         assert selector.select(None) == [(key, selectors.EVENT_WRITE)]
         assert terminal.reads == 0
+
+
+class TestConsoleSelectorMixin:
+    def test_input_kept_out_of_selector(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        key = console_selector.register(
+            terminal.input_fd, selectors.EVENT_READ, "data"
+        )
+        assert key == selectors.SelectorKey(
+            terminal.input_fd, terminal.input_fd, selectors.EVENT_READ, "data"
+        )
+        assert terminal.input_fd not in inner_map(console_selector)
+        assert not console.bound
+        assert console_selector.get_key(terminal.input_fd) is key
+        assert console_selector.get_key(terminal.input_socket) is key
+        assert dict(console_selector.get_map()) == {terminal.input_fd: key}
+        assert console_selector.unregister(terminal.input_fd) is key
+        assert not console_selector.get_map()
+
+    def test_input_and_sockets_mapped(
+        self, console_selector: ConsoleSelector, terminal: Terminal
+    ) -> None:
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            other = console_selector.register(reader, selectors.EVENT_READ)
+            key = console_selector.register(
+                terminal.input_fd, selectors.EVENT_READ
+            )
+            assert dict(console_selector.get_map()) == {
+                reader.fileno(): other,
+                terminal.input_fd: key,
+            }
+            assert console_selector.get_key(reader) is other
+            assert len(console_selector.get_map()) == 2
+
+    @pytest.mark.parametrize(
+        "events",
+        [selectors.EVENT_WRITE, selectors.EVENT_READ | selectors.EVENT_WRITE],
+    )
+    def test_input_read_only(
+        self,
+        console_selector: ConsoleSelector,
+        terminal: Terminal,
+        events: int,
+    ) -> None:
+        with pytest.raises(ValueError):
+            console_selector.register(terminal.input_fd, events)
+        key = console_selector.register(
+            terminal.input_fd, selectors.EVENT_READ
+        )
+        with pytest.raises(ValueError):
+            console_selector.modify(terminal.input_fd, events)
+        assert console_selector.get_key(terminal.input_fd) is key
+
+    def test_input_registered_once(
+        self, console_selector: ConsoleSelector, terminal: Terminal
+    ) -> None:
+        with pytest.raises(KeyError):
+            console_selector.unregister(terminal.input_fd)
+        with pytest.raises(KeyError):
+            console_selector.modify(terminal.input_fd, selectors.EVENT_READ)
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+        with pytest.raises(KeyError):
+            console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+
+    def test_modify_input_data(
+        self, console_selector: ConsoleSelector, terminal: Terminal
+    ) -> None:
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ, 1)
+        key = console_selector.modify(
+            terminal.input_fd, selectors.EVENT_READ, 2
+        )
+        assert key.data == 2
+        assert console_selector.get_key(terminal.input_fd) is key
+
+    def test_sockets_bound(
+        self, console_selector: ConsoleSelector, console: FakeConsole
+    ) -> None:
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            fd = reader.fileno()
+            console_selector.register(fd, selectors.EVENT_READ)
+            assert console.bound == {fd: selectors.EVENT_READ}
+            assert fd in inner_map(console_selector)
+            console_selector.modify(fd, selectors.EVENT_WRITE)
+            assert console.bound == {fd: selectors.EVENT_WRITE}
+            console_selector.unregister(fd)
+            assert not console.bound
+            assert fd not in inner_map(console_selector)
+
+    def test_bind_failure(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.setattr(console, "bind", Mock(side_effect=OSError))
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            with pytest.raises(OSError):
+                console_selector.register(reader, selectors.EVENT_READ)
+            assert reader.fileno() not in console_selector.get_map()
+
+    def test_invalid_file_object(
+        self, console_selector: ConsoleSelector
+    ) -> None:
+        with pytest.raises(ValueError):
+            console_selector.register(object(), selectors.EVENT_READ)
+
+    def test_queued_key(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        key = console_selector.register(
+            terminal.input_fd, selectors.EVENT_READ
+        )
+        terminal.queued.append(ord("a"))
+        assert console_selector.select(None) == [(key, selectors.EVENT_READ)]
+        assert not console.waits
+
+    def test_other_ready_kept(
+        self, console_selector: ConsoleSelector, terminal: Terminal
+    ) -> None:
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            other = console_selector.register(reader, selectors.EVENT_READ)
+            key = console_selector.register(
+                terminal.input_fd, selectors.EVENT_READ
+            )
+            writer.sendall(b"x")
+            terminal.queued.append(ord("a"))
+            assert console_selector.select(None) == [
+                (other, selectors.EVENT_READ),
+                (key, selectors.EVENT_READ),
+            ]
+
+    def test_ready_socket_without_wait(
+        self, console_selector: ConsoleSelector, console: FakeConsole
+    ) -> None:
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            other = console_selector.register(reader, selectors.EVENT_READ)
+            writer.sendall(b"x")
+            assert console_selector.select(None) == [
+                (other, selectors.EVENT_READ)
+            ]
+            assert not console.waits
+
+    def test_wakes_for_typed_key(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        key = console_selector.register(
+            terminal.input_fd, selectors.EVENT_READ
+        )
+        timer = threading.Timer(0.02, terminal.type, [b"a"])
+        timer.start()
+        try:
+            assert console_selector.select(None) == [
+                (key, selectors.EVENT_READ)
+            ]
+        finally:
+            timer.join()
+        assert console.waits == [(None, True)]
+        assert list(terminal.queued) == [ord("a")]
+
+    def test_wakes_for_socket(
+        self, console_selector: ConsoleSelector, terminal: Terminal
+    ) -> None:
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+        reader, writer = socket.socketpair()
+        with reader, writer:
+            other = console_selector.register(reader, selectors.EVENT_READ)
+            timer = threading.Timer(0.02, writer.sendall, [b"x"])
+            timer.start()
+            try:
+                assert console_selector.select(None) == [
+                    (other, selectors.EVENT_READ)
+                ]
+            finally:
+                timer.join()
+
+    def test_console_input_only_while_registered(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        terminal.type(b"a")
+        assert not console_selector.select(0.01)
+        assert [with_input for _, with_input in console.waits] == [False]
+        assert terminal.reads == 0
+
+    def test_zero_timeout(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+        assert not console_selector.select(0)
+        assert not console.waits
+        assert console.resets == 1
+
+    def test_other_console_events_keep_timeout(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+        window: Mock,
+    ) -> None:
+        def getch() -> int:
+            # Curses drains console events that are not keys,
+            # such as focus changes and key releases.
+            terminal.reads += 1
+            try:
+                terminal.input_socket.recv(1)
+            except BlockingIOError:
+                pass
+            return -1
+
+        window.getch.side_effect = getch
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+        # One event for the peek before waiting, one to wake the wait.
+        terminal.type(b"\0\0")
+        start = time.monotonic()
+        assert not console_selector.select(0.1)
+        assert time.monotonic() - start >= 0.09
+        timeouts = [timeout for timeout, _ in console.waits]
+        assert len(timeouts) == 2
+        assert typing.cast(float, timeouts[1]) < typing.cast(
+            float, timeouts[0]
+        )
+        assert terminal.reads == 3
+
+    def test_close(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+        terminal: Terminal,
+    ) -> None:
+        console_selector.register(terminal.input_fd, selectors.EVENT_READ)
+        console_selector.close()
+        assert console.closes == 1
+        with pytest.raises(RuntimeError, match="closed"):
+            console_selector.get_key(terminal.input_fd)
+
+    @pytest.mark.skipif(sys.platform == "win32", reason="has a console")
+    def test_default_console_needs_windows(self, window: Mock) -> None:
+        with pytest.raises(RuntimeError, match="Windows"):
+            ConsoleSelector(window=window)
+
+    def test_waiter_on_stock_loop(
+        self,
+        console_selector: ConsoleSelector,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Real windows-curses resizes inside getch before returning
+        # KEY_RESIZE, and every resize_term flushes console input.
+        monkeypatch.setattr(curses, "resize_term", Mock())
+        loop = asyncio.SelectorEventLoop(console_selector)
+        with contextlib.closing(loop):
+            waiter = InputWaiter(loop, input_fd=terminal.input_fd)
+            loop.call_later(0.01, terminal.ungetch, curses.KEY_RESIZE)
+            loop.run_until_complete(asyncio.wait_for(waiter.input_ready(), 5))
+            assert not is_registered(console_selector, terminal)
+        assert list(terminal.queued) == [curses.KEY_RESIZE]
+        curses.resize_term.assert_not_called()  # type: ignore[attr-defined]
 
 
 class TestInputWaiter:

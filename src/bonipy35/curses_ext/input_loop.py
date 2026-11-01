@@ -203,7 +203,8 @@ if sys.platform == "win32":  # pragma: no cover
             self._event = kernel32.CreateEventW(None, True, False, None)
             if not self._event:
                 raise ctypes.WinError(ctypes.get_last_error())
-            self._handles = (wintypes.HANDLE * 2)(console_input, self._event)
+            # The event first, so that waits may leave out the input.
+            self._handles = (wintypes.HANDLE * 2)(self._event, console_input)
 
         def bind(self, fd: int, events: int) -> None:
             flags = 0
@@ -221,7 +222,8 @@ if sys.platform == "win32":  # pragma: no cover
         def reset(self) -> None:
             self._kernel32.ResetEvent(self._event)
 
-        def wait(self, timeout: Union[None, float]) -> None:
+        def wait(self, timeout: Union[None, float], with_input: bool) -> None:
+            """Wait on the event, and on the input if ``with_input``."""
             milliseconds = (
                 _INFINITE
                 if timeout is None
@@ -229,14 +231,165 @@ if sys.platform == "win32":  # pragma: no cover
             )
             if (
                 self._kernel32.WaitForMultipleObjects(
-                    2, self._handles, False, milliseconds
+                    2 if with_input else 1, self._handles, False, milliseconds
                 )
                 == _WAIT_FAILED
             ):
                 raise ctypes.WinError(ctypes.get_last_error())
 
         def close(self) -> None:
-            self._kernel32.CloseHandle(self._event)
+            if self._event:
+                self._kernel32.CloseHandle(self._event)
+                self._event = None
+
+
+def _new_console() -> typing.Any:
+    """Return the console of standard input to wait on."""
+    if sys.platform == "win32":  # pragma: no cover
+        return _Console()
+    raise RuntimeError("Only Windows has a console to wait on")
+
+
+def _fd_of(fileobj: typing.Any) -> Union[None, int]:
+    """Return the file descriptor of ``fileobj``, or None if invalid."""
+    if isinstance(fileobj, int):
+        return fileobj
+    try:
+        return int(fileobj.fileno())
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+class _InputMap(typing.Mapping[typing.Any, selectors.SelectorKey]):
+    """The keys in ``inner``, and ``input_key``, which is not in it."""
+
+    def __init__(
+        self,
+        inner: typing.Mapping[typing.Any, selectors.SelectorKey],
+        input_key: selectors.SelectorKey,
+    ) -> None:
+        self._inner = inner
+        self._input_key = input_key
+
+    def __len__(self) -> int:
+        return len(self._inner) + 1
+
+    def __getitem__(self, fileobj: typing.Any) -> selectors.SelectorKey:
+        if _fd_of(fileobj) == self._input_key.fd:
+            return self._input_key
+        return self._inner[fileobj]
+
+    def __iter__(self) -> Iterator[typing.Any]:
+        yield from self._inner
+        yield self._input_key.fd
+
+
+class ConsoleSelectorMixin(InputSelectorMixin):
+    """Wait on a Windows console for ``input_fd``, and on sockets.
+
+    Windows selectors wait on sockets only,
+    so ``input_fd`` only names the console input:
+    its registration stays out of the selector this is mixed into,
+    and only while it lasts does the wait include the console input.
+    Other registered sockets are bound to an event of ``console``.
+    It signals only network events after binding or a reset,
+    so readiness is checked before each wait as well as after.
+    ``console`` defaults to standard input's,
+    and closes with the selector.
+    """
+
+    def __init__(
+        self,
+        *args: typing.Any,
+        console: typing.Any = None,
+        **kwargs: typing.Any
+    ) -> None:
+        super().__init__(*args, **kwargs)
+        self._console = _new_console() if console is None else console
+        self._input_key = None  # type: Union[None, selectors.SelectorKey]
+
+    def register(
+        self, fileobj: typing.Any, events: int, data: typing.Any = None
+    ) -> selectors.SelectorKey:
+        if _fd_of(fileobj) != self.input_fd:
+            key = super().register(fileobj, events, data)
+            try:
+                self._console.bind(key.fd, events)
+            except BaseException:
+                super().unregister(fileobj)
+                raise
+            return key
+        if events != selectors.EVENT_READ:
+            raise ValueError("{!r} is for reading only".format(fileobj))
+        if self._input_key is not None:
+            raise KeyError("{!r} is already registered".format(fileobj))
+        self._input_key = selectors.SelectorKey(
+            fileobj, self.input_fd, events, data
+        )
+        return self._input_key
+
+    def unregister(self, fileobj: typing.Any) -> selectors.SelectorKey:
+        if _fd_of(fileobj) != self.input_fd:
+            key = super().unregister(fileobj)
+            self._console.unbind(key.fd)
+            return key
+        if self._input_key is None:
+            raise KeyError("{!r} is not registered".format(fileobj))
+        key, self._input_key = self._input_key, None
+        return key
+
+    def modify(
+        self, fileobj: typing.Any, events: int, data: typing.Any = None
+    ) -> selectors.SelectorKey:
+        if _fd_of(fileobj) != self.input_fd:
+            key = super().modify(fileobj, events, data)
+            self._console.bind(key.fd, events)
+            return key
+        if self._input_key is None:
+            raise KeyError("{!r} is not registered".format(fileobj))
+        if events != self._input_key.events:
+            raise ValueError("{!r} is for reading only".format(fileobj))
+        self._input_key = self._input_key._replace(data=data)
+        return self._input_key
+
+    def get_map(self) -> typing.Mapping[typing.Any, selectors.SelectorKey]:
+        inner = super().get_map()
+        # A closed selector has no map.
+        if inner is None or self._input_key is None:
+            return inner
+        return _InputMap(inner, self._input_key)
+
+    def close(self) -> None:
+        self._input_key = None
+        try:
+            super().close()
+        finally:
+            self._console.close()
+
+    def _wait(
+        self,
+        timeout: Union[None, float],
+        input_key: Union[None, selectors.SelectorKey],
+    ) -> List[Tuple[selectors.SelectorKey, int]]:
+        deadline = None if timeout is None else time.monotonic() + timeout
+        while True:
+            # Network events after this check signal the event again.
+            self._console.reset()
+            ready = super()._wait(0, input_key)
+            remaining = (
+                None if deadline is None else deadline - time.monotonic()
+            )
+            if ready or (remaining is not None and remaining <= 0):
+                return ready
+            self._console.wait(remaining, with_input=input_key is not None)
+            if input_key is not None and self._has_key():
+                return _with_input(super()._wait(0, input_key), input_key)
+            # Otherwise sockets are ready, the time is up,
+            # or curses drained console events that were not keys.
+
+
+class ConsoleSelector(ConsoleSelectorMixin, selectors.SelectSelector):
+    pass
 
 
 class InputWaiter:

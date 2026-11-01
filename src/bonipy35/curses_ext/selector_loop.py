@@ -27,6 +27,9 @@ from .. import asyncio_ext
 from . import raii
 from .input_loop import _resize, keep_resize_handler
 
+# TODO(T-032): input_loop's console selector repeats the binding.
+# pylint: disable=duplicate-code
+
 _T = typing.TypeVar("_T")
 
 
@@ -123,7 +126,7 @@ class _ConsoleSelector(_Selector):
         ready = self._selector.select(0)
         if found or ready or (timeout is not None and timeout <= 0):
             return ready
-        self._console.wait(timeout)
+        self._console.wait(timeout, with_input=True)
         self._loop._read_keys()  # pylint: disable=protected-access
         return self._selector.select(0)
 
