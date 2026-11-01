@@ -33,10 +33,8 @@ from bonipy35.curses_ext.input_loop import (
     InputWaiter,
     WindowInput,
     _resize,
-    getch,
     initialise,
     keep_resize_handler,
-    run,
 )
 
 needs_sigwinch = pytest.mark.skipif(
@@ -395,30 +393,6 @@ class TestInputWaiter:
         assert not is_registered(selector, terminal)
 
 
-class TestGetch:
-    def test_queued_key(
-        self,
-        loop: asyncio.AbstractEventLoop,
-        window: Mock,
-        terminal: Terminal,
-        waiter: InputWaiter,
-    ) -> None:
-        terminal.queued.append(ord("x"))
-        assert loop.run_until_complete(getch(window, waiter)) == ord("x")
-
-    def test_waits_for_key(
-        self,
-        loop: asyncio.AbstractEventLoop,
-        window: Mock,
-        terminal: Terminal,
-        waiter: InputWaiter,
-    ) -> None:
-        loop.call_later(0.01, terminal.type, b"y")
-        assert loop.run_until_complete(
-            asyncio.wait_for(getch(window, waiter), 5)
-        ) == ord("y")
-
-
 class TestWindowInput:
     def test_queued_key(
         self,
@@ -623,92 +597,3 @@ class TestKeepResizeHandler:
         with keep_resize_handler():
             pass
         signal.signal.assert_not_called()  # type: ignore[attr-defined]
-
-
-@needs_unix
-class TestRun:
-    @pytest.fixture(autouse=True, params=["runner", "legacy"])
-    def fixture_runner(
-        self, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        if request.param == "legacy":
-            monkeypatch.delattr(asyncio, "Runner", raising=False)
-
-    def test_reads_stdin(self, window: Mock, stdin: Terminal) -> None:
-        async def app(given: "curses.window", waiter: InputWaiter) -> int:
-            assert given is window
-            assert window.nodelay.call_args_list == [((True,),)]
-            stdin.type(b"r")
-            return await getch(given, waiter)
-
-        assert run(app) == ord("r")
-        window.nodelay.assert_called_with(False)
-
-    @needs_sigwinch
-    def test_resize(
-        self,
-        window: Mock,
-        stdin: Terminal,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        sizes = []  # type: List[List[int]]
-
-        def resizeterm(lines: int, columns: int) -> None:
-            sizes.append([lines, columns])
-            curses.ungetch(curses.KEY_RESIZE)
-
-        monkeypatch.setattr(
-            os, "get_terminal_size", lambda: os.terminal_size((100, 30))
-        )
-        monkeypatch.setattr(curses, "resizeterm", resizeterm)
-
-        async def app(given: "curses.window", waiter: InputWaiter) -> int:
-            os.kill(os.getpid(), signal.SIGWINCH)
-            return await asyncio.wait_for(getch(given, waiter), 5)
-
-        del window, stdin
-        assert run(app) == curses.KEY_RESIZE
-        assert sizes == [[30, 100]]
-
-    def test_without_sigwinch(
-        self,
-        window: Mock,
-        stdin: Terminal,
-        monkeypatch: pytest.MonkeyPatch,
-    ) -> None:
-        monkeypatch.delattr(signal, "SIGWINCH", raising=False)
-
-        async def app(given: "curses.window", waiter: InputWaiter) -> int:
-            stdin.type(b"s")
-            return await getch(given, waiter)
-
-        del window
-        assert run(app) == ord("s")
-
-    @needs_sigwinch
-    def test_restores_resize_handler(
-        self, window: Mock, stdin: Terminal
-    ) -> None:
-        del window, stdin
-
-        async def app(given: "curses.window", waiter: InputWaiter) -> None:
-            del given, waiter
-
-        previous = signal.getsignal(signal.SIGWINCH)
-        run(app)
-        assert signal.getsignal(signal.SIGWINCH) == previous
-
-    def test_terminal_cleanup_on_failure(
-        self, window: Mock, stdin: Terminal
-    ) -> None:
-        del stdin
-
-        async def app(given: "curses.window", waiter: InputWaiter) -> None:
-            del given, waiter
-            raise ValueError("application failed")
-
-        with pytest.raises(ValueError, match="application failed"):
-            run(app)
-        window.keypad.assert_called_with(False)
-        window.nodelay.assert_called_with(False)
-        curses.endwin.assert_called_once()  # type: ignore[attr-defined]

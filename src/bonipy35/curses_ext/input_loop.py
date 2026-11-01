@@ -26,7 +26,6 @@ Unix only for now: Windows selectors cannot wait on the console.
 import asyncio
 import contextlib
 import curses
-import functools
 import os
 import selectors
 import signal
@@ -35,10 +34,7 @@ import typing
 from typing import Callable, Iterator, List, Tuple, Union
 
 # Internal modules.
-from .. import asyncio_ext
 from . import raii
-
-_T = typing.TypeVar("_T")
 
 
 # A mixin: a concrete selector later in the MRO implements the rest.
@@ -180,15 +176,6 @@ class WindowInput:
             await self.waiter.input_ready()
 
 
-async def getch(window: "curses.window", waiter: InputWaiter) -> int:
-    """Return the next key of ``window``, which must be in nodelay mode."""
-    while True:
-        key = window.getch()
-        if key != -1:
-            return key
-        await waiter.input_ready()
-
-
 def _resize() -> None:
     """Resize curses to the terminal, queueing `KEY_RESIZE` on a change."""
     try:
@@ -258,45 +245,5 @@ def initialise(
             window.nodelay(True)
             try:
                 yield window
-            finally:
-                window.nodelay(False)
-
-
-def _new_loop(window: "curses.window") -> asyncio.AbstractEventLoop:
-    return asyncio.SelectorEventLoop(InputSelector(window=window))
-
-
-async def _main(
-    func: "Callable[[curses.window, InputWaiter], typing.Awaitable[_T]]",
-    window: "curses.window",
-) -> _T:
-    loop = asyncio.get_event_loop()
-    if hasattr(signal, "SIGWINCH"):
-        # Closing the loop removes the handler.
-        loop.add_signal_handler(signal.SIGWINCH, _resize)
-    return await func(window, InputWaiter(loop))
-
-
-def run(
-    func: "Callable[[curses.window, InputWaiter], typing.Awaitable[_T]]",
-) -> _T:
-    """Run ``func(window, waiter)`` with curses on standard input.
-
-    ``window`` is in nodelay mode while ``func`` runs,
-    and ``waiter`` waits for its input.
-    Terminal size changes queue `KEY_RESIZE`.
-    Restores the terminal and the SIGWINCH handler even on exceptions.
-    Unfinished tasks are cancelled and awaited.
-    Keep curses calls on the main thread;
-    worker threads submit them with ``call_soon_threadsafe``.
-    """
-    with keep_resize_handler():
-        with raii.initialise() as window:
-            window.nodelay(True)
-            try:
-                return asyncio_ext.run(
-                    _main(func, window),
-                    loop_factory=functools.partial(_new_loop, window),
-                )
             finally:
                 window.nodelay(False)

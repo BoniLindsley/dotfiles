@@ -4,7 +4,7 @@
 Assumption tests check the ncurses behaviour the input selector
 relies on. End-to-end tests play the cases stored as JSON files in
 ``input_input_loop_pty/TestRunEndToEnd.test_case``, through
-``input_loop.run``: steps type text, optionally paced in seconds
+``input_loop``'s layers: steps type text, optionally paced in seconds
 between characters, sleep, resize the terminal, or expect lines
 reported by the child, which names each key with ``curses.keyname``.
 """
@@ -56,19 +56,21 @@ report = os.fdopen(int(sys.argv[1]), "w", buffering=1)
 # t: a thread wakes the loop. u: a task pushes back U while getch waits.
 # w: sleeps with typeahead unread, reporting whether the loop spun.
 APPLICATION = r"""
-from bonipy35.curses_ext.input_loop import getch, run
+from bonipy35 import asyncio_ext
+from bonipy35.curses_ext.input_loop import EventLoop, WindowInput, initialise
 
 async def push_back():
     await asyncio.sleep(0.05)
     curses.ungetch(ord("U"))
 
-async def app(window, waiter):
+async def app(window):
     loop = asyncio.get_event_loop()
+    window_input = WindowInput(window)
     tasks = []
     count = 0
     report.write("ready\n")
     while True:
-        key = await getch(window, waiter)
+        key = await window_input.getch()
         name = curses.keyname(key).decode()
         if key == curses.KEY_RESIZE:
             report.write("%s %d %d\n" % ((name,) + window.getmaxyx()))
@@ -97,7 +99,8 @@ async def app(window, waiter):
         window.refresh()
         report.write(name + "\n")
 
-run(app)
+with initialise() as window:
+    asyncio_ext.run(app(window), loop_factory=EventLoop)
 """
 
 TIMEOUT = 5
