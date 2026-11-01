@@ -35,7 +35,9 @@ from bonipy35.curses_ext.input_loop import (
     EventLoop,
     InputSelector,
     InputWaiter,
+    UnixEventLoop,
     WindowInput,
+    WindowsEventLoop,
     _resize,
     initialise,
     keep_resize_handler,
@@ -569,22 +571,15 @@ class TestConsoleSelectorMixin:
             ConsoleSelector(window=window)
 
     def test_waiter_on_stock_loop(
-        self,
-        console_selector: ConsoleSelector,
-        terminal: Terminal,
-        monkeypatch: pytest.MonkeyPatch,
+        self, console_selector: ConsoleSelector, terminal: Terminal
     ) -> None:
-        # Real windows-curses resizes inside getch before returning
-        # KEY_RESIZE, and every resize_term flushes console input.
-        monkeypatch.setattr(curses, "resize_term", Mock())
         loop = asyncio.SelectorEventLoop(console_selector)
         with contextlib.closing(loop):
             waiter = InputWaiter(loop, input_fd=terminal.input_fd)
-            loop.call_later(0.01, terminal.ungetch, curses.KEY_RESIZE)
+            loop.call_later(0.01, terminal.ungetch, ord("u"))
             loop.run_until_complete(asyncio.wait_for(waiter.input_ready(), 5))
             assert not is_registered(console_selector, terminal)
-        assert list(terminal.queued) == [curses.KEY_RESIZE]
-        curses.resize_term.assert_not_called()  # type: ignore[attr-defined]
+        assert list(terminal.queued) == [ord("u")]
 
 
 class TestInputWaiter:
@@ -886,6 +881,129 @@ class TestEventLoop:
             return await WindowInput(window).getch()
 
         assert asyncio_ext.run(app(), loop_factory=EventLoop) == ord("s")
+
+
+@pytest.fixture(name="windows_loop")
+def fixture_windows_loop(
+    console_selector: ConsoleSelector,
+) -> Iterator[WindowsEventLoop]:
+    with contextlib.closing(WindowsEventLoop(console_selector)) as loop:
+        asyncio.set_event_loop(loop)
+        try:
+            yield loop
+        finally:
+            asyncio.set_event_loop(None)
+
+
+def get_wakeup_fd() -> int:
+    wakeup_fd = signal.set_wakeup_fd(-1)
+    signal.set_wakeup_fd(wakeup_fd)
+    return wakeup_fd
+
+
+class TestWindowsEventLoop:
+    def test_input_selector(
+        self,
+        windows_loop: WindowsEventLoop,
+        console_selector: ConsoleSelector,
+    ) -> None:
+        assert windows_loop.input_selector is console_selector
+
+    def test_reads_console(
+        self, windows_loop: WindowsEventLoop, window: Mock, terminal: Terminal
+    ) -> None:
+        async def app() -> int:
+            windows_loop.call_later(0.01, terminal.type, b"w")
+            return await WindowInput(window).getch()
+
+        assert windows_loop.run_until_complete(
+            asyncio.wait_for(app(), 5)
+        ) == ord("w")
+
+    def test_resize_left_to_curses(
+        self,
+        windows_loop: WindowsEventLoop,
+        window: Mock,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        # Real windows-curses resizes inside getch before returning
+        # KEY_RESIZE, and every resize_term flushes console input.
+        resize_term = Mock()
+        monkeypatch.setattr(curses, "resize_term", resize_term)
+
+        async def app() -> int:
+            windows_loop.call_later(0.01, terminal.ungetch, curses.KEY_RESIZE)
+            return await WindowInput(window).getch()
+
+        assert windows_loop.run_until_complete(
+            asyncio.wait_for(app(), 5)
+        ) == (curses.KEY_RESIZE)
+        resize_term.assert_not_called()
+
+    def test_thread_wakeup(
+        self, windows_loop: WindowsEventLoop, console: FakeConsole
+    ) -> None:
+        woken = windows_loop.create_future()  # type: asyncio.Future[None]
+        timer = threading.Timer(
+            0.02, windows_loop.call_soon_threadsafe, [woken.set_result, None]
+        )
+        timer.start()
+        try:
+            windows_loop.run_until_complete(asyncio.wait_for(woken, 5))
+        finally:
+            timer.join()
+        # Woken in the first wait, before its timeout.
+        assert console.waits[0][0] is not None
+        assert console.waits[0][0] > 1
+
+    @pytest.mark.skipif(
+        sys.platform == "win32", reason="Windows sends to sockets"
+    )
+    def test_signal_wakeup(
+        self, windows_loop: WindowsEventLoop, console: FakeConsole
+    ) -> None:
+        wakeup_fd = get_wakeup_fd()
+        # Python's signal handler writes the signal number there.
+        timer = threading.Timer(
+            0.02, os.write, [wakeup_fd, bytes([signal.SIGINT])]
+        )
+        timer.start()
+        try:
+            windows_loop.run_until_complete(asyncio.sleep(0.2))
+        finally:
+            timer.join()
+        timeouts = [timeout for timeout, _ in console.waits if timeout]
+        # Woken early: the remaining time is waited again.
+        assert len(timeouts) >= 2
+        assert timeouts[1] < 0.19
+
+    def test_close(
+        self,
+        console_selector: ConsoleSelector,
+        console: FakeConsole,
+    ) -> None:
+        previous = get_wakeup_fd()
+        loop = WindowsEventLoop(console_selector)
+        assert get_wakeup_fd() not in (-1, previous)
+        loop.close()
+        loop.close()
+        assert get_wakeup_fd() == previous
+        assert console.closes == 1
+
+    def test_close_running(self, windows_loop: WindowsEventLoop) -> None:
+        async def check() -> None:
+            with pytest.raises(RuntimeError, match="running"):
+                windows_loop.close()
+
+        windows_loop.run_until_complete(check())
+
+
+class TestEventLoopAlias:
+    def test_platform_loop(self) -> None:
+        assert EventLoop is (
+            WindowsEventLoop if sys.platform == "win32" else UnixEventLoop
+        )
 
 
 class TestInitialise:

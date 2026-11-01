@@ -21,7 +21,10 @@ and read keys with a `WindowInput`::
 
 `run` does the last two steps: ``run(main)``.
 
-Unix only for now: Windows selectors cannot wait on the console.
+On Unix, the loop resizes curses on SIGWINCH.
+On Windows, where selectors wait on sockets only,
+it waits on the console input too,
+and windows-curses resizes curses itself before returning `KEY_RESIZE`.
 
 Run ``python -m bonipy35.curses_ext.input_loop`` to check a terminal.
 """
@@ -35,6 +38,7 @@ import math
 import os
 import selectors
 import signal
+import socket
 import sys
 import threading
 import time
@@ -530,8 +534,60 @@ class UnixEventLoop(asyncio.SelectorEventLoop):
         )
 
 
-# TODO(T-031): Choose the Windows loop here.
-EventLoop = UnixEventLoop
+class WindowsEventLoop(asyncio.SelectorEventLoop):
+    """Report curses input on the console, peeking through ``stdscr``.
+
+    ``selector`` replaces that default console selector.
+    Until the loop closes, signals such as Ctrl+C end its waits:
+    its own socket pair is the signal wakeup file descriptor.
+    Create on the main thread, while curses is initialised.
+    """
+
+    def __init__(
+        self, selector: Union[None, ConsoleSelectorMixin] = None
+    ) -> None:
+        super().__init__(ConsoleSelector() if selector is None else selector)
+        self._wakeup_reader, self._wakeup_writer = socket.socketpair()
+        self._wakeup_reader.setblocking(False)
+        self._wakeup_writer.setblocking(False)
+        self.add_reader(self._wakeup_reader.fileno(), self._drain_wakeups)
+        self._previous_wakeup_fd = signal.set_wakeup_fd(
+            self._wakeup_writer.fileno()
+        )
+
+    @property
+    def input_selector(self) -> ConsoleSelectorMixin:
+        # Asyncio keeps the selector given above, but only privately.
+        return typing.cast(
+            ConsoleSelectorMixin, self._selector  # type: ignore[attr-defined]
+        )
+
+    def _drain_wakeups(self) -> None:
+        # The writer stays open while this is registered.
+        try:
+            while True:
+                self._wakeup_reader.recv(4096)
+        except BlockingIOError:
+            pass
+
+    def close(self) -> None:
+        if self.is_running():
+            raise RuntimeError("Cannot close a running event loop")
+        if self.is_closed():
+            return
+        try:
+            signal.set_wakeup_fd(self._previous_wakeup_fd)
+            self.remove_reader(self._wakeup_reader.fileno())
+        finally:
+            super().close()
+            self._wakeup_reader.close()
+            self._wakeup_writer.close()
+
+
+if sys.platform == "win32":  # pragma: no cover
+    EventLoop = WindowsEventLoop
+else:
+    EventLoop = UnixEventLoop
 
 
 @contextlib.contextmanager
