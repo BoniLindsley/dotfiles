@@ -3,7 +3,6 @@
 # Standard libraries.
 import asyncio
 import curses
-import typing
 
 from unittest.mock import Mock
 
@@ -11,7 +10,7 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.selector_loop import EventLoop
+from bonipy35.curses_ext.input_loop import EventLoop
 from bonipy35.curses_ext.tower import (
     AttackSource,
     AttackTarget,
@@ -236,22 +235,30 @@ class TestAsyncRun:
     def test_quit(self, state: State, window: Mock, loop: EventLoop) -> None:
         del state
         window.getch.side_effect = [ord("!"), ord("q")] + [-1] * 20
-        assert loop.run_until_complete(async_run()) == 0
+        assert loop.run_until_complete(async_run(window)) == 0
         assert not asyncio.all_tasks(loop)
 
     def test_render_failure(
-        self, state: State, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+        self,
+        state: State,
+        window: Mock,
+        loop: EventLoop,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         del state
         monkeypatch.setattr(
             State, "render", Mock(side_effect=RuntimeError("render failed"))
         )
         with pytest.raises(RuntimeError, match="render failed"):
-            loop.run_until_complete(async_run())
+            loop.run_until_complete(async_run(window))
         assert not asyncio.all_tasks(loop)
 
     def test_render_finishes(
-        self, state: State, loop: EventLoop, monkeypatch: pytest.MonkeyPatch
+        self,
+        state: State,
+        window: Mock,
+        loop: EventLoop,
+        monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         del state
 
@@ -259,12 +266,14 @@ class TestAsyncRun:
             del self, window
 
         monkeypatch.setattr(State, "run_render_loop", finish)
-        assert loop.run_until_complete(async_run()) == 0
+        assert loop.run_until_complete(async_run(window)) == 0
         assert not asyncio.all_tasks(loop)
 
-    def test_cancel(self, state: State, loop: EventLoop) -> None:
+    def test_cancel(
+        self, state: State, window: Mock, loop: EventLoop
+    ) -> None:
         del state
-        task = loop.create_task(async_run())
+        task = loop.create_task(async_run(window))
         loop.call_later(0.001, task.cancel)
         with pytest.raises(asyncio.CancelledError):
             loop.run_until_complete(task)
@@ -272,13 +281,8 @@ class TestAsyncRun:
 
 
 class TestRun:
-    def test_shared_runner(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def runner(
-            coro: typing.Coroutine[typing.Any, typing.Any, int],
-        ) -> int:
-            assert asyncio.iscoroutine(coro)
-            coro.close()
-            return 7
-
-        monkeypatch.setattr("bonipy35.curses_ext.selector_loop.run", runner)
-        assert run() == 7
+    def test_quit(self, state: State, window: Mock) -> None:
+        del state
+        window.getch.side_effect = [ord("q")] + [-1] * 20
+        assert run() == 0
+        window.nodelay.assert_called_with(False)

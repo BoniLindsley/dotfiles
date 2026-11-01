@@ -6,12 +6,8 @@ import curses
 
 from typing import List
 
-# Internal modules.
-from .selector_loop import EventLoop
 
-
-def draw(loop: EventLoop, lines: List[str]) -> None:
-    window = loop.window
+def draw(window: "curses.window", lines: List[str]) -> None:
     window.erase()
     height, width = window.getmaxyx()
     for row, text in enumerate(lines[:height]):

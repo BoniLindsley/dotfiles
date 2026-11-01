@@ -10,8 +10,8 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.selector_loop import EventLoop
 from bonipy35.curses_ext.clock import async_run, clock
+from bonipy35.curses_ext.input_loop import EventLoop
 
 
 class TestAsyncRun:
@@ -19,7 +19,7 @@ class TestAsyncRun:
         window.getch.side_effect = [-1, curses.KEY_RESIZE, ord("q")] + [
             -1
         ] * 20
-        assert loop.run_until_complete(async_run()) == 0
+        assert loop.run_until_complete(async_run(window)) == 0
         window.noutrefresh.assert_called()
 
 
@@ -30,7 +30,7 @@ class TestClock:
         window.getmaxyx.return_value = (1, 1)
 
         async def check() -> None:
-            task = loop.create_task(clock(loop))
+            task = loop.create_task(clock(window))
             await asyncio.sleep(0.11)
             task.cancel()
             with pytest.raises(asyncio.CancelledError):

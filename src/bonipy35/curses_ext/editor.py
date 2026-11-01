@@ -3,18 +3,16 @@
 
 # Standard libraries.
 import argparse
-import asyncio
 import curses
 import curses.textpad
 import pathlib
 import shlex
 import sys
-import typing
 
 from typing import List, Union
 
 # Internal modules.
-from . import selector_loop
+from . import input_loop
 
 MAX_FILE_SIZE = 4096
 
@@ -227,12 +225,12 @@ class Editor:
         curses.doupdate()
 
 
-async def async_run() -> int:
-    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
-    editor = Editor(loop.window)
+async def async_run(window: "curses.window") -> int:
+    window_input = input_loop.WindowInput(window)
+    editor = Editor(window)
     while True:
         editor.render()
-        if editor.handle_key(await loop.getch()):
+        if editor.handle_key(await window_input.getch()):
             return 0
 
 
@@ -241,7 +239,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
         description="Modal ASCII editor using asyncio and ncurses"
     )
     parser.parse_args(None if argv is None else argv[1:])
-    return selector_loop.run(async_run())
+    return input_loop.run(async_run)
 
 
 if __name__ == "__main__":
