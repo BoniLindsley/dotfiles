@@ -8,8 +8,6 @@ wakeup, and socket, pipe and subprocess readiness work as usual.
 
 On Windows, the wait covers the console input and the loop's sockets,
 which are the only readiness Windows selectors support.
-
-Run ``python -m bonipy35.curses_ext.selector_loop`` to check a terminal.
 """
 
 # Standard libraries.
@@ -21,8 +19,6 @@ import math
 import selectors
 import signal
 import sys
-import threading
-import time
 import typing
 
 from typing import Iterator, List, Mapping, Tuple, Union
@@ -401,71 +397,3 @@ def run(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:
         with raii.initialise() as window:
             with use_event_loop_policy(window):
                 return asyncio_ext.run(coro)
-
-
-def main() -> int:
-    """Show keys, a clock and thread wakeups, to check a terminal."""
-
-    async def show() -> None:
-        loop = typing.cast(EventLoop, asyncio.get_event_loop())
-        window = loop.window
-        keys = collections.deque(maxlen=8)  # type: typing.Deque[str]
-        counts = collections.Counter()  # type: typing.Counter[str]
-
-        def draw() -> None:
-            height, width = window.getmaxyx()
-            lines = [
-                "Selector loop check. q quits, Ctrl+C interrupts,",
-                "t wakes the loop from a thread after 0.5 s.",
-                "",
-                "Time {}".format(time.strftime("%H:%M:%S")),
-                "Size {} x {}".format(height, width),
-                "Keys {}: {}".format(counts["keys"], " ".join(keys)),
-                "Resizes {}".format(counts["resizes"]),
-                "Thread wakeups {} of {}".format(
-                    counts["woken"], counts["requested"]
-                ),
-            ]
-            window.erase()
-            for row, line in enumerate(lines[: height - 1]):
-                window.addnstr(row, 0, line, width - 1)
-            window.refresh()
-
-        def woken() -> None:
-            counts["woken"] += 1
-            draw()
-
-        async def tick() -> None:
-            while True:
-                draw()
-                await asyncio.sleep(1 - time.time() % 1)
-
-        ticker = loop.create_task(tick())
-        try:
-            while True:
-                key = await loop.getch()
-                if key == ord("q"):
-                    return
-                if key == curses.KEY_RESIZE:
-                    counts["resizes"] += 1
-                if key == ord("t"):
-                    counts["requested"] += 1
-                    threading.Timer(
-                        0.5, loop.call_soon_threadsafe, [woken]
-                    ).start()
-                counts["keys"] += 1
-                keys.append(curses.keyname(key).decode(errors="replace"))
-                draw()
-        finally:
-            ticker.cancel()
-
-    try:
-        run(show())
-    except KeyboardInterrupt:
-        print("Interrupted.")
-        return 130
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

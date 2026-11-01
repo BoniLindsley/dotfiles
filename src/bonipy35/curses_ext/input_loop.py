@@ -22,15 +22,21 @@ and read keys with a `WindowInput`::
 `run` does the last two steps: ``run(main)``.
 
 Unix only for now: Windows selectors cannot wait on the console.
+
+Run ``python -m bonipy35.curses_ext.input_loop`` to check a terminal.
 """
 
 # Standard libraries.
 import asyncio
+import collections
 import contextlib
 import curses
 import os
 import selectors
 import signal
+import sys
+import threading
+import time
 import typing
 
 from typing import Callable, Iterator, List, Tuple, Union
@@ -282,3 +288,71 @@ def run(
     """
     with initialise() as window:
         return asyncio_ext.run(func(window), loop_factory=EventLoop)
+
+
+def main() -> int:
+    """Show keys, a clock and thread wakeups, to check a terminal."""
+
+    async def show(window: "curses.window") -> None:
+        loop = asyncio.get_event_loop()
+        window_input = WindowInput(window)
+        keys = collections.deque(maxlen=8)  # type: typing.Deque[str]
+        counts = collections.Counter()  # type: typing.Counter[str]
+
+        def draw() -> None:
+            height, width = window.getmaxyx()
+            lines = [
+                "Input loop check. q quits, Ctrl+C interrupts,",
+                "t wakes the loop from a thread after 0.5 s.",
+                "",
+                "Time {}".format(time.strftime("%H:%M:%S")),
+                "Size {} x {}".format(height, width),
+                "Keys {}: {}".format(counts["keys"], " ".join(keys)),
+                "Resizes {}".format(counts["resizes"]),
+                "Thread wakeups {} of {}".format(
+                    counts["woken"], counts["requested"]
+                ),
+            ]
+            window.erase()
+            for row, line in enumerate(lines[: height - 1]):
+                window.addnstr(row, 0, line, width - 1)
+            window.refresh()
+
+        def woken() -> None:
+            counts["woken"] += 1
+            draw()
+
+        async def tick() -> None:
+            while True:
+                draw()
+                await asyncio.sleep(1 - time.time() % 1)
+
+        ticker = asyncio.ensure_future(tick())
+        try:
+            while True:
+                key = await window_input.getch()
+                if key == ord("q"):
+                    return
+                if key == curses.KEY_RESIZE:
+                    counts["resizes"] += 1
+                if key == ord("t"):
+                    counts["requested"] += 1
+                    threading.Timer(
+                        0.5, loop.call_soon_threadsafe, [woken]
+                    ).start()
+                counts["keys"] += 1
+                keys.append(curses.keyname(key).decode(errors="replace"))
+                draw()
+        finally:
+            ticker.cancel()
+
+    try:
+        run(show)
+    except KeyboardInterrupt:
+        print("Interrupted.")
+        return 130
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

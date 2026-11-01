@@ -18,7 +18,7 @@ The clock quits with `q`.
 In the counter, `+` increments, `s` saves to `data.json`,
 and `q` saves and quits.
 
-To check a terminal, run `python -m bonipy35.curses_ext.selector_loop`:
+To check a terminal, run `python -m bonipy35.curses_ext.input_loop`:
 it shows keys, a clock, the size and thread wakeups.
 
 ## Usage
