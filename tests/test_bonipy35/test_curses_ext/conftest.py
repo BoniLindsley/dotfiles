@@ -33,6 +33,7 @@ def fixture_window(
     ):
         monkeypatch.setattr(curses, name, Mock())
     monkeypatch.setattr(curses, "initscr", Mock(return_value=window))
+    monkeypatch.setattr(curses, "isendwin", Mock(return_value=False))
     monkeypatch.setattr(curses, "has_colors", Mock(return_value=True))
     return window
 

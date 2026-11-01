@@ -35,6 +35,7 @@ from bonipy35.curses_ext.input_loop import (
     _resize,
     initialise,
     keep_resize_handler,
+    run,
 )
 
 needs_sigwinch = pytest.mark.skipif(
@@ -567,6 +568,19 @@ class TestInitialise:
             with initialise():
                 raise ValueError("application failed")
         window.keypad.assert_called_with(False)
+        window.nodelay.assert_called_with(False)
+        curses.endwin.assert_called_once()  # type: ignore[attr-defined]
+
+
+class TestRun:
+    def test_reads_stdin(self, window: Mock, stdin: Terminal) -> None:
+        async def app(given: "curses.window") -> int:
+            assert given is window
+            assert asyncio.get_event_loop().is_running()
+            stdin.type(b"r")
+            return await WindowInput(given).getch()
+
+        assert run(app) == ord("r")
         window.nodelay.assert_called_with(False)
         curses.endwin.assert_called_once()  # type: ignore[attr-defined]
 

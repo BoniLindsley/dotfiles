@@ -19,6 +19,8 @@ and read keys with a `WindowInput`::
     with initialise() as window:
         asyncio_ext.run(main(window), loop_factory=EventLoop)
 
+`run` does the last two steps: ``run(main)``.
+
 Unix only for now: Windows selectors cannot wait on the console.
 """
 
@@ -34,7 +36,10 @@ import typing
 from typing import Callable, Iterator, List, Tuple, Union
 
 # Internal modules.
+from .. import asyncio_ext
 from . import raii
+
+_T = typing.TypeVar("_T")
 
 
 # A mixin: a concrete selector later in the MRO implements the rest.
@@ -264,3 +269,16 @@ def initialise(
                 yield window
             finally:
                 window.nodelay(False)
+
+
+def run(
+    func: Callable[
+        ["curses.window"], "typing.Coroutine[typing.Any, typing.Any, _T]"
+    ],
+) -> _T:
+    """Return ``func(stdscr)`` run on an `EventLoop` inside `initialise`.
+
+    Restores the terminal on exit and cancels unfinished tasks.
+    """
+    with initialise() as window:
+        return asyncio_ext.run(func(window), loop_factory=EventLoop)
