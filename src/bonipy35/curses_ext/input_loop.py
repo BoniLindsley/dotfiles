@@ -82,19 +82,23 @@ class InputSelectorMixin(selectors.BaseSelector):
         self, timeout: Union[None, float] = None
     ) -> List[Tuple[selectors.SelectorKey, int]]:
         input_key = self.get_map().get(self._input_fd)
-        if (
-            input_key is None
-            or not input_key.events & selectors.EVENT_READ
-            or not self._has_key()
-        ):
-            return super().select(timeout)
-        ready = super().select(0)
-        for index, (key, events) in enumerate(ready):
-            if key.fd == input_key.fd:
-                ready[index] = (key, events | selectors.EVENT_READ)
-                return ready
-        ready.append((input_key, selectors.EVENT_READ))
-        return ready
+        if input_key is None or not input_key.events & selectors.EVENT_READ:
+            return self._wait(timeout, None)
+        if self._has_key():
+            return _with_input(super().select(0), input_key)
+        return self._wait(timeout, input_key)
+
+    def _wait(
+        self,
+        timeout: Union[None, float],
+        input_key: Union[None, selectors.SelectorKey],
+    ) -> List[Tuple[selectors.SelectorKey, int]]:
+        """Wait for events while curses holds no key.
+
+        ``input_key`` is given if ``input_fd`` is registered for reading.
+        """
+        del input_key
+        return super().select(timeout)
 
     def _has_key(self) -> bool:
         key = self._window.getch()
@@ -106,6 +110,19 @@ class InputSelectorMixin(selectors.BaseSelector):
 
 class InputSelector(InputSelectorMixin, selectors.DefaultSelector):
     pass
+
+
+def _with_input(
+    ready: List[Tuple[selectors.SelectorKey, int]],
+    input_key: selectors.SelectorKey,
+) -> List[Tuple[selectors.SelectorKey, int]]:
+    """Return ``ready`` with ``input_key`` readable."""
+    for index, (key, events) in enumerate(ready):
+        if key.fd == input_key.fd:
+            ready[index] = (key, events | selectors.EVENT_READ)
+            return ready
+    ready.append((input_key, selectors.EVENT_READ))
+    return ready
 
 
 def _stdscr() -> "curses.window":
