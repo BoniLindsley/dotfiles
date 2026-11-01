@@ -587,12 +587,14 @@ class TestConsoleSelector:
         terminal: Terminal,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
+        # Real windows-curses resizes inside getch before returning
+        # KEY_RESIZE, and every resize_term flushes console input.
         monkeypatch.setattr(curses, "resize_term", Mock())
         terminal.queued.append(curses.KEY_RESIZE)
         assert console_loop.run_until_complete(console_loop.getch()) == (
             curses.KEY_RESIZE
         )
-        curses.resize_term.assert_called_once_with(0, 0)  # type: ignore[attr-defined]
+        curses.resize_term.assert_not_called()  # type: ignore[attr-defined]
 
     def test_wakeup_fd(
         self,

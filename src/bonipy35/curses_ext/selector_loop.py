@@ -165,7 +165,8 @@ class EventLoop(asyncio.SelectorEventLoop):
     and restore it after ending curses, as ``run()`` does.
 
     On Windows, input comes from the console and ``input_fd`` is unused.
-    `KEY_RESIZE` resizes curses to the console before ``getch()`` returns it,
+    Windows-curses resizes curses to the console
+    before its ``getch`` returns `KEY_RESIZE`,
     and the loop takes over the signal wakeup file descriptor,
     as asyncio's own Windows loop does, so that Ctrl+C ends a wait.
     """
@@ -231,9 +232,6 @@ class EventLoop(asyncio.SelectorEventLoop):
             if key == -1:
                 return found
             found = True
-            if key == curses.KEY_RESIZE and self._console is not None:
-                # PDCurses resizes only when asked to.
-                curses.resize_term(0, 0)
             while self._input_waiters and self._input_waiters[0].done():
                 self._input_waiters.popleft()
             if self._input_waiters:
