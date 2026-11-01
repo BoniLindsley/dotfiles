@@ -26,11 +26,15 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
+from bonipy35 import asyncio_ext
 from bonipy35.curses_ext.input_loop import (
+    EventLoop,
     InputSelector,
     InputWaiter,
+    WindowInput,
     _resize,
     getch,
+    initialise,
     keep_resize_handler,
     run,
 )
@@ -107,7 +111,7 @@ def fixture_selector(
 def fixture_loop(
     selector: InputSelector,
 ) -> Iterator[asyncio.AbstractEventLoop]:
-    with contextlib.closing(asyncio.SelectorEventLoop(selector)) as loop:
+    with contextlib.closing(EventLoop(selector)) as loop:
         asyncio.set_event_loop(loop)
         try:
             yield loop
@@ -188,6 +192,39 @@ class TestInputSelectorMixin:
         assert terminal.reads == 1
         terminal.type(b"c")
         assert selector.select(None) == [(key, selectors.EVENT_READ)]
+
+    def test_default_window_is_stdscr(
+        self,
+        window: Mock,
+        terminal: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        del window
+        monkeypatch.setattr(curses, "isendwin", Mock(return_value=False))
+        with InputSelector(input_fd=terminal.input_fd) as selector:
+            key = selector.register(terminal.input_fd, selectors.EVENT_READ)
+            terminal.queued.append(ord("a"))
+            assert selector.select(None) == [(key, selectors.EVENT_READ)]
+        # Peeked through the window that initscr returned.
+        assert terminal.reads == 1
+
+    @pytest.mark.parametrize(
+        "isendwin",
+        [
+            Mock(side_effect=curses.error("must call initscr() first")),
+            Mock(return_value=True),
+        ],
+        ids=["before_initscr", "after_endwin"],
+    )
+    def test_default_window_without_curses(
+        self, monkeypatch: pytest.MonkeyPatch, isendwin: Mock
+    ) -> None:
+        initscr = Mock()
+        monkeypatch.setattr(curses, "initscr", initscr)
+        monkeypatch.setattr(curses, "isendwin", isendwin)
+        with pytest.raises(curses.error):
+            InputSelector()
+        initscr.assert_not_called()
 
     def test_write_only_not_peeked(
         self, selector: InputSelector, terminal: Terminal
@@ -380,6 +417,157 @@ class TestGetch:
         assert loop.run_until_complete(
             asyncio.wait_for(getch(window, waiter), 5)
         ) == ord("y")
+
+
+class TestWindowInput:
+    def test_queued_key(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        window: Mock,
+        terminal: Terminal,
+    ) -> None:
+        async def read() -> int:
+            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            assert window_input.window is window
+            return await window_input.getch()
+
+        terminal.queued.append(ord("x"))
+        assert loop.run_until_complete(read()) == ord("x")
+
+    def test_waits_for_key(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        window: Mock,
+        terminal: Terminal,
+    ) -> None:
+        async def read() -> int:
+            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            return await window_input.getch()
+
+        loop.call_later(0.01, terminal.type, b"y")
+        assert loop.run_until_complete(asyncio.wait_for(read(), 5)) == ord(
+            "y"
+        )
+
+    def test_wake(
+        self,
+        loop: asyncio.AbstractEventLoop,
+        window: Mock,
+        terminal: Terminal,
+    ) -> None:
+        async def read_after_wake() -> int:
+            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            task = loop.create_task(window_input.getch())
+            await asyncio.sleep(0.01)
+            # A key pushed back from outside the loop shows on no descriptor.
+            terminal.queued.append(ord("w"))
+            window_input.waiter.wake()
+            return await asyncio.wait_for(task, 5)
+
+        assert loop.run_until_complete(read_after_wake()) == ord("w")
+
+    def test_rejects_other_loop(self, window: Mock) -> None:
+        async def create() -> None:
+            WindowInput(window)
+
+        with contextlib.closing(asyncio.SelectorEventLoop()) as loop:
+            with pytest.raises(TypeError, match="EventLoop"):
+                loop.run_until_complete(create())
+
+
+@needs_unix
+class TestEventLoop:
+    @pytest.fixture(autouse=True, params=["runner", "legacy"])
+    def fixture_runner(
+        self, request: pytest.FixtureRequest, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        if request.param == "legacy":
+            monkeypatch.delattr(asyncio, "Runner", raising=False)
+
+    @pytest.fixture(autouse=True)
+    def fixture_initialised(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(curses, "isendwin", Mock(return_value=False))
+
+    def test_reads_stdin(self, window: Mock, stdin: Terminal) -> None:
+        async def app() -> int:
+            stdin.type(b"r")
+            return await WindowInput(window).getch()
+
+        assert asyncio_ext.run(app(), loop_factory=EventLoop) == ord("r")
+
+    @needs_sigwinch
+    def test_resize(
+        self,
+        window: Mock,
+        stdin: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        sizes = []  # type: List[List[int]]
+
+        def resizeterm(lines: int, columns: int) -> None:
+            sizes.append([lines, columns])
+            curses.ungetch(curses.KEY_RESIZE)
+
+        monkeypatch.setattr(
+            os, "get_terminal_size", lambda: os.terminal_size((100, 30))
+        )
+        monkeypatch.setattr(curses, "resizeterm", resizeterm)
+
+        async def app() -> int:
+            os.kill(os.getpid(), signal.SIGWINCH)
+            return await asyncio.wait_for(WindowInput(window).getch(), 5)
+
+        del stdin
+        assert asyncio_ext.run(app(), loop_factory=EventLoop) == (
+            curses.KEY_RESIZE
+        )
+        assert sizes == [[30, 100]]
+
+    def test_without_sigwinch(
+        self,
+        window: Mock,
+        stdin: Terminal,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        monkeypatch.delattr(signal, "SIGWINCH", raising=False)
+
+        async def app() -> int:
+            stdin.type(b"s")
+            return await WindowInput(window).getch()
+
+        assert asyncio_ext.run(app(), loop_factory=EventLoop) == ord("s")
+
+
+class TestInitialise:
+    def test_nodelay_while_entered(self, window: Mock) -> None:
+        with initialise() as given:
+            assert given is window
+            assert window.nodelay.call_args_list == [((True,),)]
+        window.nodelay.assert_called_with(False)
+        curses.endwin.assert_called_once()  # type: ignore[attr-defined]
+
+    def test_initscr(self, window: Mock) -> None:
+        other = Mock()
+        with initialise(initscr=lambda: other) as given:
+            assert given is other
+        window.nodelay.assert_not_called()
+
+    @needs_sigwinch
+    def test_keeps_resize_handler(self, window: Mock) -> None:
+        del window
+        previous = signal.getsignal(signal.SIGWINCH)
+        with initialise():
+            # A Python handler, so ncurses does not install its own.
+            assert callable(signal.getsignal(signal.SIGWINCH))
+        assert signal.getsignal(signal.SIGWINCH) == previous
+
+    def test_terminal_cleanup_on_failure(self, window: Mock) -> None:
+        with pytest.raises(ValueError, match="application failed"):
+            with initialise():
+                raise ValueError("application failed")
+        window.keypad.assert_called_with(False)
+        window.nodelay.assert_called_with(False)
+        curses.endwin.assert_called_once()  # type: ignore[attr-defined]
 
 
 class TestResize:

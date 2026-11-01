@@ -269,6 +269,43 @@ report.write(json.dumps(bool(called)) + "\n")
 """)
         assert child.read_json() is True
 
+    def test_isendwin_raises_before_initscr(self, spawn: Any) -> None:
+        child = spawn(r"""
+try:
+    curses.isendwin()
+except curses.error:
+    raised = True
+else:
+    raised = False
+report.write(json.dumps(raised) + "\n")
+""")
+        assert child.read_json() is True
+
+    def test_isendwin_after_endwin(self, spawn: Any) -> None:
+        child = spawn(r"""
+curses.initscr()
+before = curses.isendwin()
+curses.endwin()
+report.write(json.dumps([before, curses.isendwin()]) + "\n")
+""")
+        assert child.read_json() == [False, True]
+
+    def test_initscr_again_returns_stdscr(self, spawn: Any) -> None:
+        child = spawn(r"""
+first = curses.initscr()
+first.nodelay(True)
+first.addstr(0, 0, "abc")
+curses.ungetch(ord("z"))
+second = curses.initscr()
+text = second.instr(0, 0, 3).decode()
+# Same window: nodelay and pushed back keys carry over.
+keys = [second.getch(), second.getch()]
+ended = curses.isendwin()
+curses.endwin()
+report.write(json.dumps([text, keys, ended]) + "\n")
+""")
+        assert child.read_json() == ["abc", [ord("z"), -1], False]
+
 
 def play(child: Child, steps: List[Dict[str, Any]]) -> None:
     for step in steps:
