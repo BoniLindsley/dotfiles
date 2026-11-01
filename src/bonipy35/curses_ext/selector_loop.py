@@ -15,7 +15,6 @@ import asyncio
 import collections
 import contextlib
 import curses
-import math
 import selectors
 import signal
 import sys
@@ -136,108 +135,8 @@ class _ConsoleSelector(_Selector):
 
 
 if sys.platform == "win32":  # pragma: no cover
-    # Standard libraries, Windows-only.
-    import ctypes
-
-    from ctypes import wintypes
-
-    _FD_READ = 0x01
-    _FD_WRITE = 0x02
-    _FD_ACCEPT = 0x08
-    _FD_CONNECT = 0x10
-    _FD_CLOSE = 0x20
-    _STD_INPUT_HANDLE = -10 & 0xFFFFFFFF
-    _INFINITE = 0xFFFFFFFF
-    _WAIT_FAILED = 0xFFFFFFFF
-    # A function, its result type and its argument types.
-    _Signature = typing.Tuple[typing.Any, typing.Any, typing.List[typing.Any]]
-
-    class _Console:
-        """Wait on the console input and an event bound to sockets.
-
-        ``console_input`` is a handle to wait on for input,
-        by default standard input's.
-        """
-
-        def __init__(self, console_input: Union[None, int] = None) -> None:
-            self._kernel32 = kernel32 = ctypes.WinDLL(
-                "kernel32", use_last_error=True
-            )
-            self._ws2_32 = ws2_32 = ctypes.WinDLL(
-                "ws2_32", use_last_error=True
-            )
-            signatures = (
-                (kernel32.GetStdHandle, wintypes.HANDLE, [wintypes.DWORD]),
-                (
-                    kernel32.CreateEventW,
-                    wintypes.HANDLE,
-                    [
-                        wintypes.LPVOID,
-                        wintypes.BOOL,
-                        wintypes.BOOL,
-                        wintypes.LPCWSTR,
-                    ],
-                ),
-                (kernel32.ResetEvent, wintypes.BOOL, [wintypes.HANDLE]),
-                (kernel32.CloseHandle, wintypes.BOOL, [wintypes.HANDLE]),
-                (
-                    kernel32.WaitForMultipleObjects,
-                    wintypes.DWORD,
-                    [
-                        wintypes.DWORD,
-                        ctypes.POINTER(wintypes.HANDLE),
-                        wintypes.BOOL,
-                        wintypes.DWORD,
-                    ],
-                ),
-                (
-                    ws2_32.WSAEventSelect,
-                    ctypes.c_int,
-                    [wintypes.WPARAM, wintypes.HANDLE, ctypes.c_long],
-                ),
-            )  # type: typing.Sequence[_Signature]
-            for function, restype, argtypes in signatures:
-                function.restype = restype
-                function.argtypes = argtypes
-            if console_input is None:
-                console_input = kernel32.GetStdHandle(_STD_INPUT_HANDLE)
-            self._event = kernel32.CreateEventW(None, True, False, None)
-            if not self._event:
-                raise ctypes.WinError(ctypes.get_last_error())
-            self._handles = (wintypes.HANDLE * 2)(console_input, self._event)
-
-        def bind(self, fd: int, events: int) -> None:
-            flags = 0
-            if events & selectors.EVENT_READ:
-                flags |= _FD_READ | _FD_ACCEPT | _FD_CLOSE
-            if events & selectors.EVENT_WRITE:
-                flags |= _FD_WRITE | _FD_CONNECT | _FD_CLOSE
-            if self._ws2_32.WSAEventSelect(fd, self._event, flags):
-                raise ctypes.WinError(ctypes.get_last_error())
-
-        def unbind(self, fd: int) -> None:
-            # Fails harmlessly for a socket closed before unregistering.
-            self._ws2_32.WSAEventSelect(fd, None, 0)
-
-        def reset(self) -> None:
-            self._kernel32.ResetEvent(self._event)
-
-        def wait(self, timeout: Union[None, float]) -> None:
-            milliseconds = (
-                _INFINITE
-                if timeout is None
-                else min(_INFINITE - 1, max(0, math.ceil(timeout * 1000)))
-            )
-            if (
-                self._kernel32.WaitForMultipleObjects(
-                    2, self._handles, False, milliseconds
-                )
-                == _WAIT_FAILED
-            ):
-                raise ctypes.WinError(ctypes.get_last_error())
-
-        def close(self) -> None:
-            self._kernel32.CloseHandle(self._event)
+    # Internal modules, Windows-only.
+    from .input_loop import _Console
 
 
 def _new_console() -> typing.Any:
