@@ -62,6 +62,10 @@ class InputSelectorMixin(selectors.BaseSelector):
         self._window = window
         self._input_fd = input_fd
 
+    @property
+    def input_fd(self) -> int:
+        return self._input_fd
+
     def select(
         self, timeout: Union[None, float] = None
     ) -> List[Tuple[selectors.SelectorKey, int]]:
@@ -151,21 +155,26 @@ class InputWaiter:
 
 
 class WindowInput:
-    """Read keys of ``window`` on the running `EventLoop`.
+    """Read keys of ``window`` on the running loop.
 
+    The loop must have an ``input_selector`` property
+    giving its input selector, as `EventLoop` does.
     ``window`` must be in nodelay mode.
-    ``waiter`` waits for input on ``input_fd``;
+    ``waiter`` waits for input on the selector's ``input_fd``;
     `wake()` it to return from a pending `getch()` early.
     """
 
-    def __init__(self, window: "curses.window", *, input_fd: int = 0) -> None:
+    def __init__(self, window: "curses.window") -> None:
         loop = asyncio.get_event_loop()
-        if not isinstance(loop, EventLoop):
+        selector = getattr(loop, "input_selector", None)
+        if not isinstance(selector, InputSelectorMixin):
             raise TypeError(
-                "Expected an input_loop.EventLoop, got {!r}".format(loop)
+                "Expected a loop with an input_selector, got {!r}".format(
+                    loop
+                )
             )
         self.window = window
-        self.waiter = InputWaiter(loop, input_fd=input_fd)
+        self.waiter = InputWaiter(loop, input_fd=selector.input_fd)
 
     async def getch(self) -> int:
         """Return the next key, waiting for one."""
@@ -211,19 +220,27 @@ def keep_resize_handler() -> Iterator[None]:
 
 
 class UnixEventLoop(asyncio.SelectorEventLoop):
-    """Wait on curses input of ``stdscr`` by default.
+    """Report curses input on standard input, peeking through ``stdscr``.
 
+    ``selector`` replaces that default input selector.
     Terminal size changes queue `KEY_RESIZE`.
     Create on the main thread, while curses is initialised.
     """
 
     def __init__(
-        self, selector: Union[None, selectors.BaseSelector] = None
+        self, selector: Union[None, InputSelectorMixin] = None
     ) -> None:
         super().__init__(InputSelector() if selector is None else selector)
         if hasattr(signal, "SIGWINCH"):
             # Closing the loop removes the handler.
             self.add_signal_handler(signal.SIGWINCH, _resize)
+
+    @property
+    def input_selector(self) -> InputSelectorMixin:
+        # Asyncio keeps the selector given above, but only privately.
+        return typing.cast(
+            InputSelectorMixin, self._selector  # type: ignore[attr-defined]
+        )
 
 
 # TODO(T-031): Choose the Windows loop here.

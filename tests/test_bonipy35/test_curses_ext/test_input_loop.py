@@ -108,7 +108,7 @@ def fixture_selector(
 @pytest.fixture(name="loop")
 def fixture_loop(
     selector: InputSelector,
-) -> Iterator[asyncio.AbstractEventLoop]:
+) -> Iterator[EventLoop]:
     with contextlib.closing(EventLoop(selector)) as loop:
         asyncio.set_event_loop(loop)
         try:
@@ -141,6 +141,11 @@ def is_registered(selector: InputSelector, terminal: Terminal) -> bool:
 
 
 class TestInputSelectorMixin:
+    def test_input_fd(
+        self, selector: InputSelector, terminal: Terminal
+    ) -> None:
+        assert selector.input_fd == terminal.input_fd
+
     def test_not_registered_does_not_peek(
         self, selector: InputSelector, terminal: Terminal
     ) -> None:
@@ -401,7 +406,7 @@ class TestWindowInput:
         terminal: Terminal,
     ) -> None:
         async def read() -> int:
-            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            window_input = WindowInput(window)
             assert window_input.window is window
             return await window_input.getch()
 
@@ -415,7 +420,7 @@ class TestWindowInput:
         terminal: Terminal,
     ) -> None:
         async def read() -> int:
-            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            window_input = WindowInput(window)
             return await window_input.getch()
 
         loop.call_later(0.01, terminal.type, b"y")
@@ -430,7 +435,7 @@ class TestWindowInput:
         terminal: Terminal,
     ) -> None:
         async def read_after_wake() -> int:
-            window_input = WindowInput(window, input_fd=terminal.input_fd)
+            window_input = WindowInput(window)
             task = loop.create_task(window_input.getch())
             await asyncio.sleep(0.01)
             # A key pushed back from outside the loop shows on no descriptor.
@@ -440,12 +445,29 @@ class TestWindowInput:
 
         assert loop.run_until_complete(read_after_wake()) == ord("w")
 
-    def test_rejects_other_loop(self, window: Mock) -> None:
+    def test_any_loop_with_input_selector(
+        self, selector: InputSelector, window: Mock, terminal: Terminal
+    ) -> None:
+        class OtherLoop(asyncio.SelectorEventLoop):
+            @property
+            def input_selector(self) -> InputSelector:
+                return selector
+
+        async def read() -> int:
+            return await WindowInput(window).getch()
+
+        with contextlib.closing(OtherLoop(selector)) as loop:
+            loop.call_later(0.01, terminal.type, b"o")
+            assert loop.run_until_complete(
+                asyncio.wait_for(read(), 5)
+            ) == ord("o")
+
+    def test_rejects_loop_without_input_selector(self, window: Mock) -> None:
         async def create() -> None:
             WindowInput(window)
 
         with contextlib.closing(asyncio.SelectorEventLoop()) as loop:
-            with pytest.raises(TypeError, match="EventLoop"):
+            with pytest.raises(TypeError, match="input_selector"):
                 loop.run_until_complete(create())
 
 
@@ -461,6 +483,11 @@ class TestEventLoop:
     @pytest.fixture(autouse=True)
     def fixture_initialised(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(curses, "isendwin", Mock(return_value=False))
+
+    def test_input_selector(
+        self, loop: EventLoop, selector: InputSelector
+    ) -> None:
+        assert loop.input_selector is selector
 
     def test_reads_stdin(self, window: Mock, stdin: Terminal) -> None:
         async def app() -> int:
