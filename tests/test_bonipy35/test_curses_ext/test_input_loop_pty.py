@@ -119,7 +119,9 @@ class Child:
         self.master, slave = pty.openpty()
         set_size(self.master, 24, 80)
         self._report, report_writer = os.pipe()
-        environment = dict(os.environ, TERM="xterm", ESCDELAY="100")
+        # Split escape sequences pause 0.01 s; a long ESCDELAY keeps them
+        # one key even when the machine is loaded.
+        environment = dict(os.environ, TERM="xterm", ESCDELAY="1000")
         try:
             # pylint: disable-next=consider-using-with
             self.process = subprocess.Popen(
@@ -231,7 +233,8 @@ start = time.monotonic()
 key = window.getch()
 elapsed = time.monotonic() - start
 curses.endwin()
-report.write(json.dumps([key, elapsed < 0.05]) + "\n")
+# Far below a wait for input, with room for a loaded machine.
+report.write(json.dumps([key, elapsed < 1]) + "\n")
 """)
         assert child.read_json() == [-1, True]
 

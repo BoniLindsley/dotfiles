@@ -30,8 +30,16 @@ class TestClock:
         window.getmaxyx.return_value = (1, 1)
 
         async def check() -> None:
+            redrawn = asyncio.Event()
+
+            def noutrefresh() -> None:
+                if window.noutrefresh.call_count >= 2:
+                    redrawn.set()
+
+            window.noutrefresh.side_effect = noutrefresh
             task = loop.create_task(clock(window))
-            await asyncio.sleep(0.11)
+            # Wait for the timer's redraw, not a fixed time that load can skew.
+            await asyncio.wait_for(redrawn.wait(), timeout=5)
             task.cancel()
             with pytest.raises(asyncio.CancelledError):
                 await task
