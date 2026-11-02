@@ -1,8 +1,5 @@
 #!/usr/bin/env python3
 
-# TODO(T-032): the loop fixture repeats the EventLoop tests' one.
-# pylint: disable=duplicate-code
-
 # Standard libraries.
 import asyncio
 import curses

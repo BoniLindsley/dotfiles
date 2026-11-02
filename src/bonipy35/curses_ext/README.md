@@ -19,44 +19,53 @@ In the counter, `+` increments, `s` saves to `data.json`,
 and `q` saves and quits.
 
 To check a terminal, run `python -m bonipy35.curses_ext.input_loop`:
-it shows keys, a clock, the size and thread wakeups.
+it shows keys, mouse events, a clock, the size and thread wakeups.
 
 ## Usage
 
 ```python
 import asyncio
-import curses
-import typing
-from bonipy35.curses_ext import EventLoop, run
+from bonipy35.curses_ext import WindowInput, run
 
 
-async def async_run():
-    loop = typing.cast(EventLoop, asyncio.get_event_loop())
-    window = loop.window
+async def main(window):
     window.addstr(0, 0, "Press a key")
-    window.noutrefresh()
-    curses.doupdate()
-    key = await loop.getch()
+    window.refresh()
+    key = await WindowInput(window).getch()
     await asyncio.sleep(0.1)  # Normal asyncio operations work here.
     return key
 
 
-key = run(async_run())
+key = run(main)
 print("Key:", key)  # The terminal has been restored.
 ```
 
-The `run()` function restores the terminal on exit
-and cancels unfinished tasks.
-The loop waits outside curses and reads keys when input is ready,
-so socket, pipe and subprocess readiness work as usual on Unix.
+`run(main)` initialises curses with `stdscr` in nodelay mode,
+runs `main(stdscr)` on an `EventLoop`,
+and restores the terminal on exit, cancelling unfinished tasks.
+To do the steps separately, enter `initialise()`,
+then run the coroutine with `loop_factory=EventLoop`,
+for example with `bonipy35.asyncio_ext.run`.
+
+`WindowInput(window).getch()` returns the next key,
+waiting on the loop while curses has none,
+so other tasks keep running.
+Keys pushed back with `curses.ungetch` from any task are returned too.
+Waiting peeks with `getch`, which refreshes the window,
+so draw each screen in one synchronous step.
+The loop waits outside curses, so socket, pipe and subprocess
+readiness work as usual on Unix.
 On Windows it waits on the console and the loop's sockets,
 the only readiness Windows selector loops support.
 
 `getch()` returns `KEY_RESIZE` when the terminal is resized.
 On Unix the loop handles `SIGWINCH`;
-`run()` keeps ncurses from installing its own handler.
+`initialise()` keeps ncurses from installing its own handler.
 Applications that initialise curses themselves
-should do so inside `keep_resize_handler()`.
+should do so inside `keep_resize_handler()`,
+and create the loop inside it.
+On Windows, windows-curses resizes curses itself
+before returning `KEY_RESIZE`.
 
 ## Mini-editor
 

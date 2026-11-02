@@ -9,9 +9,6 @@ between characters, sleep, resize the terminal, or expect lines
 reported by the child, which names each key with ``curses.keyname``.
 """
 
-# TODO(T-032): drop with the EventLoop tests, which these repeat.
-# pylint: disable=duplicate-code
-
 # Standard libraries.
 import importlib.util
 import json

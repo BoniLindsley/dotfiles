@@ -4,9 +4,6 @@
 Real ncurses is driven on a pseudo-terminal in ``test_input_loop_pty``.
 """
 
-# TODO(T-032): drop with the EventLoop tests, which these repeat.
-# pylint: disable=duplicate-code
-
 # Standard libraries.
 import asyncio
 import collections
