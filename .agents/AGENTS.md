@@ -13,9 +13,20 @@ A project's own `AGENTS.md` adds to these.
   Human co-authors are fine when I ask for them.
 - Commit subjects start with a conventional prefix.
   Use the prefixes the project's history already uses,
-  such as `add:`, `change:` and `fix:`.
+  such as `add:`, `change:` and `fix:`,
+  and a Conventional Commits type where none of them fits,
+  such as `refactor:`.
   Where it has none, use Conventional Commits types:
   `feat`, `fix`, `docs`, `refactor`, `test`, `build` or `chore`.
+- Split work into commits that are each easy to review
+  and pass the project's checks.
+  Moves, renames and refactors go in commits of their own,
+  without changes in behaviour.
+- Commit with the identity git is configured with.
+  Where it has none, ask me which to use before committing,
+  offering the identities in the project's history
+  and the account identity the tool reports,
+  and pass the answer with `git -c user.name=... -c user.email=...`.
 - Do not add package or library dependencies,
   runtime or development, without my approval.
   Recommend one when it is clearly worth it,

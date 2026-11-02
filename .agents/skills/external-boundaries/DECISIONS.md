@@ -58,3 +58,16 @@ Read before proposing a change to it; not needed to use it.
     to stop agents loading it on their own.
   - Revisit: make it automatic, or move stable parts
     into coding-conventions and the language styles.
+- **D-8** `[accepted]` Adapters may be tested by replacing
+  the external library's own functions.
+  - Change: under "Design APIs for It",
+    an adapter calls the library directly,
+    and its tests may replace the library's functions
+    when the real thing cannot be used;
+    the project's own code is never replaced this way.
+  - Reason: "Do not rely on monkeypatching" and
+    "a parameter that is always given the same value"
+    pulled opposite ways for an adapter calling
+    module-level functions of a terminal library,
+    which production always passes the real ones.
+    Found by an agent, 2026-10-30.

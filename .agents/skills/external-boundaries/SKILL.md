@@ -78,6 +78,15 @@ Then use the lightest seam that works:
 Do not rely on monkeypatching or link-time substitution
 to reach code that could take a parameter instead.
 
+An adapter calls the external library directly;
+it does not take the library's functions as parameters,
+since production would always pass the same ones.
+Where a test of the adapter cannot use the real thing,
+it may replace the library's own functions,
+such as `curses.ungetch` with a fake terminal's.
+Never replace the project's own code this way:
+a consumer takes the adapter as a parameter.
+
 Wire real adapters in one place, such as `main` or `run`,
 without globals or singletons;
 tests wire stored data or fakes in the same way.
