@@ -4,6 +4,7 @@ line-length = 78
 [tool.pytest.ini_options]
 markers = [
   "integration: tests that exercise external applications such as Neovim",
+  "e2e: end-to-end tests of stored cases through the external program",
 ]
 
 [tool.coverage.report]

@@ -22,6 +22,7 @@ from typing import Callable, Dict, List, Union
 
 # Internal modules.
 from .compare import Entry, Side, compare
+from .diff import Diff, diff
 from .rc import Daemon, RcError
 from .runner import RcloneError, argument_parser, runner_from_arguments
 from .transfer import Direction, copy_files
@@ -201,6 +202,25 @@ def copy_request(
     )
 
 
+def diff_request(body: object) -> Union[None, typing.Tuple[str, str, str]]:
+    """Return locations and path of a diff request if valid."""
+    paths = locations(body)
+    if paths is None:
+        return None
+    path = typing.cast(Dict[str, object], body).get("path")
+    if not isinstance(path, str):
+        return None
+    return paths["left"], paths["right"], path
+
+
+def diff_json(result: Diff) -> Dict[str, object]:
+    """Describe a diff for JSON; ``reason`` is a value such as ``binary``."""
+    return {
+        "hunks": [[line._asdict() for line in hunk] for hunk in result.hunks],
+        "reason": None if result.reason is None else result.reason.value,
+    }
+
+
 def add_routes(server: Server, daemon: Daemon) -> None:
     """Serve the API on ``server``, sending rclone requests to ``daemon``."""
 
@@ -246,8 +266,24 @@ def add_routes(server: Server, daemon: Daemon) -> None:
         finally:
             results.close()
 
+    def diff_route(handler: Handler, body: object) -> None:
+        request = diff_request(body)
+        if request is None:
+            handler.send_json_error(
+                400, "Expected left, right and path as strings"
+            )
+            return
+        left, right, path = request
+        try:
+            result = diff(daemon, left, right, path)
+        except RcError as error:
+            handler.send_json_error(502, str(error))
+            return
+        handler.send_json(200, diff_json(result))
+
     server.routes["/api/compare"] = compare_route
     server.routes["/api/copy"] = copy_route
+    server.routes["/api/diff"] = diff_route
 
 
 def page_url(server: Server, *, left: str = "", right: str = "") -> str:

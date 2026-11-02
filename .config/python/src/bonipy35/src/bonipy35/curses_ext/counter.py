@@ -3,7 +3,7 @@
 
 # Standard libraries.
 import argparse
-import asyncio
+import curses
 import datetime
 import json
 import pathlib
@@ -13,7 +13,7 @@ import typing
 from typing import List, Union
 
 # Internal modules.
-from . import selector_loop
+from . import input_loop
 from . import ui
 
 
@@ -50,19 +50,19 @@ class Data:
             )
 
 
-async def async_run() -> int:
-    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
+async def async_run(window: "curses.window") -> int:
+    window_input = input_loop.WindowInput(window)
     path = pathlib.Path("data.json")
     data = Data.load(path)
     while True:
         ui.draw(
-            loop,
+            window,
             [
                 "Counter: + adds, s saves, q saves and quits",
                 "Zenny: " + str(data.zenny),
             ],
         )
-        key = await loop.getch()
+        key = await window_input.getch()
         if key == ord("+"):
             data.zenny += 1
             data.updated_at = datetime.datetime.now()
@@ -77,7 +77,7 @@ def main(argv: Union[None, List[str]] = None) -> int:
         description="Persistent counter using asyncio and ncurses"
     )
     parser.parse_args(None if argv is None else argv[1:])
-    return selector_loop.run(async_run())
+    return input_loop.run(async_run)
 
 
 if __name__ == "__main__":

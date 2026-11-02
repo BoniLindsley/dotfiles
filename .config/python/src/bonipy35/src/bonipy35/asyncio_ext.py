@@ -5,7 +5,7 @@ import asyncio
 import sys
 import typing
 
-from typing import Tuple, Union
+from typing import Callable, Tuple, Union
 
 _T = typing.TypeVar("_T")
 
@@ -118,9 +118,14 @@ def stdin_ready() -> "asyncio.Future[None]":
     return future
 
 
-def _run_legacy(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:
+def _run_legacy(
+    coro: "typing.Coroutine[typing.Any, typing.Any, _T]",
+    loop_factory: "Union[None, Callable[[], asyncio.AbstractEventLoop]]",
+) -> _T:
     """Provide runner cleanup on Python versions predating asyncio.run."""
-    loop = asyncio.new_event_loop()
+    loop = (
+        asyncio.new_event_loop() if loop_factory is None else loop_factory()
+    )
     asyncio.set_event_loop(loop)
     try:
         return loop.run_until_complete(coro)
@@ -153,13 +158,26 @@ def _run_legacy(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:
                 asyncio.set_event_loop(None)
 
 
-def run(coro: "typing.Coroutine[typing.Any, typing.Any, _T]") -> _T:
+def run(
+    coro: "typing.Coroutine[typing.Any, typing.Any, _T]",
+    *,
+    loop_factory: "Union[None, Callable[[], asyncio.AbstractEventLoop]]" = None
+) -> _T:
     """Run a coroutine using asyncio.run, with a Python 3.5/3.6 fallback.
 
-    Use the installed event-loop policy. Cancel unfinished tasks and close the
-    loop on exit. Call outside an existing running loop.
+    Create the loop with ``loop_factory`` if given,
+    otherwise use the installed event-loop policy.
+    Cancel unfinished tasks and close the loop on exit.
+    Call outside an existing running loop.
     """
-    runner = getattr(asyncio, "run", None)
-    if runner is not None:
-        return typing.cast(_T, runner(coro))
-    return _run_legacy(coro)
+    if loop_factory is not None:
+        # asyncio.run takes a factory from Python 3.12, Runner from 3.11.
+        runner_class = getattr(asyncio, "Runner", None)
+        if runner_class is not None:
+            with runner_class(loop_factory=loop_factory) as runner:
+                return typing.cast(_T, runner.run(coro))
+        return _run_legacy(coro, loop_factory)
+    run_function = getattr(asyncio, "run", None)
+    if run_function is not None:
+        return typing.cast(_T, run_function(coro))
+    return _run_legacy(coro, None)

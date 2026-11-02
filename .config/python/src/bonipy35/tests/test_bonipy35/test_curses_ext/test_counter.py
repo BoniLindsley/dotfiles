@@ -11,8 +11,8 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.selector_loop import EventLoop
 from bonipy35.curses_ext.counter import Data, async_run
+from bonipy35.curses_ext.input_loop import EventLoop
 
 
 class TestData:
@@ -58,5 +58,5 @@ class TestAsyncRun:
             ord("s"),
             ord("q"),
         ] + [-1] * 20
-        assert loop.run_until_complete(async_run()) == 0
+        assert loop.run_until_complete(async_run(window)) == 0
         assert Data.load(tmp_path / "data.json").zenny == 1

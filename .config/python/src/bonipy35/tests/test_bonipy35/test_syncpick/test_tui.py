@@ -14,7 +14,7 @@ import pytest
 
 # Internal modules.
 from bonipy35 import asyncio_ext
-from bonipy35.curses_ext.selector_loop import use_event_loop_policy
+from bonipy35.curses_ext.input_loop import EventLoop, InputSelector
 from bonipy35.syncpick.compare import Entry, Side, State
 from bonipy35.syncpick.rc import RcError
 from bonipy35.syncpick.screen import Screen, Style
@@ -344,6 +344,8 @@ class TestRun:
         )
         daemon = Mock()
         daemon.call.return_value = {"list": [], "combined": []}
-        with use_event_loop_policy(window):
-            asyncio_ext.run(run(daemon, "a", "b"))
+        asyncio_ext.run(
+            run(daemon, window, left="a", right="b"),
+            loop_factory=lambda: EventLoop(InputSelector(window=window)),
+        )
         assert window.addnstr.call_args_list[0][0][2] == "a  <->  b"

@@ -84,4 +84,6 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         def ids(path: pathlib.Path) -> str:
             return path.name
 
-        metafunc.parametrize(param_name, input_directory.iterdir(), ids=ids)
+        metafunc.parametrize(
+            param_name, sorted(input_directory.iterdir()), ids=ids
+        )

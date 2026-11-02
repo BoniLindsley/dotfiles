@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 # Standard libraries.
+import json
 import pathlib
 import shutil
 import sys
@@ -58,6 +59,19 @@ class Handler(http.server.BaseHTTPRequestHandler):
             os._exit(0)
         else:
             self.reply(404, b"not found")
+
+    def do_GET(self):
+        if self.headers["Authorization"] != expected:
+            self.reply(401, b"Unauthorized")
+        elif self.path.startswith("/[missing]/"):
+            self.reply(404, b'{"error": "object not found", "status": 404}')
+        else:
+            # Ignores Range, so that the client must stop reading itself.
+            self.reply(200, json.dumps({
+                "arguments": sys.argv[1:],
+                "path": self.path,
+                "range": self.headers["Range"],
+            }).encode("utf-8"))
 
     def reply(self, status, content):
         self.send_response(status)
@@ -198,6 +212,30 @@ class TestCall:
             daemon.call("echo")
 
 
+class TestRead:
+    def test_requests_file(self, daemon: Daemon) -> None:
+        content = daemon.read("r:d/x y", "a #1/ü", limit=1000)
+        assert json.loads(content.decode("utf-8")) == {
+            "arguments": ["--rc-addr", "127.0.0.1:0", "--rc-serve"],
+            "path": "/[r%3Ad%2Fx%20y]/a%20%231/%C3%BC",
+            "range": "bytes=0-999",
+        }
+
+    def test_stops_at_limit(self, daemon: Daemon) -> None:
+        assert daemon.read("fs", "a", limit=3) == b'{"a'
+
+    def test_missing(self, daemon: Daemon) -> None:
+        with pytest.raises(RcError) as raised:
+            daemon.read("missing", "a", limit=10)
+        assert str(raised.value) == "object not found"
+        assert raised.value.path == "[missing]/a"
+        assert raised.value.status == 404
+
+    def test_not_running(self, runner: Runner) -> None:
+        with pytest.raises(RcError, match="not running"):
+            Daemon(runner).read("fs", "a", limit=10)
+
+
 class TestWait:
     def test_returns_exit_code(self, daemon: Daemon) -> None:
         daemon.call("quit")
@@ -251,3 +289,23 @@ class TestRealRcd:
                     },
                 )
             assert raised.value.status == 404
+
+    def test_read(self, tmp_path: pathlib.Path) -> None:
+        config = tmp_path / "rclone.conf"
+        config.write_text("")
+        tree = tmp_path / "tree dir"
+        (tree / "d").mkdir(parents=True)
+        (tree / "d" / "a #1").write_bytes(b"content\r\n")
+        (tree / "empty").write_bytes(b"")
+        with Daemon(Runner(config=config)) as daemon:
+            assert daemon.read(str(tree), "d/a #1", limit=100) == (
+                b"content\r\n"
+            )
+            assert daemon.read(str(tree), "d/a #1", limit=4) == b"cont"
+            assert daemon.read(str(tree), "empty", limit=4) == b""
+            with pytest.raises(RcError) as raised:
+                daemon.read(str(tree), "missing", limit=4)
+            assert raised.value.status == 404
+            with pytest.raises(RcError) as raised:
+                daemon.read(str(tree), "d", limit=4)
+            assert raised.value.status == 500

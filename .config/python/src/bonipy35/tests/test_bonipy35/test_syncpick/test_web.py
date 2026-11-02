@@ -24,6 +24,7 @@ import pytest
 
 # Internal modules.
 from bonipy35.syncpick.compare import Entry, Side, State
+from bonipy35.syncpick.diff import Diff, Line, Reason
 from bonipy35.syncpick.rc import Daemon, RcError
 from bonipy35.syncpick.runner import Runner
 from bonipy35.syncpick.transfer import Direction
@@ -35,6 +36,8 @@ from bonipy35.syncpick.web import (
     add_routes,
     Waker,
     copy_request,
+    diff_json,
+    diff_request,
     entry_json,
     locations,
     page_url,
@@ -261,6 +264,7 @@ class TestLogMessage:
 class FakeDaemon(Daemon):
     """Lists ``left`` with one file and checks it as left only.
 
+    Reads file ``a`` of ``left`` and of ``right``; others are missing.
     Copies succeed except for source ``missing``.
     After the first copy, each waits until ``proceed`` is set.
     """
@@ -298,6 +302,13 @@ class FakeDaemon(Daemon):
                 ]
             }
         return {"list": []}
+
+    def read(self, fs: str, path: str, *, limit: int) -> bytes:
+        if self.error is not None:
+            raise self.error
+        if path != "a":
+            raise RcError("object not found", path=path, status=404)
+        return {"left": b"a\nb\n", "right": b"a\nc\n"}[fs][:limit]
 
 
 @pytest.fixture(name="daemon")
@@ -513,6 +524,90 @@ class TestCopyRoute:
         assert "direction" in typing.cast(Dict[str, str], body)["error"]
 
 
+class TestDiffRequest:
+    def test_valid(self) -> None:
+        assert diff_request({"left": "a", "right": "b:", "path": "d/x"}) == (
+            "a",
+            "b:",
+            "d/x",
+        )
+
+    @pytest.mark.parametrize(
+        "body",
+        [
+            {"right": "b", "path": "x"},
+            {"left": "a", "right": "b"},
+            {"left": "a", "right": "b", "path": ["x"]},
+        ],
+    )
+    def test_invalid(self, body: object) -> None:
+        assert diff_request(body) is None
+
+
+class TestDiffJson:
+    def test_hunks(self) -> None:
+        assert diff_json(
+            Diff(
+                hunks=[[Line(kind="+", left=1, right=None, text="x")]],
+                reason=None,
+            )
+        ) == {
+            "hunks": [[{"kind": "+", "left": 1, "right": None, "text": "x"}]],
+            "reason": None,
+        }
+
+    def test_reason(self) -> None:
+        assert diff_json(Diff(hunks=[], reason=Reason.TOO_LARGE)) == {
+            "hunks": [],
+            "reason": "too-large",
+        }
+
+
+def diff_body(path: str) -> bytes:
+    return json.dumps(
+        {"left": "left", "right": "right", "path": path}
+    ).encode("utf-8")
+
+
+class TestDiffRoute:
+    @pytest.mark.usefixtures("daemon")
+    def test_hunks(self, server: Server) -> None:
+        assert post(server, "/api/diff", diff_body("a")) == (
+            200,
+            {
+                "hunks": [
+                    [
+                        {"kind": " ", "left": 1, "right": 1, "text": "a"},
+                        {"kind": "-", "left": None, "right": 2, "text": "c"},
+                        {"kind": "+", "left": 2, "right": None, "text": "b"},
+                    ]
+                ],
+                "reason": None,
+            },
+        )
+
+    @pytest.mark.usefixtures("daemon")
+    def test_reason(self, server: Server) -> None:
+        assert post(server, "/api/diff", diff_body("b")) == (
+            200,
+            {"hunks": [], "reason": "left-missing"},
+        )
+
+    @pytest.mark.usefixtures("daemon")
+    def test_invalid_body(self, server: Server) -> None:
+        assert post(server, "/api/diff", b'{"left": "l", "right": "r"}') == (
+            400,
+            {"error": "Expected left, right and path as strings"},
+        )
+
+    def test_rclone_error(self, server: Server, daemon: FakeDaemon) -> None:
+        daemon.error = RcError("is a directory", path="[l]/a", status=500)
+        assert post(server, "/api/diff", diff_body("a")) == (
+            502,
+            {"error": "is a directory"},
+        )
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(RCLONE is None, reason="Executable not found: rclone")
 class TestRealRoutes:
@@ -587,6 +682,29 @@ class TestRealRoutes:
             if path.is_file()
         ) == ["d/a"]
         assert (right / "d" / "a").read_text() == "a"
+
+    def test_diff(self, server: Server, tmp_path: pathlib.Path) -> None:
+        config = tmp_path / "rclone.conf"
+        config.write_text("")
+        left = tmp_path / "left"
+        right = tmp_path / "right"
+        (left / "d").mkdir(parents=True)
+        (right / "d").mkdir(parents=True)
+        (left / "d" / "a file").write_bytes(b"one\r\n")
+        (right / "d" / "a file").write_bytes(b"one\n")
+        with Daemon(Runner(config=config)) as daemon:
+            add_routes(server, daemon)
+            assert post(
+                server,
+                "/api/diff",
+                json.dumps(
+                    {
+                        "left": str(left),
+                        "right": str(right),
+                        "path": "d/a file",
+                    }
+                ).encode("utf-8"),
+            ) == (200, {"hunks": [], "reason": "line-endings"})
 
 
 class TestPageUrl:

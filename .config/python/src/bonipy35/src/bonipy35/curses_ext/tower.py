@@ -16,7 +16,7 @@ import typing
 # Internal modules.
 from .. import contextlib_ext
 from .. import logging_ext
-from . import selector_loop
+from . import input_loop
 from . import ui
 
 _logger = logging.getLogger(__name__)
@@ -310,10 +310,7 @@ class State:
 
     def render(self, window: "curses.window") -> None:
         if self.height < 28 or self.width < 44:
-            loop = typing.cast(
-                selector_loop.EventLoop, asyncio.get_event_loop()
-            )
-            ui.draw(loop, ["Tower needs 44 columns and 28 rows; q quits."])
+            ui.draw(window, ["Tower needs 44 columns and 28 rows; q quits."])
             return
         self.draw_border(window)
         self.draw_ui(window)
@@ -519,11 +516,11 @@ class State:
             await asyncio.sleep(1 / 5)
 
 
-async def async_run() -> int:
-    loop = typing.cast(selector_loop.EventLoop, asyncio.get_event_loop())
-    state = State(loop.window)
-    draw_task = loop.create_task(state.run_render_loop(loop.window))
-    input_task = loop.create_task(loop.getch())
+async def async_run(window: "curses.window") -> int:
+    window_input = input_loop.WindowInput(window)
+    state = State(window)
+    draw_task = asyncio.ensure_future(state.run_render_loop(window))
+    input_task = asyncio.ensure_future(window_input.getch())
     try:
         while not state.is_stopping:
             # Propagate rendering failures even while input is blocked.
@@ -535,7 +532,7 @@ async def async_run() -> int:
                 break
             state.handle_input(input_task.result())
             if not state.is_stopping:
-                input_task = loop.create_task(loop.getch())
+                input_task = asyncio.ensure_future(window_input.getch())
     finally:
         draw_task.cancel()
         input_task.cancel()
@@ -544,7 +541,7 @@ async def async_run() -> int:
 
 
 def run() -> int:
-    return selector_loop.run(async_run())
+    return input_loop.run(async_run)
 
 
 def main(argv: "None | list[str]" = None) -> int:

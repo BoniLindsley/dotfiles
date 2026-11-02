@@ -10,8 +10,8 @@ from unittest.mock import Mock
 import pytest
 
 # Internal modules.
-from bonipy35.curses_ext.selector_loop import EventLoop
 from bonipy35.curses_ext.editor import Editor, async_run
+from bonipy35.curses_ext.input_loop import EventLoop
 
 
 @pytest.fixture(name="pad")
@@ -252,4 +252,4 @@ class TestAsyncRun:
     def test_quit(self, loop: EventLoop, window: Mock, pad: Mock) -> None:
         del pad
         window.getch.side_effect = list(map(ord, ":quit\n")) + [-1] * 20
-        assert loop.run_until_complete(async_run()) == 0
+        assert loop.run_until_complete(async_run(window)) == 0
