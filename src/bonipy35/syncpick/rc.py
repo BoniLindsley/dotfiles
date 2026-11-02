@@ -13,6 +13,7 @@ import sys
 import threading
 import typing
 import urllib.error
+import urllib.parse
 import urllib.request
 
 from typing import BinaryIO, Dict, List, Tuple, Union
@@ -81,7 +82,13 @@ class Daemon:
         environment = self.runner.environment()
         environment["RCLONE_RC_USER"] = user
         environment["RCLONE_RC_PASS"] = password
-        command = [self.runner.executable, "rcd", "--rc-addr", "127.0.0.1:0"]
+        command = [
+            self.runner.executable,
+            "rcd",
+            "--rc-addr",
+            "127.0.0.1:0",
+            "--rc-serve",
+        ]
         try:
             # Outlives this method; stop() waits for it.
             process = subprocess.Popen(  # pylint: disable=consider-using-with
@@ -151,14 +158,31 @@ class Daemon:
             )
         return result
 
+    def read(self, fs: str, path: str, *, limit: int) -> bytes:
+        """Read at most the first ``limit`` bytes of file ``path`` in ``fs``.
+
+        A missing file raises `RcError` with status 404.
+        """
+        return self._send(
+            "[{}]/{}".format(
+                urllib.parse.quote(fs, safe=""), urllib.parse.quote(path)
+            ),
+            headers={"Range": "bytes=0-{}".format(limit - 1)},
+            limit=limit,
+        )
+
     def _send(
         self,
         path: str,
         *,
         data: Union[None, bytes] = None,
-        headers: Dict[str, str]
+        headers: Dict[str, str],
+        limit: Union[None, int] = None
     ) -> bytes:
-        """Send a request to ``path``, a POST if ``data`` is given."""
+        """Send a request to ``path``, a POST if ``data`` is given.
+
+        Returns at most ``limit`` bytes of the response if given.
+        """
         if self._running is None:
             raise RcError("rclone rcd is not running", path=path, status=0)
         request = urllib.request.Request(
@@ -170,7 +194,7 @@ class Daemon:
         opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         try:
             with opener.open(request) as response:
-                return typing.cast(bytes, response.read())
+                return typing.cast(bytes, response.read(limit))
         except urllib.error.HTTPError as error:
             try:
                 message = _error_message(error.read())
