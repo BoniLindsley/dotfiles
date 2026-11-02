@@ -623,13 +623,15 @@ def run(
 
 
 def main() -> int:
-    """Show keys, a clock and thread wakeups, to check a terminal."""
+    """Show input, a clock and thread wakeups, to check a terminal."""
 
     async def show(window: "curses.window") -> None:
         loop = asyncio.get_event_loop()
         window_input = WindowInput(window)
         keys = collections.deque(maxlen=8)  # type: typing.Deque[str]
         counts = collections.Counter()  # type: typing.Counter[str]
+        mouse = ""
+        curses.mousemask(curses.ALL_MOUSE_EVENTS)
 
         def draw() -> None:
             height, width = window.getmaxyx()
@@ -641,6 +643,7 @@ def main() -> int:
                 "Size {} x {}".format(height, width),
                 "Keys {}: {}".format(counts["keys"], " ".join(keys)),
                 "Resizes {}".format(counts["resizes"]),
+                "Mouse events {}: {}".format(counts["mouse"], mouse),
                 "Thread wakeups {} of {}".format(
                     counts["woken"], counts["requested"]
                 ),
@@ -667,6 +670,13 @@ def main() -> int:
                     return
                 if key == curses.KEY_RESIZE:
                     counts["resizes"] += 1
+                if key == curses.KEY_MOUSE:
+                    counts["mouse"] += 1
+                    try:
+                        _, x, y, _, state = curses.getmouse()
+                        mouse = "{}, {} state {:#x}".format(x, y, state)
+                    except curses.error:
+                        mouse = "unreadable"
                 if key == ord("t"):
                     counts["requested"] += 1
                     threading.Timer(
