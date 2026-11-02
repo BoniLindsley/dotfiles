@@ -22,7 +22,7 @@ import threading
 import time
 import typing
 
-from typing import Dict, Iterator, List, Optional, Tuple
+from typing import Callable, Dict, Iterator, List, Optional, Tuple
 from unittest.mock import Mock
 
 # External dependencies.
@@ -114,14 +114,9 @@ def fixture_selector(
 
 @pytest.fixture(name="loop")
 def fixture_loop(
-    selector: InputSelector,
-) -> Iterator[EventLoop]:
-    with contextlib.closing(EventLoop(selector)) as loop:
-        asyncio.set_event_loop(loop)
-        try:
-            yield loop
-        finally:
-            asyncio.set_event_loop(None)
+    selector: InputSelector, current_loop: Callable[[EventLoop], EventLoop]
+) -> EventLoop:
+    return current_loop(EventLoop(selector))
 
 
 @pytest.fixture(name="waiter")
@@ -886,13 +881,9 @@ class TestEventLoop:
 @pytest.fixture(name="windows_loop")
 def fixture_windows_loop(
     console_selector: ConsoleSelector,
-) -> Iterator[WindowsEventLoop]:
-    with contextlib.closing(WindowsEventLoop(console_selector)) as loop:
-        asyncio.set_event_loop(loop)
-        try:
-            yield loop
-        finally:
-            asyncio.set_event_loop(None)
+    current_loop: Callable[[WindowsEventLoop], WindowsEventLoop],
+) -> WindowsEventLoop:
+    return current_loop(WindowsEventLoop(console_selector))
 
 
 def get_wakeup_fd() -> int:

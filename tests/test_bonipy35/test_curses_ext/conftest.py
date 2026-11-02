@@ -5,11 +5,11 @@
 
 # Standard libraries.
 import asyncio
-import contextlib
 import curses
 import itertools
+import typing
 
-from typing import Iterator
+from typing import Callable, Iterator, List
 from unittest.mock import Mock
 
 # External dependencies.
@@ -52,11 +52,32 @@ def fixture_window(
     return window
 
 
-@pytest.fixture(name="loop")
-def fixture_loop(window: Mock) -> Iterator[EventLoop]:
-    with contextlib.closing(EventLoop(InputSelector(window=window))) as loop:
+_Loop = typing.TypeVar("_Loop", bound=asyncio.AbstractEventLoop)
+
+
+@pytest.fixture(name="current_loop")
+def fixture_current_loop() -> Iterator[Callable[[_Loop], _Loop]]:
+    """Return a function setting a loop as current until the test ends.
+
+    The loops are closed then.
+    """
+    loops = []  # type: List[asyncio.AbstractEventLoop]
+
+    def set_current(loop: _Loop) -> _Loop:
+        loops.append(loop)
         asyncio.set_event_loop(loop)
-        try:
-            yield loop
-        finally:
-            asyncio.set_event_loop(None)
+        return loop
+
+    try:
+        yield set_current
+    finally:
+        asyncio.set_event_loop(None)
+        for loop in loops:
+            loop.close()
+
+
+@pytest.fixture(name="loop")
+def fixture_loop(
+    window: Mock, current_loop: Callable[[EventLoop], EventLoop]
+) -> EventLoop:
+    return current_loop(EventLoop(InputSelector(window=window)))
