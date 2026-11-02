@@ -999,6 +999,114 @@ class TestWindowsEventLoop:
         windows_loop.run_until_complete(check())
 
 
+@pytest.fixture(name="platform_loop", params=["unix", "windows"])
+def fixture_platform_loop(
+    request: pytest.FixtureRequest,
+) -> asyncio.AbstractEventLoop:
+    """Each platform's loop; Windows waits on a fake console."""
+    return typing.cast(
+        asyncio.AbstractEventLoop,
+        request.getfixturevalue(
+            "loop" if request.param == "unix" else "windows_loop"
+        ),
+    )
+
+
+class TestReadiness:
+    """Asyncio readiness works as usual on the curses loops."""
+
+    def test_thread_wakeup(
+        self, platform_loop: asyncio.AbstractEventLoop
+    ) -> None:
+        loop = platform_loop
+        ready = loop.create_future()  # type: asyncio.Future[int]
+        started = threading.Event()
+
+        def worker() -> None:
+            assert started.wait(5)
+            loop.call_soon_threadsafe(ready.set_result, 42)
+
+        thread = threading.Thread(target=worker)
+        thread.start()
+        try:
+            loop.call_soon(started.set)
+            assert loop.run_until_complete(asyncio.wait_for(ready, 5)) == 42
+        finally:
+            thread.join(timeout=5)
+        assert not thread.is_alive()
+
+    def test_reader_and_writer(
+        self, platform_loop: asyncio.AbstractEventLoop
+    ) -> None:
+        loop = platform_loop
+        left, right = socket.socketpair()
+        with left, right:
+            writable = loop.create_future()  # type: asyncio.Future[bool]
+
+            def write() -> None:
+                loop.remove_writer(left.fileno())
+                writable.set_result(True)
+
+            loop.add_reader(left.fileno(), lambda: None)
+            # Watching the same descriptor for writing modifies its key.
+            loop.add_writer(left.fileno(), write)
+            assert loop.run_until_complete(asyncio.wait_for(writable, 5))
+            loop.remove_reader(left.fileno())
+
+    def test_socket_reader(
+        self, platform_loop: asyncio.AbstractEventLoop
+    ) -> None:
+        loop = platform_loop
+        left, right = socket.socketpair()
+        with left, right:
+            ready = loop.create_future()  # type: asyncio.Future[bytes]
+
+            def read() -> None:
+                loop.remove_reader(left.fileno())
+                ready.set_result(left.recv(10))
+
+            loop.add_reader(left.fileno(), read)
+            loop.call_later(0.01, right.sendall, b"data")
+            assert loop.run_until_complete(asyncio.wait_for(ready, 5)) == (
+                b"data"
+            )
+
+    @needs_unix
+    def test_pipe_reader(self, loop: EventLoop) -> None:
+        read_fd, write_fd = os.pipe()
+        try:
+            ready = loop.create_future()  # type: asyncio.Future[bytes]
+
+            def read() -> None:
+                loop.remove_reader(read_fd)
+                ready.set_result(os.read(read_fd, 10))
+
+            loop.add_reader(read_fd, read)
+            loop.call_later(0.01, os.write, write_fd, b"pipe")
+            assert loop.run_until_complete(asyncio.wait_for(ready, 5)) == (
+                b"pipe"
+            )
+        finally:
+            os.close(read_fd)
+            os.close(write_fd)
+
+    @needs_unix
+    def test_subprocess(self, loop: EventLoop) -> None:
+        async def check() -> bytes:
+            process = await asyncio.create_subprocess_exec(
+                sys.executable,
+                "-c",
+                "print('child')",
+                stdout=asyncio.subprocess.PIPE,
+            )
+            output, _error = await process.communicate()
+            return output
+
+        assert loop.run_until_complete(asyncio.wait_for(check(), 10)) == (
+            b"child" + os.linesep.encode()
+        )
+
+
 class TestEventLoopAlias:
     def test_platform_loop(self) -> None:
         assert EventLoop is (
