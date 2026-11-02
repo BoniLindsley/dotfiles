@@ -137,29 +137,11 @@ class Daemon:
         self, path: str, parameters: Union[None, Dict[str, object]] = None
     ) -> Dict[str, object]:
         """Send a request, such as ``operations/list``; return its result."""
-        if self._running is None:
-            raise RcError("rclone rcd is not running", path=path, status=0)
-        request = urllib.request.Request(
-            self.url + "/" + path,
+        content = self._send(
+            path,
             data=json.dumps(parameters or {}).encode("utf-8"),
-            headers={
-                "Authorization": self._authorization,
-                "Content-Type": "application/json",
-            },
+            headers={"Content-Type": "application/json"},
         )
-        # Proxies from the environment must not see local requests.
-        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-        try:
-            with opener.open(request) as response:
-                content = response.read()  # type: bytes
-        except urllib.error.HTTPError as error:
-            try:
-                message = _error_message(error.read())
-            finally:
-                error.close()
-            raise RcError(message, path=path, status=error.code) from error
-        except urllib.error.URLError as error:
-            raise RcError(str(error.reason), path=path, status=0) from error
         result = json.loads(content.decode("utf-8"))
         if not isinstance(result, dict):
             raise RcError(
@@ -168,6 +150,35 @@ class Daemon:
                 status=200,
             )
         return result
+
+    def _send(
+        self,
+        path: str,
+        *,
+        data: Union[None, bytes] = None,
+        headers: Dict[str, str]
+    ) -> bytes:
+        """Send a request to ``path``, a POST if ``data`` is given."""
+        if self._running is None:
+            raise RcError("rclone rcd is not running", path=path, status=0)
+        request = urllib.request.Request(
+            self.url + "/" + path,
+            data=data,
+            headers=dict(headers, Authorization=self._authorization),
+        )
+        # Proxies from the environment must not see local requests.
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        try:
+            with opener.open(request) as response:
+                return typing.cast(bytes, response.read())
+        except urllib.error.HTTPError as error:
+            try:
+                message = _error_message(error.read())
+            finally:
+                error.close()
+            raise RcError(message, path=path, status=error.code) from error
+        except urllib.error.URLError as error:
+            raise RcError(str(error.reason), path=path, status=0) from error
 
     def wait(self) -> int:
         """Wait until rclone exits, such as after ``core/quit``.
