@@ -37,7 +37,11 @@ A project's own `AGENTS.md` adds to these.
 - Keep agent state for a project under `.meta/` at its root,
   excluded through `.git/info/exclude`, not `.gitignore`:
   objectives records, the instruction backlog, and drafts for review.
+  Tools I run may keep their own configuration there too,
+  such as `.meta/dockered-claude/config`.
   Do not add other state files or directories to the project tree.
+- Do not edit tool configuration under `.meta/`;
+  propose changes as a draft in `.meta/drafts/` instead.
 - Before the first reply of a session, and again after compaction,
   run `ls -a .meta` and `git worktree list` in the project root;
   `.meta/` is hidden and excluded from git, so it is easy to miss.

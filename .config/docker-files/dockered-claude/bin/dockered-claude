@@ -2,14 +2,17 @@
 
 __help() {
   cat <<HELP
-Usage: ${script_name} [--help] [--build] [--tool NAME]... [--] [claude arguments...]
+Usage: ${script_name} [--help] [--build] [--tool NAME | --no-tools]... [--no-save]
+                         [--] [claude arguments...]
        ${script_name} [--build] [--tool NAME]... --install-tool NAME [--] [command...]
 
 Run Claude Code in an isolated Docker container.
 
   -h, --help              Show this help
   -b, --build             Rebuild the Docker image (also how Claude Code gets updated)
-  -t, --tool NAME         Make tool NAME available (repeatable)
+  -t, --tool NAME         Make tool NAME available (repeatable; saved for the project)
+  --no-tools              Make no tools available (saved for the project)
+  --no-save               Use --tool and --no-tools for this run only
   --install-tool NAME     Run command in a container that can write to tool NAME
   --list-tools            List the installed tools
   --                      Pass remaining arguments directly to Claude Code
@@ -18,7 +21,8 @@ Environment:
   DOCKERED_CLAUDE_IMAGE   Image name (default: dockered-claude:latest)
   DOCKERED_CLAUDE_HOME    Host state directory (default: \$XDG_STATE_HOME/dockered-claude
                           or \$HOME/.local/state/dockered-claude)
-  DOCKERED_CLAUDE_TOOLS   Space-separated tools to use when no --tool is given
+  DOCKERED_CLAUDE_TOOLS   Space-separated tools to use when neither --tool nor
+                          the project configuration gives any
   DOCKERED_CLAUDE_TOOLS_DIR
                           Host tools directory (default: \$XDG_DATA_HOME/dockered-claude/tools
                           or \$HOME/.local/share/dockered-claude/tools)
@@ -36,6 +40,21 @@ Configuration:
   into the container's ~/.claude (e.g. settings.json), so the configuration
   is managed on the host while the rest of ~/.claude stays writable state.
   ~/.config/git is mounted read-only, so git uses the host's configuration.
+
+Project configuration:
+  ${project_config_path} holds options for a project as "KEY = VALUE"
+  lines and # comments. It is read as data and never run. It is looked for
+  in the working directory and its parents below \$HOME, then in the main
+  worktree of the git repository.
+
+  --tool and --no-tools are saved to it, replacing the line for their key
+  and keeping all other lines. When there is no file yet, it is created in
+  the main worktree, or else in the working directory. .meta/ is excluded
+  from git through info/exclude unless it is ignored already. The
+  directory is mounted read-only in the container, since the launcher reads
+  it on the host. Install runs (--install-tool) neither read nor save it.
+
+  tools = NAME...         Tools to use when no --tool is given
 
 Tools:
   Each tool is a prefix directory in the tools directory, with its
@@ -95,9 +114,15 @@ parse_arguments() {
         kwargs[install_tool]="$1"
       else
         tools+=("$1")
+        kwargs[tools_given]=1
       fi
       shift
       ;;
+    --no-tools)
+      tools=()
+      kwargs[tools_given]=1
+      ;;
+    --no-save) kwargs[no_save]=1 ;;
     --list-tools) kwargs[list_tools]=1 ;;
     --)
       args+=("$@")
@@ -130,14 +155,21 @@ resolve_paths() {
   config_dir="${HOME:?}/.config/claude"
   git_config_dir="${HOME:?}/.config/git"
   tools_dir="${DOCKERED_CLAUDE_TOOLS_DIR:-${XDG_DATA_HOME:-${HOME:?}/.local/share}/dockered-claude/tools}"
+}
 
-  if ((${#tools[@]} == 0)); then
+# Choose the tools from --tool and --no-tools, else from the project
+# configuration (empty for install runs), else from DOCKERED_CLAUDE_TOOLS.
+select_tools() {
+  [[ -z "${kwargs[tools_given]+defined}" ]] || return 0
+  if [[ -n "${project_options[tools]+defined}" ]]; then
+    read -r -a tools <<<"${project_options[tools]}"
+  else
     read -r -a tools <<<"${DOCKERED_CLAUDE_TOOLS:-}"
-    declare tool
-    for tool in "${tools[@]}"; do
-      validate_tool_name "${tool}" || return
-    done
   fi
+  declare tool
+  for tool in "${tools[@]}"; do
+    validate_tool_name "${tool}" || return
+  done
 }
 
 # Tool names become path components on the host and in the container.
@@ -147,6 +179,146 @@ validate_tool_name() {
     warn "invalid tool name '${name}'"
     return 1
   fi
+}
+
+check_tool_installed() {
+  declare tool="$1"
+  if [[ ! -d "${tools_dir}/${tool}/bin" ]]; then
+    warn "unknown tool '${tool}': ${tools_dir}/${tool}/bin does not exist"
+    return 1
+  fi
+}
+
+declare project_config_path='.meta/dockered-claude/config'
+
+# The project configuration is kept with the project's agent state in .meta/,
+# which is excluded from git, so a cloned repository cannot bring its own.
+# Set project_config to the first one found walking up from the working
+# directory, stopping below $HOME, or else in the main worktree of the git
+# repository; failing both, to where a new one would be created.
+find_project_config() {
+  declare directory="${workdir}" home_host main_worktree='' common_dir
+  home_host="$(cd -- "${HOME:?}" && pwd -P)" || return
+
+  while [[ "${directory}" != / && "${directory}" != "${home_host}" ]]; do
+    if [[ -f "${directory}/${project_config_path}" ]]; then
+      project_config="${directory}/${project_config_path}"
+      return 0
+    fi
+    directory="$(dirname -- "${directory}")" || return
+  done
+
+  if common_dir="$(git -C "${workdir}" rev-parse --path-format=absolute \
+    --git-common-dir 2>/dev/null)" && [[ "${common_dir}" == */.git ]]; then
+    main_worktree="${common_dir%/.git}"
+  fi
+  project_config="${main_worktree:-${workdir}}/${project_config_path}"
+}
+
+# Read project_config into project_options. Each line is blank, a comment,
+# or "KEY = VALUE" with a known KEY set at most once.
+read_project_config() {
+  [[ -f "${project_config}" ]] || return 0
+  declare line key value
+  declare -i number=0
+  declare skip='^[[:space:]]*(#|$)'
+  declare setting='^[[:space:]]*([a-z]+)[[:space:]]*=[[:space:]]*(.*[^[:space:]])?[[:space:]]*$'
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    number+=1
+    [[ "${line}" =~ ${skip} ]] && continue
+    if [[ ! "${line}" =~ ${setting} ]]; then
+      warn "${project_config}:${number}: expected KEY = VALUE"
+      return 1
+    fi
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    case "${key}" in
+    tools) ;;
+    *)
+      warn "${project_config}:${number}: unknown key '${key}'"
+      return 1
+      ;;
+    esac
+    if [[ -n "${project_options[${key}]+defined}" ]]; then
+      warn "${project_config}:${number}: '${key}' is set more than once"
+      return 1
+    fi
+    project_options[${key}]="${value}"
+  done <"${project_config}"
+}
+
+# Save the options given on the command line, unless --no-save is given.
+save_project_options() {
+  [[ -z "${kwargs[no_save]+defined}" ]] || return 0
+  if [[ -n "${kwargs[tools_given]+defined}" ]]; then
+    declare tool
+    for tool in "${tools[@]}"; do
+      check_tool_installed "${tool}" || return
+    done
+    save_project_option tools "${tools[*]}" || return
+  fi
+}
+
+# Save KEY = VALUE to project_config if VALUE differs from the current one,
+# replacing the line for KEY and keeping every other line, and say so.
+save_project_option() {
+  declare key="$1" value="$2"
+  if [[ -n "${project_options[${key}]+defined}" &&
+    "${project_options[${key}]}" == "${value}" ]]; then
+    return 0
+  fi
+
+  declare directory="${project_config%/*}"
+  declare root="${project_config%/"${project_config_path}"}"
+  declare setting="${key} =${value:+ ${value}}"
+  declare line temporary replaced=''
+  declare pattern="^[[:space:]]*${key}[[:space:]]*="
+
+  mkdir -p -- "${directory}" || return
+  exclude_meta_directory "${root}" || return
+
+  # Written to a temporary file in the same directory and renamed over the
+  # configuration, so an interrupted run cannot leave half a file.
+  temporary="$(mktemp -- "${directory}/.config.XXXXXX")" || return
+  {
+    if [[ -f "${project_config}" ]]; then
+      while IFS= read -r line || [[ -n "${line}" ]]; do
+        if [[ "${line}" =~ ${pattern} ]]; then
+          printf '%s\n' "${setting}"
+          replaced=1
+        else
+          printf '%s\n' "${line}"
+        fi
+      done <"${project_config}"
+    else
+      printf '%s\n' \
+        "# ${script_name} options for this project, saved from the command line" \
+        "# (see ${script_name} --help)."
+    fi
+    [[ -n "${replaced}" ]] || printf '%s\n' "${setting}"
+  } >"${temporary}" &&
+    mv -f -- "${temporary}" "${project_config}" || {
+    rm -f -- "${temporary}"
+    return 1
+  }
+
+  project_options[${key}]="${value}"
+  warn "saved '${setting}' to ${project_config}"
+}
+
+# Exclude .meta/ at root from git through info/exclude, which is not itself
+# tracked, unless root is not in a work tree or .meta/ is ignored already.
+exclude_meta_directory() {
+  declare root="$1" exclude prefix
+  git -C "${root}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  git -C "${root}" check-ignore -q -- .meta/ && return 0
+  prefix="$(git -C "${root}" rev-parse --show-prefix)" || return
+  exclude="$(git -C "${root}" rev-parse --path-format=absolute \
+    --git-path info/exclude)" || return
+  mkdir -p -- "${exclude%/*}" || return
+  printf '/%s.meta/\n' "${prefix}" >>"${exclude}" || return
+  warn "excluded /${prefix}.meta/ from git in ${exclude}"
 }
 
 list_tools() {
@@ -372,10 +544,7 @@ add_tool_arguments() {
       env_args=(--env-file "${env_file}" "${env_args[@]}")
     fi
     [[ "${tool}" == "${writable_tool}" ]] && continue
-    if [[ ! -d "${tools_dir}/${tool}/bin" ]]; then
-      warn "unknown tool '${tool}': ${tools_dir}/${tool}/bin does not exist"
-      return 1
-    fi
+    check_tool_installed "${tool}" || return
     docker_args+=(
       --mount "type=bind,src=${tools_dir}/${tool},dst=/opt/tools/${tool},readonly"
     )
@@ -510,6 +679,15 @@ run_container() {
     --workdir "${workdir}"
   )
 
+  # The launcher reads the project configuration on the host, so it must not
+  # be writable from the container.
+  declare project_config_dir="${project_config%/*}"
+  if [[ -d "${project_config_dir}" && "${project_config_dir}" == "${workdir}/"* ]]; then
+    docker_args+=(
+      --mount "type=bind,src=${project_config_dir},dst=${project_config_dir},readonly"
+    )
+  fi
+
   declare variable
   for variable in ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
     ANTHROPIC_BASE_URL ANTHROPIC_MODEL; do
@@ -549,8 +727,8 @@ main() {
 
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
-  declare tools_dir
-  declare -A kwargs=()
+  declare tools_dir project_config
+  declare -A kwargs=() project_options=()
   declare -a args=() tools=()
 
   parse_arguments "$@" || return
@@ -567,12 +745,17 @@ main() {
 
   prepare_state_directory || return
   if [[ -n "${kwargs[install_tool]+defined}" ]]; then
+    select_tools || return
     prepare_user_identity || return
     ensure_image || return
     install_tool "${args[@]}" || return
     return
   fi
 
+  find_project_config || return
+  read_project_config || return
+  select_tools || return
+  save_project_options || return
   prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
