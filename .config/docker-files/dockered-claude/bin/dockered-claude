@@ -2,7 +2,8 @@
 
 __help() {
   cat <<HELP
-Usage: ${script_name} [--help] [--build] [--tool NAME | --no-tools]... [--no-save]
+Usage: ${script_name} [--help] [--build] [--tool NAME | --no-tools]...
+                         [--package NAME | --no-packages]... [--no-save]
                          [--] [claude arguments...]
        ${script_name} [--build] [--tool NAME]... --install-tool NAME [--] [command...]
 
@@ -10,9 +11,14 @@ Run Claude Code in an isolated Docker container.
 
   -h, --help              Show this help
   -b, --build             Rebuild the Docker image (also how Claude Code gets updated)
-  -t, --tool NAME         Make tool NAME available (repeatable; saved for the project)
+  -t, --tool NAME         Make tool NAME available (repeatable; saved for the
+                          project)
   --no-tools              Make no tools available (saved for the project)
-  --no-save               Use --tool and --no-tools for this run only
+  --package NAME          Add Debian package NAME to the image (repeatable;
+                          saved for the project)
+  --no-packages           Use the base image without extra packages (saved
+                          for the project)
+  --no-save               Use these options for this run only
   --install-tool NAME     Run command in a container that can write to tool NAME
   --list-tools            List the installed tools
   --                      Pass remaining arguments directly to Claude Code
@@ -47,14 +53,26 @@ Project configuration:
   in the working directory and its parents below \$HOME, then in the main
   worktree of the git repository.
 
-  --tool and --no-tools are saved to it, replacing the line for their key
-  and keeping all other lines. When there is no file yet, it is created in
-  the main worktree, or else in the working directory. .meta/ is excluded
-  from git through info/exclude unless it is ignored already. The
-  directory is mounted read-only in the container, since the launcher reads
-  it on the host. Install runs (--install-tool) neither read nor save it.
+  --tool, --no-tools, --package and --no-packages are saved to it,
+  replacing the line for their key and keeping all other lines; packages
+  are saved only once their image has been built. When there is no file
+  yet, it is created in the main worktree, or else in the working
+  directory. .meta/ is excluded from git through info/exclude unless it is
+  ignored already. The directory is mounted read-only in the container,
+  since the launcher reads it on the host. Install runs (--install-tool)
+  neither read nor save it.
 
   tools = NAME...         Tools to use when no --tool is given
+  packages = NAME...      Debian packages to add when no --package is given
+
+  Packages are installed in an image derived from the base image, tagged
+  by a hash of the sorted package names (as in
+  dockered-claude:packages-3f9a1c2b4d5e), so projects with the same
+  packages share it. It is rebuilt with --build and whenever the base
+  image has changed. Remove unused ones with:
+  docker image prune --all --filter label=dockered-claude.packages
+  (they are rebuilt when next needed). Tools are installed (--install-tool)
+  on the base image, since they are shared between projects.
 
 Tools:
   Each tool is a prefix directory in the tools directory, with its
@@ -122,6 +140,20 @@ parse_arguments() {
       tools=()
       kwargs[tools_given]=1
       ;;
+    --package)
+      if (($# == 0)); then
+        warn "${argument} requires a package name"
+        return 1
+      fi
+      validate_package_name "$1" || return
+      packages+=("$1")
+      kwargs[packages_given]=1
+      shift
+      ;;
+    --no-packages)
+      packages=()
+      kwargs[packages_given]=1
+      ;;
     --no-save) kwargs[no_save]=1 ;;
     --list-tools) kwargs[list_tools]=1 ;;
     --)
@@ -139,6 +171,8 @@ parse_arguments() {
 resolve_paths() {
   workdir="$(pwd -P)" || return
   image="${DOCKERED_CLAUDE_IMAGE:-dockered-claude:latest}"
+  # The image containers run, which ensure_packages_image may change.
+  container_image="${image}"
   uid_host="$(id -u)" || return
   gid_host="$(id -g)" || return
   username="$(id -un)" || return
@@ -177,6 +211,27 @@ validate_tool_name() {
   declare name="$1"
   if [[ ! "${name}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
     warn "invalid tool name '${name}'"
+    return 1
+  fi
+}
+
+# Choose the packages from --package and --no-packages, else from the project
+# configuration.
+select_packages() {
+  [[ -z "${kwargs[packages_given]+defined}" ]] || return 0
+  read -r -a packages <<<"${project_options[packages]:-}"
+  declare package
+  for package in "${packages[@]}"; do
+    validate_package_name "${package}" || return
+  done
+}
+
+# Package names are expanded unquoted in a RUN instruction, so only Debian's
+# own syntax for them is accepted.
+validate_package_name() {
+  declare name="$1"
+  if [[ ! "${name}" =~ ^[a-z0-9][a-z0-9+.-]+$ ]]; then
+    warn "invalid package name '${name}'"
     return 1
   fi
 }
@@ -234,7 +289,7 @@ read_project_config() {
     key="${BASH_REMATCH[1]}"
     value="${BASH_REMATCH[2]}"
     case "${key}" in
-    tools) ;;
+    tools | packages) ;;
     *)
       warn "${project_config}:${number}: unknown key '${key}'"
       return 1
@@ -249,6 +304,8 @@ read_project_config() {
 }
 
 # Save the options given on the command line, unless --no-save is given.
+# Called once the image is built, so that a misspelt package, which only
+# the build reveals, is not saved.
 save_project_options() {
   [[ -z "${kwargs[no_save]+defined}" ]] || return 0
   if [[ -n "${kwargs[tools_given]+defined}" ]]; then
@@ -257,6 +314,9 @@ save_project_options() {
       check_tool_installed "${tool}" || return
     done
     save_project_option tools "${tools[*]}" || return
+  fi
+  if [[ -n "${kwargs[packages_given]+defined}" ]]; then
+    save_project_option packages "${packages[*]}" || return
   fi
 }
 
@@ -492,6 +552,37 @@ ensure_image() {
   fi
 }
 
+# Run containers from an image with the selected packages on top of the base
+# image, tagged by a hash of their sorted names so that projects with the
+# same packages share it. Build it with --build, when it is missing, or when
+# it was built from another base image.
+ensure_packages_image() {
+  ((${#packages[@]} > 0)) || return 0
+  declare repository="${image}" names hash base_id built_from
+  # Drop the tag, but not a registry port (e.g. host:5000/name).
+  [[ "${repository##*/}" != *:* ]] || repository="${repository%:*}"
+  names="$(printf '%s\n' "${packages[@]}" | sort -u | paste -s -d ' ')" || return
+  hash="$(printf '%s\n' "${names}" | sha256sum)" || return
+  container_image="${repository}:packages-${hash:0:12}"
+
+  base_id="$(docker image inspect --format '{{.Id}}' "${image}")" || return
+  if [[ -z "${kwargs[build]+defined}" ]] &&
+    built_from="$(docker image inspect \
+      --format '{{index .Config.Labels "dockered-claude.base-image"}}' \
+      "${container_image}" 2>/dev/null)" &&
+    [[ "${built_from}" == "${base_id}" ]]; then
+    return 0
+  fi
+
+  docker build \
+    --build-arg "BASE_IMAGE=${image}" \
+    --build-arg "BASE_IMAGE_ID=${base_id}" \
+    --build-arg "PACKAGES=${names}" \
+    --file "${project_directory}/Dockerfile.packages" \
+    --tag "${container_image}" \
+    "${project_directory}" || return
+}
+
 # The docker run arguments shared by Claude Code and tool install containers.
 # SYS_PTRACE is only usable through the file capability on gdb in the image,
 # which no-new-privileges would ignore, so that option is not set.
@@ -553,10 +644,10 @@ add_tool_arguments() {
   [[ -n "${tool_path}" ]] || return 0
   docker_args+=("${env_args[@]}")
   image_path="$(docker image inspect \
-    --format '{{range .Config.Env}}{{println .}}{{end}}' "${image}" |
+    --format '{{range .Config.Env}}{{println .}}{{end}}' "${container_image}" |
     sed -n 's/^PATH=//p')" || return
   if [[ -z "${image_path}" ]]; then
-    warn "cannot determine the PATH of image ${image}"
+    warn "cannot determine the PATH of image ${container_image}"
     return 1
   fi
   docker_args+=(--env "PATH=${tool_path}${image_path}")
@@ -665,7 +756,7 @@ install_tool() {
   )
   shift
 
-  exec docker "${docker_args[@]}" "${image}" "$@"
+  exec docker "${docker_args[@]}" "${container_image}" "$@"
 }
 
 run_container() {
@@ -712,7 +803,7 @@ run_container() {
     )
   fi
 
-  exec docker "${docker_args[@]}" "${image}" "$@"
+  exec docker "${docker_args[@]}" "${container_image}" "$@"
 }
 
 main() {
@@ -727,9 +818,9 @@ main() {
 
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
-  declare tools_dir project_config
+  declare tools_dir project_config container_image
   declare -A kwargs=() project_options=()
-  declare -a args=() tools=()
+  declare -a args=() tools=() packages=()
 
   parse_arguments "$@" || return
   if [[ -n "${kwargs[help]+defined}" ]]; then
@@ -755,12 +846,14 @@ main() {
   find_project_config || return
   read_project_config || return
   select_tools || return
-  save_project_options || return
+  select_packages || return
   prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
   link_config_files || return
   ensure_image || return
+  ensure_packages_image || return
+  save_project_options || return
   run_container "${args[@]}" || return
 }
 

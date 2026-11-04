@@ -1,0 +1,24 @@
+# A project's extra Debian packages on top of the base image, built by the
+# launcher, which validates the package names before they reach RUN.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+# Recorded so the launcher can rebuild this image when the base changes, and
+# so `docker image prune --filter label=dockered-claude.packages` finds it.
+ARG BASE_IMAGE_ID
+ARG PACKAGES
+LABEL dockered-claude.base-image="${BASE_IMAGE_ID}"
+LABEL dockered-claude.packages="${PACKAGES}"
+
+USER root
+
+RUN : \
+ && apt-get update \
+ && apt-get install \
+    --assume-yes \
+    --no-install-recommends \
+     ${PACKAGES} \
+ && rm -rf /var/lib/apt/lists/* \
+ && :
+
+USER 65532:65532
