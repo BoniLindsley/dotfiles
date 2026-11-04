@@ -95,7 +95,10 @@ Tools:
   Static binaries can instead be copied into the tool's bin/ on the host.
 
   Known tools install with a built-in command when none is given:
-  ${known_tools[*]}. Run again to update.
+  ${known_tools[*]}. Run again to update. A selected tool that is not
+  installed yet is installed with its built-in command before Claude Code
+  starts; other tools must be installed with --install-tool first. A tool
+  counts as installed once its bin/ is not empty.
 
 Examples:
   ${script_name}
@@ -237,12 +240,42 @@ validate_package_name() {
   fi
 }
 
+# A tool is installed once its bin/ has an entry,
+# since an install that failed may have left an empty one.
+tool_installed() {
+  declare tool="$1"
+  [[ -n "$(ls -A -- "${tools_dir}/${tool}/bin" 2>/dev/null)" ]]
+}
+
 check_tool_installed() {
   declare tool="$1"
-  if [[ ! -d "${tools_dir}/${tool}/bin" ]]; then
-    warn "unknown tool '${tool}': ${tools_dir}/${tool}/bin does not exist"
+  if ! tool_installed "${tool}"; then
+    warn "tool '${tool}' is not installed:" \
+      "${tools_dir}/${tool}/bin is missing or empty"
     return 1
   fi
+}
+
+# Install each selected tool that is not installed yet
+# with its built-in install command,
+# in a container without the other selected tools.
+install_missing_tools() {
+  declare tool
+  for tool in "${tools[@]}"; do
+    tool_installed "${tool}" && continue
+    if [[ " ${known_tools[*]} " != *" ${tool} "* ]]; then
+      warn "tool '${tool}' is not installed and has no built-in install" \
+        "command; install it with: ${script_name} --install-tool ${tool}" \
+        "-- COMMAND"
+      return 1
+    fi
+    warn "installing tool '${tool}'"
+    (
+      tools=()
+      install_tool "${tool}"
+    ) || return
+    check_tool_installed "${tool}" || return
+  done
 }
 
 declare project_config_path='.meta/dockered-claude/config'
@@ -392,8 +425,8 @@ list_tools() {
   [[ -d "${tools_dir}" ]] || return 0
   declare entry
   for entry in "${tools_dir}"/*/; do
-    [[ -d "${entry}bin" ]] || continue
     entry="${entry%/}"
+    tool_installed "${entry##*/}" || continue
     printf '%s\n' "${entry##*/}"
   done
 }
@@ -736,11 +769,15 @@ known_install_command() {
   esac
 }
 
-# Run an install command in a container where the tool's prefix is
-# writable at the same path it is later mounted at read-only.
+# Run an install command for TOOL, or else its built-in one,
+# in a container where the tool's prefix is writable
+# at the same path it is later mounted at read-only.
+# Tools are shared between projects, so they are installed on the base image.
 install_tool() {
-  declare tool="${kwargs[install_tool]}"
+  declare tool="$1"
+  shift
   declare prefix="/opt/tools/${tool}"
+  declare container_image="${image}"
   declare -a docker_args=() install_command=()
 
   if (($# == 0)); then
@@ -769,7 +806,7 @@ install_tool() {
   )
   shift
 
-  exec docker "${docker_args[@]}" "${container_image}" "$@"
+  docker "${docker_args[@]}" "${container_image}" "$@"
 }
 
 run_container() {
@@ -852,7 +889,7 @@ main() {
     select_tools || return
     prepare_user_identity || return
     ensure_image || return
-    install_tool "${args[@]}" || return
+    install_tool "${kwargs[install_tool]}" "${args[@]}" || return
     return
   fi
 
@@ -865,6 +902,7 @@ main() {
   link_agent_skills || return
   link_config_files || return
   ensure_image || return
+  install_missing_tools || return
   ensure_packages_image || return
   save_project_options || return
   run_container "${args[@]}" || return
