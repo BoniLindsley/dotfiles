@@ -44,6 +44,11 @@ Tools:
   may consist of many files (e.g. an npm package) and the first tool
   selected wins on name collisions.
 
+  A tool may also have an env file in its directory, in docker's --env-file
+  format, to set variables it needs (e.g. VCPKG_ROOT=/opt/tools/vcpkg/root).
+  It must not set PATH. The first tool selected wins on name collisions here
+  too.
+
   Tools are installed from inside the image, at the path they are mounted
   at, so that absolute paths and native code match the container. The
   install container mounts the tool writable at /opt/tools/NAME, makes it
@@ -62,6 +67,7 @@ Examples:
   ${script_name} -p 'run the tests'
   ${script_name} --tool rclone --tool typescript
   ${script_name} --install-tool typescript
+  ${script_name} --install-tool vcpkg
   ${script_name} --install-tool prettier -- npm install --global prettier
   ${script_name} --install-tool ruff -- uv tool install ruff
 HELP
@@ -315,9 +321,12 @@ ensure_image() {
 }
 
 # The docker run arguments shared by Claude Code and tool install containers.
+# SYS_PTRACE is only usable through the file capability on gdb in the image,
+# which no-new-privileges would ignore, so that option is not set.
 add_base_arguments() {
   docker_args+=(
     run
+    --cap-add SYS_PTRACE
     --cap-drop ALL
     --env "TERM=${TERM:-xterm-256color}"
     --init
@@ -326,9 +335,8 @@ add_base_arguments() {
     --mount "type=bind,src=${passwd_file},dst=/etc/passwd,readonly"
     --read-only
     --rm
-    --security-opt no-new-privileges:true
     --security-opt seccomp=unconfined
-    --tmpfs '/tmp:rw,nosuid,nodev,mode=1777'
+    --tmpfs '/tmp:rw,exec,nosuid,nodev,mode=1777'
     --user "${uid_host}:${gid_host}"
   )
 
@@ -343,15 +351,26 @@ add_base_arguments() {
 # in front of the image's PATH, in selection order. The tool being installed
 # (if any) is mounted writable by the caller, but its bin/ is put on PATH
 # here so the install command sees a consistent PATH.
+# A tool's env file, if any, is passed with --env-file. Later files override
+# earlier ones, so they are passed in reverse order to let the first tool win.
 add_tool_arguments() {
   declare writable_tool="${1:-}"
-  declare image_path tool tool_path=''
+  declare env_file image_path tool tool_path=''
+  declare -a env_args=()
   declare -A seen=()
 
   for tool in "${tools[@]}" ${writable_tool:+"${writable_tool}"}; do
     [[ -z "${seen[${tool}]+defined}" ]] || continue
     seen[${tool}]=1
     tool_path+="/opt/tools/${tool}/bin:"
+    env_file="${tools_dir}/${tool}/env"
+    if [[ -f "${env_file}" ]]; then
+      if grep -Eq '^[[:space:]]*PATH([[:space:]]*=|[[:space:]]*$)' "${env_file}"; then
+        warn "${env_file} must not set PATH"
+        return 1
+      fi
+      env_args=(--env-file "${env_file}" "${env_args[@]}")
+    fi
     [[ "${tool}" == "${writable_tool}" ]] && continue
     if [[ ! -d "${tools_dir}/${tool}/bin" ]]; then
       warn "unknown tool '${tool}': ${tools_dir}/${tool}/bin does not exist"
@@ -363,6 +382,7 @@ add_tool_arguments() {
   done
 
   [[ -n "${tool_path}" ]] || return 0
+  docker_args+=("${env_args[@]}")
   image_path="$(docker image inspect \
     --format '{{range .Config.Env}}{{println .}}{{end}}' "${image}" |
     sed -n 's/^PATH=//p')" || return
@@ -373,7 +393,7 @@ add_tool_arguments() {
   docker_args+=(--env "PATH=${tool_path}${image_path}")
 }
 
-declare -a known_tools=(rclone typescript uv)
+declare -a known_tools=(rclone typescript uv vcpkg)
 
 # Set install_command to the built-in install command for a known tool.
 # It runs in the install container, with the tool's prefix as the working
@@ -417,6 +437,26 @@ known_install_command() {
         "https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-unknown-linux-gnu.tar.gz" |
         tar -xz --strip-components=1 -C bin
       bin/uv --version
+    ')
+    ;;
+  vcpkg)
+    install_command=(sh -c '
+      set -eu
+      # A full clone, since manifests pin port versions to commits in its
+      # history (builtin-baseline).
+      if [ -d root/.git ]; then
+        git -C root pull --ff-only
+      else
+        git clone https://github.com/microsoft/vcpkg root
+      fi
+      root/bootstrap-vcpkg.sh -disableMetrics
+      # The root is mounted read-only, so vcpkg must run in manifest mode,
+      # with build trees in vcpkg_installed/ of the project and downloads
+      # and binary caches in ~/.cache/vcpkg.
+      printf "%s\n" "{\"readonly\": true}" >root/vcpkg-bundle.json
+      ln -sfn ../root/vcpkg bin/vcpkg
+      printf "VCPKG_ROOT=%s\n" "${PWD}/root" >env
+      bin/vcpkg version
     ')
     ;;
   *) return 1 ;;
