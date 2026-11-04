@@ -41,8 +41,8 @@ RUN : \
      libcap2-bin \
      ninja-build \
      \
-     # Autotools, parser generators and archivers, which many vcpkg ports
-     # and source distributions need to build
+     # Autotools, parser generators and archivers,
+     # which many vcpkg ports and source distributions need to build
      autoconf \
      autoconf-archive \
      automake \
@@ -58,10 +58,11 @@ RUN : \
      python3-dev \
      python3-pip \
      python3-venv \
- # The container runs as a non-root user, so the CAP_SYS_PTRACE that the
- # launcher adds only reaches gdb through a file capability. It lets gdb
- # attach to processes it did not start (gdb -p), which the host's Yama
- # ptrace_scope of 1 otherwise forbids.
+ # The container runs as a non-root user,
+ # so the CAP_SYS_PTRACE that the launcher adds
+ # only reaches gdb through a file capability.
+ # It lets gdb attach to processes it did not start (gdb -p),
+ # which the host's Yama ptrace_scope of 1 otherwise forbids.
  && setcap cap_sys_ptrace+ep "$(readlink -f /usr/bin/gdb)" \
  && getcap "$(readlink -f /usr/bin/gdb)" | grep -q cap_sys_ptrace \
  && rm -rf /var/lib/apt/lists/* \
@@ -102,8 +103,13 @@ RUN : \
  && npm --version \
  && :
 
+# npm blocks install scripts of packages not covered by allowScripts,
+# and Claude Code needs its postinstall (node install.cjs)
+# to set up the claude command.
+# Only that package's scripts are allowed.
 RUN : \
  && npm install \
+    --allow-scripts=@anthropic-ai/claude-code \
     --global \
     --include=optional \
     @anthropic-ai/claude-code@latest \

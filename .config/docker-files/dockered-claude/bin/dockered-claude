@@ -191,8 +191,9 @@ resolve_paths() {
   tools_dir="${DOCKERED_CLAUDE_TOOLS_DIR:-${XDG_DATA_HOME:-${HOME:?}/.local/share}/dockered-claude/tools}"
 }
 
-# Choose the tools from --tool and --no-tools, else from the project
-# configuration (empty for install runs), else from DOCKERED_CLAUDE_TOOLS.
+# Choose the tools from --tool and --no-tools,
+# else from the project configuration (empty for install runs),
+# else from DOCKERED_CLAUDE_TOOLS.
 select_tools() {
   [[ -z "${kwargs[tools_given]+defined}" ]] || return 0
   if [[ -n "${project_options[tools]+defined}" ]]; then
@@ -215,8 +216,8 @@ validate_tool_name() {
   fi
 }
 
-# Choose the packages from --package and --no-packages, else from the project
-# configuration.
+# Choose the packages from --package and --no-packages,
+# else from the project configuration.
 select_packages() {
   [[ -z "${kwargs[packages_given]+defined}" ]] || return 0
   read -r -a packages <<<"${project_options[packages]:-}"
@@ -226,8 +227,8 @@ select_packages() {
   done
 }
 
-# Package names are expanded unquoted in a RUN instruction, so only Debian's
-# own syntax for them is accepted.
+# Package names are expanded unquoted in a RUN instruction,
+# so only Debian's own syntax for them is accepted.
 validate_package_name() {
   declare name="$1"
   if [[ ! "${name}" =~ ^[a-z0-9][a-z0-9+.-]+$ ]]; then
@@ -247,10 +248,12 @@ check_tool_installed() {
 declare project_config_path='.meta/dockered-claude/config'
 
 # The project configuration is kept with the project's agent state in .meta/,
-# which is excluded from git, so a cloned repository cannot bring its own.
-# Set project_config to the first one found walking up from the working
-# directory, stopping below $HOME, or else in the main worktree of the git
-# repository; failing both, to where a new one would be created.
+# which is excluded from git,
+# so a cloned repository cannot bring its own.
+# Set project_config to the first one found
+# walking up from the working directory, stopping below $HOME,
+# or else in the main worktree of the git repository;
+# failing both, to where a new one would be created.
 find_project_config() {
   declare directory="${workdir}" home_host main_worktree='' common_dir
   home_host="$(cd -- "${HOME:?}" && pwd -P)" || return
@@ -270,7 +273,8 @@ find_project_config() {
   project_config="${main_worktree:-${workdir}}/${project_config_path}"
 }
 
-# Read project_config into project_options. Each line is blank, a comment,
+# Read project_config into project_options.
+# Each line is blank, a comment,
 # or "KEY = VALUE" with a known KEY set at most once.
 read_project_config() {
   [[ -f "${project_config}" ]] || return 0
@@ -304,8 +308,8 @@ read_project_config() {
 }
 
 # Save the options given on the command line, unless --no-save is given.
-# Called once the image is built, so that a misspelt package, which only
-# the build reveals, is not saved.
+# Called once the image is built,
+# so that a misspelt package, which only the build reveals, is not saved.
 save_project_options() {
   [[ -z "${kwargs[no_save]+defined}" ]] || return 0
   if [[ -n "${kwargs[tools_given]+defined}" ]]; then
@@ -321,7 +325,8 @@ save_project_options() {
 }
 
 # Save KEY = VALUE to project_config if VALUE differs from the current one,
-# replacing the line for KEY and keeping every other line, and say so.
+# replacing the line for KEY and keeping every other line,
+# and say so.
 save_project_option() {
   declare key="$1" value="$2"
   if [[ -n "${project_options[${key}]+defined}" &&
@@ -338,8 +343,9 @@ save_project_option() {
   mkdir -p -- "${directory}" || return
   exclude_meta_directory "${root}" || return
 
-  # Written to a temporary file in the same directory and renamed over the
-  # configuration, so an interrupted run cannot leave half a file.
+  # Written to a temporary file in the same directory
+  # and renamed over the configuration,
+  # so an interrupted run cannot leave half a file.
   temporary="$(mktemp -- "${directory}/.config.XXXXXX")" || return
   {
     if [[ -f "${project_config}" ]]; then
@@ -367,8 +373,9 @@ save_project_option() {
   warn "saved '${setting}' to ${project_config}"
 }
 
-# Exclude .meta/ at root from git through info/exclude, which is not itself
-# tracked, unless root is not in a work tree or .meta/ is ignored already.
+# Exclude .meta/ at root from git through info/exclude,
+# which is not itself tracked,
+# unless root is not in a work tree or .meta/ is ignored already.
 exclude_meta_directory() {
   declare root="$1" exclude prefix
   git -C "${root}" rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
@@ -552,10 +559,12 @@ ensure_image() {
   fi
 }
 
-# Run containers from an image with the selected packages on top of the base
-# image, tagged by a hash of their sorted names so that projects with the
-# same packages share it. Build it with --build, when it is missing, or when
-# it was built from another base image.
+# Run containers from an image with the selected packages
+# on top of the base image,
+# tagged by a hash of their sorted names
+# so that projects with the same packages share it.
+# Build it with --build, when it is missing,
+# or when it was built from another base image.
 ensure_packages_image() {
   ((${#packages[@]} > 0)) || return 0
   declare repository="${image}" names hash base_id built_from
@@ -585,7 +594,8 @@ ensure_packages_image() {
 
 # The docker run arguments shared by Claude Code and tool install containers.
 # SYS_PTRACE is only usable through the file capability on gdb in the image,
-# which no-new-privileges would ignore, so that option is not set.
+# which no-new-privileges would ignore,
+# so that option is not set.
 add_base_arguments() {
   docker_args+=(
     run
@@ -614,8 +624,9 @@ add_base_arguments() {
 # in front of the image's PATH, in selection order. The tool being installed
 # (if any) is mounted writable by the caller, but its bin/ is put on PATH
 # here so the install command sees a consistent PATH.
-# A tool's env file, if any, is passed with --env-file. Later files override
-# earlier ones, so they are passed in reverse order to let the first tool win.
+# A tool's env file, if any, is passed with --env-file.
+# Later files override earlier ones,
+# so they are passed in reverse order to let the first tool win.
 add_tool_arguments() {
   declare writable_tool="${1:-}"
   declare env_file image_path tool tool_path=''
@@ -702,17 +713,19 @@ known_install_command() {
   vcpkg)
     install_command=(sh -c '
       set -eu
-      # A full clone, since manifests pin port versions to commits in its
-      # history (builtin-baseline).
+      # A full clone,
+      # since manifests pin port versions to commits in its history
+      # (builtin-baseline).
       if [ -d root/.git ]; then
         git -C root pull --ff-only
       else
         git clone https://github.com/microsoft/vcpkg root
       fi
       root/bootstrap-vcpkg.sh -disableMetrics
-      # The root is mounted read-only, so vcpkg must run in manifest mode,
-      # with build trees in vcpkg_installed/ of the project and downloads
-      # and binary caches in ~/.cache/vcpkg.
+      # The root is mounted read-only,
+      # so vcpkg must run in manifest mode,
+      # with build trees in vcpkg_installed/ of the project
+      # and downloads and binary caches in ~/.cache/vcpkg.
       printf "%s\n" "{\"readonly\": true}" >root/vcpkg-bundle.json
       ln -sfn ../root/vcpkg bin/vcpkg
       printf "VCPKG_ROOT=%s\n" "${PWD}/root" >env
@@ -770,8 +783,8 @@ run_container() {
     --workdir "${workdir}"
   )
 
-  # The launcher reads the project configuration on the host, so it must not
-  # be writable from the container.
+  # The launcher reads the project configuration on the host,
+  # so it must not be writable from the container.
   declare project_config_dir="${project_config%/*}"
   if [[ -d "${project_config_dir}" && "${project_config_dir}" == "${workdir}/"* ]]; then
     docker_args+=(
