@@ -13,6 +13,7 @@ def window($name; $fmt):
    | map(. // 0) | add) as $in
 | [ (.model.display_name // "unknown"),
     "in: \($in) tokens",
+    (.cost.total_cost_usd | if . == null then empty else "$\(. * 100 | round / 100)" end),
     (.rate_limits.five_hour | window("5h"; "%H:%M")),
     (.rate_limits.seven_day | window("7d"; "%a %H:%M")) ]
 | join(" | ")
