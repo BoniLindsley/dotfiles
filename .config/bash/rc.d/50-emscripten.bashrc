@@ -5,8 +5,8 @@ export EMSDK="${XDG_LOCAL_HOME:="${HOME}/.local"}/opt/emsdk"
 __emscripten_help() {
   cat << EOF
 Usage:
-  emscripten-install
-  rm -dfr '${EMSDK}'
+  emscripten-install  # Need git, xz-utils
+  rm -dfr '${EMSDK}'  # To uninstall.
   emscripten-init
   GIT_DIR=${EMSDK}/.git git pull
   emsdk list
