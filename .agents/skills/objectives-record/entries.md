@@ -163,6 +163,12 @@ Statuses: `proposed`, `awaiting_user` (with the question and `asked`),
 `superseded` (with `superseded_by`).
 
 ```markdown
+## Decision
+User, 2026-10-26: "Trust the bubbles."
+
+## Consequences
+What this commits the code to; open risks.
+
 ## Question
 The question as asked, with the recommendation.
 
@@ -175,20 +181,20 @@ What forced the choice; constraints in play.
 ### 2. Flip after a fixed 90 seconds (D-004)
 - Rejected: thin batter burns, thick batter stays raw.
 
-## Decision
-User, 2026-10-26: "Trust the bubbles."
-
-## Consequences
-What this commits the code to; open risks.
-
 ## Evidence
 Spikes, measurements, commands and results.
 ```
 
-While `awaiting_user`, the `summary` states the question.
-Once decided, `## Question` stays as asked,
+Read up to `## Consequences` when only the outcome is needed.
+While `awaiting_user`, there is no `## Decision`,
+and the `summary` states the question;
+once decided, `## Decision` and `## Consequences` go above
+`## Question`, which stays as asked,
 the `summary` states the answer,
 and the log says the summary was rewritten.
+When a discussion runs long, keep `## Decision` current
+as the settled result, with each exchange quoted below it,
+or move the exchanges to `data/<ID>/discussion.md`.
 
 ### Constraints (`C-`)
 
@@ -294,3 +300,6 @@ check the rest by reading.
     and every file in it is named by that entry.
 15. No secrets or credentials appear.
 16. Every acceptance criterion ID is defined once.
+17. (c) The index from `## Status` up to `## Artifacts`
+    is at most 4000 characters,
+    and every `Handoff` item naming entries names an open one.

@@ -4,7 +4,7 @@
 #   sh record.sh list           open entries, one line each
 #   sh record.sh applies PATH   entries whose applies: covers PATH
 #   sh record.sh next PREFIX    next free ID, such as T or AC
-#   sh record.sh check          entries or logs not in the record's format
+#   sh record.sh check          entries, logs or index not in the record's format
 #
 # Entries start with lines `---`, `id:`, `status:`, `summary:`,
 # and for tasks `objective:` on line 5.
@@ -58,6 +58,32 @@ check() {
         grep -rnE '\b([A-Z]{1,2})-[0-9]{3} to [A-Z]{1,2}-[0-9]{3}\b' entries log OBJECTIVES.md \
             | sed 's/$/  (ID range)/'
         grep -nvE '^(- |# Log: |$)' log/*.md | sed 's/$/  (log line format)/'
+        awk '/^## Status/ { on = 1 } /^## Artifacts/ { on = 0 }
+        on { size += length($0) + 1 }
+        END { if (size > 4000)
+            print "OBJECTIVES.md: Status to Handoff has " size " characters, over 4000" }
+        ' OBJECTIVES.md
+        awk -v open="^($open)\$" '
+        function flush(   rest, named, live) {
+            rest = item
+            while (match(rest, /(^|[^A-Z])[OTDCA]-[0-9]+/)) {
+                id = substr(rest, RSTART, RLENGTH); sub(/^[^A-Z]/, "", id)
+                named++; if (status[id] ~ open) live++
+                rest = substr(rest, RSTART + RLENGTH)
+            }
+            if (named && !live) print "OBJECTIVES.md:" start ": " substr(item, 1, 60) "...  (Handoff item names only finished entries)"
+            item = ""
+        }
+        FILENAME != "OBJECTIVES.md" {
+            if (FNR == 2) id = substr($0, 5)
+            if (FNR == 3) status[id] = substr($0, 9)
+            next
+        }
+        /^#/ { if (item != "") flush(); on = /^### Handoff/; next }
+        on && /^- / { if (item != "") flush(); item = $0; start = FNR; next }
+        on && /^  / { item = item " " $0 }
+        END { if (item != "") flush() }
+        ' entries/*.md OBJECTIVES.md
     } || true
 }
 

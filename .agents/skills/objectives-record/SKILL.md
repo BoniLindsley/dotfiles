@@ -8,7 +8,7 @@ description: >
   or whenever OBJECTIVES.md, a .meta/objectives or .objectives directory
   or a meta/*/objectives branch is in the project or mentioned.
 metadata:
-  version: 6.2.1
+  version: 6.3.0
 ---
 
 The aim is that any later session,
@@ -76,7 +76,7 @@ Setup, commits and merges are in [git-setup.md](git-setup.md).
    A record of an older version may be checked out elsewhere,
    such as `.objectives/<branch>` for version 4:
    use it where it is, following its own rules block,
-   and see [lifecycle.md](lifecycle.md) on converting it.
+   and see [converting.md](converting.md) on converting it.
 2. Read the whole of `OBJECTIVES.md` before planning or acting,
    and again after compaction,
    since a summary can drop the position and the decisions.
@@ -204,12 +204,13 @@ make `Status` concrete enough to start the next session immediately:
 the exact position,
 one executable next action with its expected result,
 open decisions and blockers,
-what not to redo,
 and what to recheck after a long gap.
 Avoid handoffs such as `continue implementation`.
-Keep the hand-written parts short:
-notes that outlast the next task go to the entry they concern,
+Rewrite `Status`, `Next action` and `Handoff` to say what holds now,
+rather than adding to them; history belongs in the log.
+Notes that outlast the next task go to the entry they concern,
 and conventions go to constraints or `AGENTS.md`.
+Run `sh record.sh check`.
 
 ## OBJECTIVES.md
 
@@ -237,7 +238,8 @@ naming the entries to read first.>
 
 ### Handoff
 
-- Do not redo: <...>
+- <What the next session needs that no entry holds,
+  naming the open entry it serves.>
 - Recheck after a long gap: <A-xxx, ...>
 
 ## Artifacts
@@ -247,8 +249,17 @@ naming the entries to read first.>
   what comes next belongs in `Position` and `Next action`.
 - `Position` says where work stands now, not how it got there:
   the story belongs in the log.
+- `Last verified` is the latest verification only;
+  earlier ones are log lines.
 - `Waiting on the user` names decisions `awaiting_user`,
-  and anything else owed by the user, such as a review.
+  and anything else owed by the user, such as a review,
+  each by the ID of the entry that holds the question.
+  An optional question, such as inviting comments, is not owed.
+- `Handoff` holds what the next session needs and no entry holds,
+  each item naming the open entry it serves.
+  When that entry finishes, the item goes:
+  to the log as history, or to a constraint if it still applies.
+  What not to redo needs no list: finished statuses say it.
 - `sh record.sh list` shows, one line each, entries not finished:
   objectives `proposed`, `active`, `paused` or `long-term`;
   tasks `todo`, `in_progress` or `blocked`, with their objective;
@@ -258,7 +269,8 @@ naming the entries to read first.>
   that no entry's `applies` names,
   such as a service, a dashboard, or a script to check the environment.
 
-The index stays short by itself: it holds no lists of entries.
+The index holds no lists of entries.
+`sh record.sh check` reports its hand-written part past 4000 characters.
 An objective with too many open tasks to read at a glance
 is usually several objectives.
 
@@ -272,5 +284,5 @@ Read these only when the work needs them:
   the worktree commands, commits and merges, the record without git.
 - [rules-block.md](rules-block.md): the rules block every index carries.
 - [record.sh](record.sh): the helper every record carries.
-- [lifecycle.md](lifecycle.md): starting a record,
-  finishing an objective, converting an older record.
+- [lifecycle.md](lifecycle.md): starting a record, finishing an objective.
+- [converting.md](converting.md): converting an older record.

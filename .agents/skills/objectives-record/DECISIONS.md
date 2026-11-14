@@ -198,3 +198,48 @@ Records start at 5.1.0; earlier reasons were not kept.
     one-session work: long gaps imply several sessions,
     costly context comes with them, asking for a skill's work
     loads it anyway, and trivial work fails the first condition.
+- **D-14** `[accepted]` 6.3.0: The index is rewritten, not appended to,
+  and `check` limits it.
+  - Change: `Status`, `Next action` and `Handoff` say what holds now,
+    their history going to the log; `Last verified` only the latest;
+    `Waiting on the user` by entry IDs, without optional questions;
+    each `Handoff` item names the open entry it serves, and leaves
+    when that entry finishes; no "do not redo" list; `record.sh check`
+    reports the index's hand-written part past 4000 characters and
+    `Handoff` items naming only finished entries (invariant 17);
+    the rules block says the same; conversion from 6.2.
+  - Reason: in a record of about 100 tasks, `Status` and `Handoff`
+    reached 12.5 kB, with lines of 1600 characters: histories of
+    verifications and branches, a dozen optional questions, and
+    `Handoff` items for finished work, though the template already
+    asked for a position "in a few lines" and D-7 for conventions as
+    constraints. Sessions appended rather than replaced, and edits to
+    such lines left stale fragments twice in one session; the wording
+    alone had not held, so the limit is checked (the user's preference,
+    from another backlog entry: "I prefer to not rely on agents
+    following instructions in comments, if it can be enforced in code").
+    User, 2026-11-14: "The number of objectives and tasks have grown
+    significantly past what I had intended it for. [...] Any case of
+    large swaths of unused information being pulled in when
+    searching?", then, of drafting the changes: "Draft them now."
+    The limit was set against that record: rewritten by these rules,
+    its lasting facts moved to constraints, its index came to about
+    1200 characters, and the checks passed; 4000 leaves room
+    for work in progress.
+  - Kept small, as D-12 asked of `record.sh`: two `awk` checks
+    in `check`, no new commands.
+- **D-15** `[accepted]` 6.3.0: A decision's outcome comes first.
+  - Change: the decision template puts `## Decision` and
+    `## Consequences` above `## Question`, `## Context` and
+    `## Options`; a long discussion is quoted below the current
+    decision or kept in `data/<ID>/discussion.md`.
+  - Reason: answering a design question needed only one decision's
+    outcome, but its 89 lines were mostly the dated exchange before
+    it, so reading its first 80 lines was still mostly discussion.
+    User, 2026-11-14: "Draft them now."
+- **D-16** `[accepted]` 6.3.0: Conversion steps have their own file.
+  - Change: `lifecycle.md` keeps starting and finishing;
+    converting an older record moves to `converting.md`.
+  - Reason: a session finishing an objective read every older
+    version's conversion steps with it.
+    User, 2026-11-14: "Consider moving migration steps to a different file."

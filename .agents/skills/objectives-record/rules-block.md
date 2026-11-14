@@ -11,14 +11,18 @@ The version in the block is the last one that changed it.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 6.2.0.
+It follows the objectives-record skill, version 6.3.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
+- `Status`, `Next action` and `Handoff` say what holds now:
+  rewrite them rather than adding to them, and log what they said before.
+  Each `Handoff` item names the open entry it serves;
+  conventions are constraints.
 - Each objective, task, decision, constraint and assumption
   is a file `entries/<ID>.md`, and the files are authoritative.
   After this file, run `sh record.sh list` for the open entries.
-  `sh record.sh check` finds entries and logs not in this format,
+  `sh record.sh check` finds entries, logs and an index not in this format,
   `sh record.sh applies <path>` lists the entries covering a path,
   and `sh record.sh next T` gives the next free ID of a prefix.
 - Read an entry when the work needs it:
