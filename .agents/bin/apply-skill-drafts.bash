@@ -7,11 +7,14 @@
 # DRAFTS_DIR defaults to .meta/drafts/skills
 # in the nearest directory up from the working directory holding .meta.
 # AGENTS_SKILLS_DIR overrides the installed skills directory.
+#
+# First choose drafts to see their diffs,
+# then go on to choose drafts to install.
 
 set -euo pipefail
 
 if [[ ${1-} == -h || ${1-} == --help ]]; then
-    sed -n '2,9s/^# \{0,1\}//p' "$0"
+    sed -n '2,12s/^# \{0,1\}//p' "$0"
     exit 0
 fi
 
@@ -103,44 +106,80 @@ install_skill() {
     echo "Installed $name."
 }
 
-while :; do
+show_diff() {
+    local name="$1" installed empty=""
+    installed="$skills_dir/$name"
+    # Compare a new skill with an empty directory, showing all its files.
+    if [[ ! -e $installed ]]; then
+        empty="$(mktemp -d)"
+        installed="$empty"
+    fi
+    diff -ruN --color=auto "$installed" "$drafts_dir/$name" || true
+    if [[ -n $empty ]]; then
+        rmdir "$empty"
+    fi
+}
+
+# Sets names to the drafts that differ, or exits when none do.
+load_names() {
     mapfile -t names < <(changed_skills)
     if ((${#names[@]} == 0)); then
         echo "No drafts in $drafts_dir differ from $skills_dir."
         exit 0
     fi
+}
 
-    all="All of the below"
-    labels=("$all")
+# Offers FIRST, then each draft in names, prompting with PROMPT.
+# Sets choice to "first", a skill name,
+# or nothing on q or at end of input.
+choose() {
+    local first="$1" prompt="$2" label name labels
+    labels=("$first")
     for name in "${names[@]}"; do
         labels+=("$(label_of "$name")")
     done
 
     echo
     echo "Drafts that differ from $skills_dir:"
-    PS3="Install which? (number, q to quit): "
-    chosen=""
-    select choice in "${labels[@]}"; do
+    PS3="$prompt"
+    choice=""
+    select label in "${labels[@]}"; do
         if [[ $REPLY == q ]]; then
-            exit 0
-        elif [[ $choice == "$all" ]]; then
-            chosen=all
-            break
-        elif [[ -n $choice ]]; then
-            # Option 1 is "all", so skill options start at 2.
-            chosen="${names[REPLY - 2]}"
-            break
+            return
+        elif [[ -n $label ]]; then
+            if ((REPLY == 1)); then
+                choice=first
+            else
+                choice="${names[REPLY - 2]}"
+            fi
+            return
         fi
         echo "No such option: $REPLY"
     done
-    # select ends without a choice at end of input.
-    [[ -n $chosen ]] || exit 0
+}
 
-    if [[ $chosen == all ]]; then
-        for name in "${names[@]}"; do
-            install_skill "$name"
-        done
-    else
-        install_skill "$chosen"
-    fi
+# Stage 1: review diffs.
+while :; do
+    load_names
+    choose "Go on to install" "Show which diff? (number, q to quit): "
+    case $choice in
+        "") exit 0 ;;
+        first) break ;;
+        *) show_diff "$choice" ;;
+    esac
+done
+
+# Stage 2: install.
+while :; do
+    load_names
+    choose "All of the below" "Install which? (number, q to quit): "
+    case $choice in
+        "") exit 0 ;;
+        first)
+            for name in "${names[@]}"; do
+                install_skill "$name"
+            done
+            ;;
+        *) install_skill "$choice" ;;
+    esac
 done
