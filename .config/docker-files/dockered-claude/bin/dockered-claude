@@ -856,27 +856,14 @@ run_container() {
   exec docker "${docker_args[@]}" "${container_image}" "$@"
 }
 
-main() {
-  declare script_path
-  script_path="$(realpath -- "${BASH_SOURCE[0]}")" || return
-  declare script_name
-  script_name="$(basename -- "${script_path}")" || return
-  declare script_directory
-  script_directory="$(dirname -- "${script_path}")" || return
-  declare project_directory
-  project_directory="$(dirname -- "${script_directory}")" || return
-
+# Run Claude Code with ARGUMENTS,
+# or install a tool with ARGUMENTS as its install command,
+# as the options in kwargs, tools and packages say.
+run() {
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
   declare tools_dir project_config container_image
-  declare -A kwargs=() project_options=()
-  declare -a args=() tools=() packages=()
-
-  parse_arguments "$@" || return
-  if [[ -n "${kwargs[help]+defined}" ]]; then
-    __help
-    return
-  fi
+  declare -A project_options=()
 
   resolve_paths || return
   if [[ -n "${kwargs[list_tools]+defined}" ]]; then
@@ -889,7 +876,7 @@ main() {
     select_tools || return
     prepare_user_identity || return
     ensure_image || return
-    install_tool "${kwargs[install_tool]}" "${args[@]}" || return
+    install_tool "${kwargs[install_tool]}" "$@" || return
     return
   fi
 
@@ -905,7 +892,29 @@ main() {
   install_missing_tools || return
   ensure_packages_image || return
   save_project_options || return
-  run_container "${args[@]}" || return
+  run_container "$@" || return
+}
+
+main() {
+  declare script_path
+  script_path="$(realpath -- "${BASH_SOURCE[0]}")" || return
+  declare script_name
+  script_name="$(basename -- "${script_path}")" || return
+  declare script_directory
+  script_directory="$(dirname -- "${script_path}")" || return
+  declare project_directory
+  project_directory="$(dirname -- "${script_directory}")" || return
+
+  declare -A kwargs=()
+  declare -a args=() tools=() packages=()
+
+  parse_arguments "$@" || return
+  if [[ -n "${kwargs[help]+defined}" ]]; then
+    __help
+    return
+  fi
+
+  run "${args[@]}" || return
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

@@ -15,11 +15,11 @@ Records start on 2026-11-15.
     calling into `main`, and other rules you may derive.
     Create a skill for this to be applied in future scripts,
     taking inspiration for the other language styling skills."
-  - Reason: `run` taking explicit parameters,
-    with `main` parsing and forwarding to it,
-    follows python-style.
-    `bin/dockered-claude` has no `run`:
-    its `main` calls each step itself,
-    since its steps share much state and branch by mode.
+  - Reason: `main` parsing and forwarding to `run` follows python-style.
+    `bin/dockered-claude`, whose `main` called each step itself,
+    was refactored to match; user, 2026-11-15: "Refactor."
+    Its `run` reads `kwargs`, `tools` and `packages` from `main`,
+    as passing them would need namerefs,
+    so the skill allows that when there are many options.
   - Reason: the opening paragraph for invocation with file paths
     and no load-behaviour wording follow cpp-style D-1.

@@ -131,15 +131,22 @@ fi
 
 - Use `declare` rather than `local`, inside functions;
   it is local there, and the same keyword as at the top level.
-- `main` declares the state shared between functions,
-  such as resolved paths, `kwargs` and `args`.
-  The functions it calls read and set them through dynamic scope,
+- `main` declares the script's paths, `kwargs` and `args`,
+  and `run` the state its steps share.
+  The functions they call read and set them through dynamic scope,
   without globals leaking into a shell that sources the script.
 - A function that sets a variable for its caller,
   instead of printing a result,
   says so in its comment, as in "Set drafts_dir to …".
-- Give `run` its inputs as parameters,
+- Give `run` the arguments it acts on as parameters,
+  and its options too when they are a few values,
   so that it does not depend on how `main` found them.
+  With many options, `run` reads `kwargs` and the option arrays
+  that `main` declares,
+  since Bash cannot pass arrays by value.
+- `run` declares the state its own steps share,
+  such as resolved paths,
+  so that `main` holds only the script's paths and the parsed arguments.
 
 # Errors
 
