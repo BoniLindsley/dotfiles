@@ -2,7 +2,7 @@
 # Install skill drafts from a project's .meta/drafts/skills
 # over the installed skills in ~/.agents/skills.
 #
-# Usage: apply-skill-drafts [DRAFTS_DIR]
+# Usage: apply-skill-drafts [-a | --all] [DRAFTS_DIR]
 #
 # DRAFTS_DIR defaults to .meta/drafts/skills
 # in the nearest directory up from the working directory holding .meta.
@@ -10,13 +10,21 @@
 #
 # First choose drafts to see their diffs,
 # then go on to choose drafts to install.
+# With --all, install every draft that differs, without prompting.
 
 set -euo pipefail
 
-if [[ ${1-} == -h || ${1-} == --help ]]; then
-    sed -n '2,12s/^# \{0,1\}//p' "$0"
-    exit 0
-fi
+install_all=""
+case ${1-} in
+    -h | --help)
+        sed -n '2,13s/^# \{0,1\}//p' "$0"
+        exit 0
+        ;;
+    -a | --all)
+        install_all=1
+        shift
+        ;;
+esac
 
 # The nearest directory up from here holding .meta,
 # since projects outside git keep one too.
@@ -157,6 +165,14 @@ choose() {
         echo "No such option: $REPLY"
     done
 }
+
+if [[ -n $install_all ]]; then
+    load_names
+    for name in "${names[@]}"; do
+        install_skill "$name"
+    done
+    exit 0
+fi
 
 # Stage 1: review diffs.
 while :; do
