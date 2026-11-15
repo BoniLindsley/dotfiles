@@ -19,7 +19,7 @@ metadata:
 
 # Instruction backlog
 
-Skills and the user's `AGENTS.md` are usually read-only to agents,
+Agents never edit skills or the user's `AGENTS.md`,
 and a project's `AGENTS.md` changes only with the user's approval.
 Lessons about them are easy to lose:
 by the end of a session the user's exact words are gone,
@@ -167,12 +167,14 @@ Do not interrupt the user's request to discuss entries.
 When the user asks to address the backlog:
 
 1. Group open entries by target and propose each change.
-2. Ask whether to write a modified version
-   instead of updating the file in place:
+2. Write each change as a draft, even with the user's approval,
+   for the user to install:
    for a skill, a copy of its whole directory
    in `.meta/drafts/skills/<name>/`;
-   for another target, a directory in `.meta/drafts/` named after it.
-   Never edit a skill or `AGENTS.md` without the user's approval.
+   for the user's `AGENTS.md`, a copy with its `DECISIONS.md`
+   in `.meta/drafts/user-agents/`.
+   A project's `AGENTS.md` changes in place,
+   only with the user's approval.
 3. Follow the target's own conventions:
    its version, its maintenance rules,
    the agents-md-maintainer skill for a project's `AGENTS.md`.

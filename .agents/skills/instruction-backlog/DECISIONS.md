@@ -35,3 +35,12 @@ Records start at 2.0.0; earlier reasons were not kept.
     Drafts named only after their target mix skills with AGENTS.md drafts,
     so a script would have to guess which are skills.
     A whole copy lets it replace the skill directory as it is.
+- **D-3** `[accepted]` 2.1.0: Drafts only, even with approval.
+  - Change: "Resolve" step 2 always writes a draft
+    for skills and the user's `AGENTS.md`,
+    no longer asking whether to edit in place;
+    the user's `AGENTS.md` is drafted in `.meta/drafts/user-agents/`.
+    A project's `AGENTS.md` still changes in place with approval.
+  - Reason: as D-4 of the user's `AGENTS.md`;
+    user, 2026-11-15: "Yes, record and draft."
+    Version kept at 2.1.0, not yet committed.
