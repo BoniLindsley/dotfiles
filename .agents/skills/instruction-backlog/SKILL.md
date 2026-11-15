@@ -14,7 +14,7 @@ description: >
   whenever `.meta/instruction-backlog.md` exists in the project,
   and when the user asks to review or apply pending instruction changes.
 metadata:
-  version: 2.0.0
+  version: 2.1.0
 ---
 
 # Instruction backlog
@@ -167,9 +167,11 @@ Do not interrupt the user's request to discuss entries.
 When the user asks to address the backlog:
 
 1. Group open entries by target and propose each change.
-2. Ask whether to write a modified version in `.meta/drafts/`,
-   in a directory named after the target,
-   instead of updating the file in place.
+2. Ask whether to write a modified version
+   instead of updating the file in place:
+   for a skill, a copy of its whole directory
+   in `.meta/drafts/skills/<name>/`;
+   for another target, a directory in `.meta/drafts/` named after it.
    Never edit a skill or `AGENTS.md` without the user's approval.
 3. Follow the target's own conventions:
    its version, its maintenance rules,
@@ -178,7 +180,7 @@ When the user asks to address the backlog:
    also for a rejected change, which then drafts only that entry.
    Mark each backlog entry `drafted` or `rejected`.
    A `drafted` entry names the draft and the version it starts from,
-   for example "drafted: `.meta/drafts/objectives-record/`, from 4.0.0".
+   for example "drafted: `.meta/drafts/skills/objectives-record/`, from 4.0.0".
 5. Once the installed target matches the draft,
    delete the backlog entry.
    Delete entries that became moot, such as superseded ones.

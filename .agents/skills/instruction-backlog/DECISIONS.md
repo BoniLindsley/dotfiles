@@ -26,3 +26,12 @@ Records start at 2.0.0; earlier reasons were not kept.
     to the `instruction-backlog` in length to achieve this?"
     Rejected: a header template, an example entry with a field list,
     `decisions/` files, and conversion steps (about 80 lines).
+- **D-2** `[accepted]` 2.1.0: Skill drafts in `.meta/drafts/skills/`.
+  - Change: "Resolve" step 2 puts a skill's draft
+    in `.meta/drafts/skills/<name>/`, as a copy of the whole directory;
+    other targets keep a directory named after the target.
+  - Reason: user, 2026-11-15, on a script installing skill drafts:
+    "Would it be better to have a `skills` subdirectory for this?"
+    Drafts named only after their target mix skills with AGENTS.md drafts,
+    so a script would have to guess which are skills.
+    A whole copy lets it replace the skill directory as it is.
