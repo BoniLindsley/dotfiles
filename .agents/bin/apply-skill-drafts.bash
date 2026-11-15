@@ -1,201 +1,289 @@
 #!/usr/bin/env bash
-# Install skill drafts from a project's .meta/drafts/skills
-# over the installed skills in ~/.agents/skills.
-#
-# Usage: apply-skill-drafts [-a | --all] [DRAFTS_DIR]
-#
-# DRAFTS_DIR defaults to .meta/drafts/skills
-# in the nearest directory up from the working directory holding .meta.
-# AGENTS_SKILLS_DIR overrides the installed skills directory.
-#
-# First choose drafts to see their diffs,
-# then go on to choose drafts to install.
-# With --all, install every draft that differs, without prompting.
 
-set -euo pipefail
+__help() {
+  cat <<HELP
+Usage: ${script_name} [--help] [--all] [DRAFTS_DIR]
 
-install_all=""
-case ${1-} in
-    -h | --help)
-        sed -n '2,13s/^# \{0,1\}//p' "$0"
-        exit 0
-        ;;
-    -a | --all)
-        install_all=1
-        shift
-        ;;
-esac
+Install skill drafts from a project's .meta/drafts/skills
+over the installed skills in ~/.agents/skills.
 
-# The nearest directory up from here holding .meta,
-# since projects outside git keep one too.
-root="$PWD"
-while [[ ! -d $root/.meta && $root != / ]]; do
-    root="$(dirname "$root")"
-done
-[[ -d $root/.meta ]] || root="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
-drafts_dir="${1:-${root%/}/.meta/drafts/skills}"
-skills_dir="${AGENTS_SKILLS_DIR:-$HOME/.agents/skills}"
+First choose drafts to see their diffs,
+then go on to choose drafts to install.
 
-if [[ ! -d $drafts_dir ]]; then
-    echo "No drafts directory: $drafts_dir" >&2
-    exit 1
-fi
+  -h, --help              Show this help
+  -a, --all               Install every draft that differs, without prompting
 
-# Prints the version in a SKILL.md front matter, or nothing.
+DRAFTS_DIR defaults to .meta/drafts/skills
+in the nearest directory up from the working directory holding .meta,
+else in the root of the git repository, else in the working directory.
+
+Environment:
+  AGENTS_SKILLS_DIR       Installed skills directory
+                          (default: \$HOME/.agents/skills)
+HELP
+}
+
+warn() {
+  printf '%s: %s\n' "${script_name}" "$*" >&2
+}
+
+parse_arguments() {
+  declare argument
+  while (($#)); do
+    argument="$1"
+    shift
+    case "${argument}" in
+    -h | --help) kwargs[help]=1 ;;
+    -a | --all) kwargs[all]=1 ;;
+    --)
+      args+=("$@")
+      break
+      ;;
+    -?*)
+      warn "unknown option '${argument}'"
+      return 1
+      ;;
+    *) args+=("${argument}") ;;
+    esac
+  done
+  if ((${#args[@]} > 1)); then
+    warn "expected at most one drafts directory, got ${#args[@]}"
+    return 1
+  fi
+}
+
+# Set drafts_dir to .meta/drafts/skills in the nearest directory up
+# from the working directory holding .meta,
+# since projects outside git keep one too;
+# failing that, in the root of the git repository or the working directory.
+find_drafts_directory() {
+  declare root="${PWD}"
+  while [[ ! -d "${root}/.meta" && "${root}" != / ]]; do
+    root="$(dirname -- "${root}")" || return
+  done
+  if [[ ! -d "${root}/.meta" ]]; then
+    root="$(git rev-parse --show-toplevel 2>/dev/null)" || root="${PWD}"
+  fi
+  drafts_dir="${root%/}/.meta/drafts/skills"
+}
+
+# Print the version in a SKILL.md front matter, or nothing.
 version_of() {
-    [[ -f $1 ]] || return 0
-    awk 'NR == 1 && $0 == "---" { inside = 1; next }
-         inside && $0 == "---" { exit }
-         inside && $1 == "version:" { print $2; exit }' "$1"
+  declare file="$1"
+  [[ -f "${file}" ]] || return 0
+  awk 'NR == 1 && $0 == "---" { inside = 1; next }
+       inside && $0 == "---" { exit }
+       inside && $1 == "version:" { print $2; exit }' "${file}"
 }
 
-# Prints the names of drafts that differ from the installed skill.
+# Print the names of drafts that differ from the installed skill.
 changed_skills() {
-    local draft name
-    for draft in "$drafts_dir"/*/; do
-        [[ -f $draft/SKILL.md ]] || continue
-        name="$(basename "$draft")"
-        if ! diff -rq "$draft" "$skills_dir/$name" >/dev/null 2>&1; then
-            printf '%s\n' "$name"
-        fi
-    done
+  declare draft name
+  for draft in "${drafts_dir}"/*/; do
+    [[ -f "${draft}SKILL.md" ]] || continue
+    draft="${draft%/}"
+    name="${draft##*/}"
+    if ! diff -rq -- "${draft}" "${skills_dir}/${name}" >/dev/null 2>&1; then
+      printf '%s\n' "${name}"
+    fi
+  done
 }
 
-# Prints how many installed files the draft would remove.
+# Print how many installed files the draft would remove.
 removed_count() {
-    local name="$1" file count=0
-    while IFS= read -r -d '' file; do
-        [[ -e $drafts_dir/$name/$file ]] || ((++count))
-    done < <(cd "$skills_dir/$name" && find . -type f -print0)
-    printf '%d' "$count"
+  declare name="$1" file
+  declare -i count=0
+  while IFS= read -r -d '' file; do
+    [[ -e "${drafts_dir}/${name}/${file}" ]] || count+=1
+  done < <(cd -- "${skills_dir}/${name}" && find . -type f -print0)
+  printf '%d' "${count}"
 }
 
 label_of() {
-    local name="$1" old new removed
-    if [[ ! -e $skills_dir/$name ]]; then
-        printf '%s (new)' "$name"
-        return
-    fi
-    old="$(version_of "$skills_dir/$name/SKILL.md")"
-    new="$(version_of "$drafts_dir/$name/SKILL.md")"
-    printf '%s (%s -> %s' "$name" "${old:-unversioned}" "${new:-unversioned}"
-    removed="$(removed_count "$name")"
-    if ((removed == 1)); then
-        printf ', removes 1 file'
-    elif ((removed > 1)); then
-        printf ', removes %d files' "$removed"
-    fi
-    printf ')'
+  declare name="$1" old new removed
+  if [[ ! -e "${skills_dir}/${name}" ]]; then
+    printf '%s (new)' "${name}"
+    return 0
+  fi
+  old="$(version_of "${skills_dir}/${name}/SKILL.md")" || return
+  new="$(version_of "${drafts_dir}/${name}/SKILL.md")" || return
+  printf '%s (%s -> %s' "${name}" "${old:-unversioned}" "${new:-unversioned}"
+  removed="$(removed_count "${name}")" || return
+  if ((removed == 1)); then
+    printf ', removes 1 file'
+  elif ((removed > 1)); then
+    printf ', removes %d files' "${removed}"
+  fi
+  printf ')'
 }
 
 install_skill() {
-    local name="$1" target parent staging old
-    target="$skills_dir/$name"
-    # Replace the directory a link points to, keeping the link.
-    if [[ -L $target ]]; then
-        target="$(realpath "$target")"
-    fi
-    parent="$(dirname "$target")"
-    mkdir -p "$parent"
+  declare name="$1" target parent staging old
+  target="${skills_dir}/${name}"
+  # Replace the directory a link points to, keeping the link.
+  if [[ -L "${target}" ]]; then
+    target="$(realpath -- "${target}")" || return
+  fi
+  parent="$(dirname -- "${target}")" || return
+  mkdir -p -- "${parent}" || return
 
-    # Copy beside the target and swap,
-    # so that a failed copy never leaves a half-written skill.
-    staging="$(mktemp -d "$parent/.$name.new.XXXXXX")"
-    cp -a "$drafts_dir/$name/." "$staging/"
-    chmod --reference="$drafts_dir/$name" "$staging"
-    if [[ -e $target ]]; then
-        old="$(mktemp -u "$parent/.$name.old.XXXXXX")"
-        mv "$target" "$old"
-        mv "$staging" "$target"
-        rm -rf "$old"
-    else
-        mv "$staging" "$target"
-    fi
-    echo "Installed $name."
+  # Copy beside the target and swap,
+  # so that a failed copy never leaves a half-written skill.
+  staging="$(mktemp -d -- "${parent}/.${name}.new.XXXXXX")" || return
+  if ! cp -a -- "${drafts_dir}/${name}/." "${staging}/" ||
+    ! chmod --reference="${drafts_dir}/${name}" -- "${staging}"; then
+    rm -rf -- "${staging}"
+    return 1
+  fi
+  if [[ -e "${target}" ]]; then
+    old="$(mktemp -u -- "${parent}/.${name}.old.XXXXXX")" || return
+    mv -- "${target}" "${old}" || return
+    mv -- "${staging}" "${target}" || return
+    rm -rf -- "${old}" || return
+  else
+    mv -- "${staging}" "${target}" || return
+  fi
+  printf 'Installed %s.\n' "${name}"
 }
 
 show_diff() {
-    local name="$1" installed empty=""
-    installed="$skills_dir/$name"
-    # Compare a new skill with an empty directory, showing all its files.
-    if [[ ! -e $installed ]]; then
-        empty="$(mktemp -d)"
-        installed="$empty"
-    fi
-    diff -ruN --color=auto "$installed" "$drafts_dir/$name" || true
-    if [[ -n $empty ]]; then
-        rmdir "$empty"
-    fi
+  declare name="$1" installed empty=''
+  installed="${skills_dir}/${name}"
+  # Compare a new skill with an empty directory, showing all its files.
+  if [[ ! -e "${installed}" ]]; then
+    empty="$(mktemp -d)" || return
+    installed="${empty}"
+  fi
+  # diff exits with 1 when the files differ, and 2 on trouble.
+  declare -i status=0
+  diff -ruN --color=auto -- "${installed}" "${drafts_dir}/${name}" ||
+    status=$?
+  if [[ -n "${empty}" ]]; then
+    rmdir -- "${empty}" || return
+  fi
+  ((status < 2))
 }
 
-# Sets names to the drafts that differ, or exits when none do.
+# Set names to the drafts that differ, saying so when none do.
 load_names() {
-    mapfile -t names < <(changed_skills)
-    if ((${#names[@]} == 0)); then
-        echo "No drafts in $drafts_dir differ from $skills_dir."
-        exit 0
-    fi
+  mapfile -t names < <(changed_skills) || return
+  if ((${#names[@]} == 0)); then
+    printf 'No drafts in %s differ from %s.\n' "${drafts_dir}" "${skills_dir}"
+  fi
 }
 
-# Offers FIRST, then each draft in names, prompting with PROMPT.
-# Sets choice to "first", a skill name,
+# Offer FIRST, then each draft in names, prompting with PROMPT.
+# Set choice to "first", a skill name,
 # or nothing on q or at end of input.
 choose() {
-    local first="$1" prompt="$2" label name labels
-    labels=("$first")
-    for name in "${names[@]}"; do
-        labels+=("$(label_of "$name")")
-    done
+  declare first="$1" PS3="$2" label name
+  declare -a labels=("${first}")
+  for name in "${names[@]}"; do
+    label="$(label_of "${name}")" || return
+    labels+=("${label}")
+  done
 
-    echo
-    echo "Drafts that differ from $skills_dir:"
-    PS3="$prompt"
-    choice=""
-    select label in "${labels[@]}"; do
-        if [[ $REPLY == q ]]; then
-            return
-        elif [[ -n $label ]]; then
-            if ((REPLY == 1)); then
-                choice=first
-            else
-                choice="${names[REPLY - 2]}"
-            fi
-            return
-        fi
-        echo "No such option: $REPLY"
-    done
+  printf '\nDrafts that differ from %s:\n' "${skills_dir}"
+  choice=''
+  select label in "${labels[@]}"; do
+    if [[ "${REPLY}" == q ]]; then
+      return 0
+    elif [[ -n "${label}" ]]; then
+      if ((REPLY == 1)); then
+        choice=first
+      else
+        choice="${names[REPLY - 2]}"
+      fi
+      return 0
+    fi
+    printf 'No such option: %s\n' "${REPLY}"
+  done
+  # select fails at end of input, which means quit.
+  return 0
 }
 
-if [[ -n $install_all ]]; then
-    load_names
-    for name in "${names[@]}"; do
-        install_skill "$name"
-    done
-    exit 0
+install_names() {
+  declare name
+  for name in "${names[@]}"; do
+    install_skill "${name}" || return
+  done
+}
+
+# Review the diffs of the drafts,
+# then install the chosen ones.
+review_and_install() {
+  declare choice
+
+  while :; do
+    load_names || return
+    ((${#names[@]} > 0)) || return 0
+    choose "Go on to install" "Show which diff? (number, q to quit): " ||
+      return
+    case "${choice}" in
+    '') return 0 ;;
+    first) break ;;
+    *) show_diff "${choice}" || return ;;
+    esac
+  done
+
+  while :; do
+    load_names || return
+    ((${#names[@]} > 0)) || return 0
+    choose "All of the below" "Install which? (number, q to quit): " ||
+      return
+    case "${choice}" in
+    '') return 0 ;;
+    first) install_names || return ;;
+    *) install_skill "${choice}" || return ;;
+    esac
+  done
+}
+
+# Install the drafts in args[0], or else found by find_drafts_directory,
+# over the skills in AGENTS_SKILLS_DIR:
+# all of those that differ with kwargs[all],
+# else those chosen after reviewing their diffs.
+run() {
+  declare drafts_dir skills_dir
+  declare -a names=()
+
+  if ((${#args[@]} > 0)); then
+    drafts_dir="${args[0]}"
+  else
+    find_drafts_directory || return
+  fi
+  skills_dir="${AGENTS_SKILLS_DIR:-${HOME:?}/.agents/skills}"
+
+  if [[ ! -d "${drafts_dir}" ]]; then
+    warn "no drafts directory: ${drafts_dir}"
+    return 1
+  fi
+
+  if [[ -n "${kwargs[all]+defined}" ]]; then
+    load_names || return
+    install_names || return
+    return 0
+  fi
+  review_and_install || return
+}
+
+main() {
+  declare script_name
+  script_name="$(basename -- "${BASH_SOURCE[0]}")" || return
+
+  declare -A kwargs=()
+  declare -a args=()
+
+  parse_arguments "$@" || return
+  if [[ -n "${kwargs[help]+defined}" ]]; then
+    __help
+    return
+  fi
+
+  run || return
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  main "$@"
 fi
-
-# Stage 1: review diffs.
-while :; do
-    load_names
-    choose "Go on to install" "Show which diff? (number, q to quit): "
-    case $choice in
-        "") exit 0 ;;
-        first) break ;;
-        *) show_diff "$choice" ;;
-    esac
-done
-
-# Stage 2: install.
-while :; do
-    load_names
-    choose "All of the below" "Install which? (number, q to quit): "
-    case $choice in
-        "") exit 0 ;;
-        first)
-            for name in "${names[@]}"; do
-                install_skill "$name"
-            done
-            ;;
-        *) install_skill "$choice" ;;
-    esac
-done

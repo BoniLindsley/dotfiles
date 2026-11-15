@@ -856,9 +856,9 @@ run_container() {
   exec docker "${docker_args[@]}" "${container_image}" "$@"
 }
 
-# Run Claude Code with ARGUMENTS,
-# or install a tool with ARGUMENTS as its install command,
-# as the options in kwargs, tools and packages say.
+# Run Claude Code with args,
+# or install the tool in kwargs[install_tool] with args as its install command,
+# as the other options in kwargs, tools and packages say.
 run() {
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
@@ -876,7 +876,7 @@ run() {
     select_tools || return
     prepare_user_identity || return
     ensure_image || return
-    install_tool "${kwargs[install_tool]}" "$@" || return
+    install_tool "${kwargs[install_tool]}" "${args[@]}" || return
     return
   fi
 
@@ -892,7 +892,7 @@ run() {
   install_missing_tools || return
   ensure_packages_image || return
   save_project_options || return
-  run_container "$@" || return
+  run_container "${args[@]}" || return
 }
 
 main() {
@@ -914,7 +914,7 @@ main() {
     return
   fi
 
-  run "${args[@]}" || return
+  run || return
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

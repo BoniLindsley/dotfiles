@@ -28,11 +28,10 @@ rather than silently overriding them.
   when its purpose or a decision in it is not obvious.
   Constants that only some functions use
   may be declared at the top level just above them.
-- A `run` function doing the work from explicit parameters,
+- A `run` function doing the work as `kwargs` and `args` say,
   as an entry point for other scripts and tests that source this one.
-- A `main` function that declares the shared state,
-  parses arguments, handles `--help`,
-  resolves defaults, and calls `run`.
+- A `main` function that declares the script's paths, `kwargs` and `args`,
+  parses arguments, handles `--help`, and calls `run`.
 - Scaffolding that sets shell options and calls `main`
   only when the script is executed, not sourced.
 
@@ -80,10 +79,13 @@ parse_arguments() {
   done
 }
 
-# Greet NAME with GREETING.
+# Greet the NAME in args with GREETING.
 run() {
-  declare name="$1" greeting="$2"
-  printf '%s, %s!\n' "${greeting}" "${name}"
+  if ((${#args[@]} != 1)); then
+    warn "expected one NAME"
+    return 1
+  fi
+  printf '%s, %s!\n' "${GREETING:-Hello}" "${args[0]}"
 }
 
 main() {
@@ -98,12 +100,8 @@ main() {
     __help
     return
   fi
-  if ((${#args[@]} != 1)); then
-    warn "expected one NAME"
-    return 1
-  fi
 
-  run "${args[0]}" "${GREETING:-Hello}" || return
+  run || return
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
@@ -138,15 +136,35 @@ fi
 - A function that sets a variable for its caller,
   instead of printing a result,
   says so in its comment, as in "Set drafts_dir to …".
-- Give `run` the arguments it acts on as parameters,
-  and its options too when they are a few values,
-  so that it does not depend on how `main` found them.
-  With many options, `run` reads `kwargs` and the option arrays
-  that `main` declares,
-  since Bash cannot pass arrays by value.
+- `run` takes no parameters:
+  it reads `kwargs`, `args` and the option arrays that `main` declares,
+  and resolves their defaults, such as from environment variables.
+  Its comment names the keys and arrays it reads,
+  since nothing else states them.
+  A script or test sourcing this one declares them before calling `run`.
 - `run` declares the state its own steps share,
   such as resolved paths,
   so that `main` holds only the script's paths and the parsed arguments.
+
+# Functions
+
+- Name a function's parameters on its first line,
+  as in `declare name="$1" value="${2:-}"`,
+  and use the names after that.
+  Shift the named ones off when the rest are passed on with `"$@"`.
+- Do not parse options or validate parameters in internal functions.
+  Their callers are the script itself,
+  so a wrong call is a bug, not bad input;
+  input is validated once, in `parse_arguments`.
+- Optionally guard a required parameter cheaply
+  with `"${1:?missing NAME}"`,
+  and give an optional one a default with `"${2:-}"` or `"${2:-default}"`.
+  A failed `:?` exits the whole script with status 127,
+  skipping `|| return` and any cleanup,
+  so use it only for a caller's bug, never for user input.
+- Say in the function's comment what it reads and sets
+  besides its parameters,
+  and what it prints, when its name does not make it obvious.
 
 # Errors
 
@@ -173,7 +191,11 @@ fi
 - Indent with 2 spaces, as `shfmt -i 2` formats,
   with `case` patterns at the level of `case`.
 - Quote and brace every expansion: `"${name}"`, `"${array[@]}"`,
-  except inside `(( ))` and array subscripts.
+  except inside `(( ))` and indexed array subscripts,
+  which are arithmetic and read bare names as variables.
+- A subscript of an associative array is a literal string:
+  `kwargs[help]` is the key `help`,
+  so a variable key must be written `kwargs["${key}"]`.
 - Use `[[ ]]` for tests and `(( ))` for arithmetic;
   use `declare -i` for counters.
 - Put `--` before operands of commands that accept it,
