@@ -10,20 +10,18 @@ description: >
   Markdown paragraphs and lists, code comments, docstrings,
   commit message bodies and similar text.
   Not for chat replies or other text where line breaks render.
-  Passive by default:
-  no action needed on load unless file paths are provided.
+  Load before writing the first comment, docstring or prose
+  to a file in a session;
+  given file paths, rewrap their prose.
+metadata:
+  version: 1.1.0
 ---
 
-## Behaviour on Load
-
-- **No paths given:**
-  Apply these rules to all prose written or edited in files from now on.
-  No immediate action required.
-- **Paths given:**
-  Rewrap the prose in those files by these rules,
-  leaving code, tables and other line-sensitive text unchanged.
-  An explicit request to rewrap overrides the file's existing convention
-  (see [Where Not to Apply](#where-not-to-apply)).
+When given file paths,
+rewrap the prose in them by these rules,
+leaving code, tables and other line-sensitive text unchanged.
+An explicit request to rewrap overrides the file's existing convention
+(see [Where Not to Apply](#where-not-to-apply)).
 
 ## Why
 

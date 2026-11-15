@@ -3,10 +3,9 @@ name: python-style-guide
 description: >
   Describes personal preferred Python coding style
   for Python code generation, modification and review tasks.
+metadata:
+  version: 1.0.0
 ---
-
-This skill is passive, to be applied in future requests,
-and no immediate action is expected from loaded.
 
 # Compatibility with Older Python Versions
 

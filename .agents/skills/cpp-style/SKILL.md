@@ -6,20 +6,14 @@ description: >
   Covers header guards, logical operator keywords, class design,
   inline vs. translation units, build system (CMake),
   and testing framework (Catch2).
-  Passive by default — no action needed on load
-  unless file paths are provided.
+metadata:
+  version: 1.0.0
 ---
 
-## Behaviour on Load
-
-- **No paths given:**
-  Internalize these preferences
-  and apply them to all C++ written going forward.
-  No immediate action required.
-- **Paths given:**
-  Review or rewrite the specified files to conform to this guide.
-  Flag any deviations that conflict with existing codebase conventions
-  rather than silently overriding them.
+When given file paths,
+review or rewrite them to conform to this guide.
+Flag deviations that conflict with existing codebase conventions
+rather than silently overriding them.
 
 ## Header Guards
 
