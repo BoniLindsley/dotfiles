@@ -3,7 +3,8 @@
 __help() {
   cat <<HELP
 Usage: ${script_name} [--help] [--build] [--tool NAME | --no-tools]...
-                         [--package NAME | --no-packages]... [--no-save]
+                         [--package NAME | --no-packages]...
+                         [--mount PATH[:rw] | --no-mounts]... [--no-save]
                          [--] [claude arguments...]
        ${script_name} [--build] [--tool NAME]... --install-tool NAME [--] [command...]
 
@@ -18,6 +19,9 @@ Run Claude Code in an isolated Docker container.
                           saved for the project)
   --no-packages           Use the base image without extra packages (saved
                           for the project)
+  -m, --mount PATH[:rw]   Mount PATH at the same path, read-only, or writable
+                          with :rw (repeatable; saved for the project)
+  --no-mounts             Mount no paths (saved for the project)
   --no-save               Use these options for this run only
   --install-tool NAME     Run command in a container that can write to tool NAME
   --list-tools            List the installed tools
@@ -53,9 +57,10 @@ Project configuration:
   in the working directory and its parents below \$HOME, then in the main
   worktree of the git repository.
 
-  --tool, --no-tools, --package and --no-packages are saved to it,
-  replacing the line for their key and keeping all other lines; packages
-  are saved only once their image has been built. When there is no file
+  --tool, --no-tools, --package, --no-packages, --mount and --no-mounts
+  are saved to it, replacing the line for their key (all mount lines, for
+  mounts) and keeping all other lines; packages are saved only once their
+  image has been built. When there is no file
   yet, it is created in the main worktree, or else in the working
   directory. .meta/ is excluded from git through info/exclude unless it is
   ignored already. The directory is mounted read-only in the container,
@@ -64,6 +69,27 @@ Project configuration:
 
   tools = NAME...         Tools to use when no --tool is given
   packages = NAME...      Debian packages to add when no --package is given
+  mount = PATH[:rw]       A path to mount when no --mount is given,
+                          read-only, or writable with :rw (one line per
+                          path; a relative PATH is relative to the
+                          directory holding .meta/)
+
+Mounts:
+  A mounted path appears at the same path in the container, after symbolic
+  links are resolved, so absolute paths keep working; --mount saves it
+  that way. Like --tool, --mount replaces the saved mounts rather than
+  adding to them, so give all of them, or use --no-save to mount paths for
+  one run only. A saved mount whose path does not exist is skipped with a
+  warning. Paths must not contain commas or double quotes.
+
+  A mount must not be at, inside or above Claude Code's state (~/.claude,
+  ~/.claude.json), /opt/tools or system directories such as /usr and
+  /etc; nor at or inside ~/.agents, ~/.config/claude or ~/.config/git,
+  which the launcher mounts on top of a mount above them; nor be the
+  working directory or inside .meta/dockered-claude. A project
+  configuration that a writable mount (or the working directory) would
+  expose stays read-only: this project's, and one at the root of a
+  writable mount. Others deeper inside a writable mount are not looked for.
 
   Packages are installed in an image derived from the base image, tagged
   by a hash of the sorted package names (as in
@@ -106,6 +132,9 @@ Examples:
   ${script_name} -- --help
   ${script_name} -p 'run the tests'
   ${script_name} --tool rclone --tool typescript
+  ${script_name} --mount ~/src/library --mount ~/notes:rw
+  ${script_name} --no-save --mount ~/Downloads
+  ${script_name} --no-mounts
   ${script_name} --install-tool typescript
   ${script_name} --install-tool vcpkg
   ${script_name} --install-tool prettier -- npm install --global prettier
@@ -156,6 +185,20 @@ parse_arguments() {
     --no-packages)
       packages=()
       kwargs[packages_given]=1
+      ;;
+    -m | --mount)
+      if (($# == 0)); then
+        warn "${argument} requires a path"
+        return 1
+      fi
+      validate_mount_spec "$1" || return
+      mounts+=("$1")
+      kwargs[mounts_given]=1
+      shift
+      ;;
+    --no-mounts)
+      mounts=()
+      kwargs[mounts_given]=1
       ;;
     --no-save) kwargs[no_save]=1 ;;
     --list-tools) kwargs[list_tools]=1 ;;
@@ -240,6 +283,124 @@ validate_package_name() {
   fi
 }
 
+# Set mount_path and mount_mode (ro or rw)
+# from a mount given as PATH, PATH:ro or PATH:rw.
+split_mount_spec() {
+  declare spec="$1"
+  case "${spec}" in
+  *:rw) mount_mode=rw ;;
+  *) mount_mode=ro ;;
+  esac
+  mount_path="${spec%:r[ow]}"
+}
+
+# Mount paths become fields of docker's comma-separated --mount option,
+# which has no escape for commas, and treats double quotes as quoting.
+validate_mount_spec() {
+  declare spec="$1" mount_path mount_mode
+  split_mount_spec "${spec}"
+  if [[ -z "${mount_path}" || "${mount_path}" == *[,\"$'\n']* ]]; then
+    warn "invalid mount '${spec}': the path must be non-empty" \
+      "and contain no commas or double quotes"
+    return 1
+  fi
+}
+
+# Set mount_path to the absolute path of a mount given as PATH[:ro|:rw],
+# relative PATHs resolved against base and symbolic links resolved,
+# and mount_mode to its mode.
+resolve_mount_spec() {
+  declare spec="$1" base="$2"
+  split_mount_spec "${spec}"
+  [[ "${mount_path}" == /* ]] || mount_path="${base}/${mount_path}"
+  mount_path="$(realpath -m -- "${mount_path}")" || return
+}
+
+# Refuse a mount at, inside or above a path that the image needs
+# or that holds Claude Code's state in the persisted home,
+# since it would hide or replace them;
+# at or inside a path the launcher mounts itself,
+# since that mount is on top
+# (a mount above one is fine, the launcher's mount is on top of it);
+# at the working directory, which is mounted already;
+# or at or inside the launcher's configuration,
+# which must stay read-only in the container.
+check_mount_path() {
+  declare path="$1" reserved
+  declare -a hidden_paths=(
+    /bin /boot /dev /etc /lib /lib32 /lib64 /libx32 /opt/tools /proc /run
+    /sbin /sys /tmp /usr /var
+    "${home}/.claude"
+    "${home}/.claude.json"
+  )
+  declare -a mounted_paths=(
+    "${home}/.agents"
+    "${home}/.config/claude"
+    "${home}/.config/git"
+  )
+  for reserved in "${hidden_paths[@]}" "${mounted_paths[@]}"; do
+    if [[ "${path}" == "${reserved}" || "${path}" == "${reserved}/"* ]]; then
+      warn "cannot mount '${path}': it would replace ${reserved}"
+      return 1
+    fi
+  done
+  for reserved in "${hidden_paths[@]}"; do
+    if [[ "${reserved}" == "${path%/}/"* ]]; then
+      warn "cannot mount '${path}': it would hide ${reserved}"
+      return 1
+    fi
+  done
+  if [[ "${path}" == "${workdir}" ]]; then
+    warn "cannot mount '${path}': it is the working directory," \
+      "which is mounted writable already"
+    return 1
+  fi
+  declare project_config_dir="${project_config%/*}"
+  if [[ "${path}" == "${project_config_dir}" ||
+    "${path}" == "${project_config_dir}/"* ]]; then
+    warn "cannot mount '${path}': it holds the launcher's configuration"
+    return 1
+  fi
+}
+
+# Set mount_paths, in order, and mount_modes, by path,
+# to the mounts for this run:
+# those given with --mount and --no-mounts,
+# else those saved in project_mounts that still exist.
+select_mounts() {
+  declare spec mount_path mount_mode
+
+  if [[ -z "${kwargs[mounts_given]+defined}" ]]; then
+    for spec in "${project_mounts[@]}"; do
+      resolve_mount_spec "${spec}" "${project_root}" || return
+      if [[ ! -e "${mount_path}" ]]; then
+        warn "skipping saved mount '${mount_path}': it does not exist"
+        continue
+      fi
+      add_mount || return
+    done
+    return 0
+  fi
+
+  for spec in "${mounts[@]}"; do
+    resolve_mount_spec "${spec}" "${workdir}" || return
+    if [[ ! -e "${mount_path}" ]]; then
+      warn "cannot mount '${mount_path}': it does not exist"
+      return 1
+    fi
+    add_mount || return
+  done
+}
+
+# Add mount_path with mount_mode to mount_paths and mount_modes,
+# replacing the mode of an earlier mount of the same path.
+add_mount() {
+  check_mount_path "${mount_path}" || return
+  [[ -n "${mount_modes[${mount_path}]+defined}" ]] ||
+    mount_paths+=("${mount_path}")
+  mount_modes[${mount_path}]="${mount_mode}"
+}
+
 # A tool is installed once its bin/ has an entry,
 # since an install that failed may have left an empty one.
 tool_installed() {
@@ -306,9 +467,10 @@ find_project_config() {
   project_config="${main_worktree:-${workdir}}/${project_config_path}"
 }
 
-# Read project_config into project_options.
+# Read project_config into project_options, and its mounts into project_mounts.
 # Each line is blank, a comment,
-# or "KEY = VALUE" with a known KEY set at most once.
+# or "KEY = VALUE" with a known KEY set at most once,
+# except mount, which may be given once per path.
 read_project_config() {
   [[ -f "${project_config}" ]] || return 0
   declare line key value
@@ -327,6 +489,14 @@ read_project_config() {
     value="${BASH_REMATCH[2]}"
     case "${key}" in
     tools | packages) ;;
+    mount)
+      if ! validate_mount_spec "${value}"; then
+        warn "${project_config}:${number}: invalid mount"
+        return 1
+      fi
+      project_mounts+=("${value}")
+      continue
+      ;;
     *)
       warn "${project_config}:${number}: unknown key '${key}'"
       return 1
@@ -355,6 +525,45 @@ save_project_options() {
   if [[ -n "${kwargs[packages_given]+defined}" ]]; then
     save_project_option packages "${packages[*]}" || return
   fi
+  if [[ -n "${kwargs[mounts_given]+defined}" ]]; then
+    save_project_mounts || return
+  fi
+}
+
+# Set config_lines to the lines of project_config,
+# or to a header for a new one when there is none.
+read_project_config_lines() {
+  config_lines=()
+  if [[ ! -f "${project_config}" ]]; then
+    config_lines=(
+      "# ${script_name} options for this project, saved from the command line"
+      "# (see ${script_name} --help)."
+    )
+    return 0
+  fi
+  declare line
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    config_lines+=("${line}")
+  done <"${project_config}" || return
+}
+
+# Write config_lines to project_config,
+# creating its directory and excluding .meta/ from git.
+write_project_config() {
+  declare directory="${project_config%/*}" temporary
+
+  mkdir -p -- "${directory}" || return
+  exclude_meta_directory "${project_root}" || return
+
+  # Written to a temporary file in the same directory
+  # and renamed over the configuration,
+  # so an interrupted run cannot leave half a file.
+  temporary="$(mktemp -- "${directory}/.config.XXXXXX")" || return
+  printf '%s\n' "${config_lines[@]}" >"${temporary}" &&
+    mv -f -- "${temporary}" "${project_config}" || {
+    rm -f -- "${temporary}"
+    return 1
+  }
 }
 
 # Save KEY = VALUE to project_config if VALUE differs from the current one,
@@ -367,43 +576,64 @@ save_project_option() {
     return 0
   fi
 
-  declare directory="${project_config%/*}"
-  declare root="${project_config%/"${project_config_path}"}"
   declare setting="${key} =${value:+ ${value}}"
-  declare line temporary replaced=''
   declare pattern="^[[:space:]]*${key}[[:space:]]*="
+  declare index replaced=''
+  declare -a config_lines
 
-  mkdir -p -- "${directory}" || return
-  exclude_meta_directory "${root}" || return
-
-  # Written to a temporary file in the same directory
-  # and renamed over the configuration,
-  # so an interrupted run cannot leave half a file.
-  temporary="$(mktemp -- "${directory}/.config.XXXXXX")" || return
-  {
-    if [[ -f "${project_config}" ]]; then
-      while IFS= read -r line || [[ -n "${line}" ]]; do
-        if [[ "${line}" =~ ${pattern} ]]; then
-          printf '%s\n' "${setting}"
-          replaced=1
-        else
-          printf '%s\n' "${line}"
-        fi
-      done <"${project_config}"
-    else
-      printf '%s\n' \
-        "# ${script_name} options for this project, saved from the command line" \
-        "# (see ${script_name} --help)."
+  read_project_config_lines || return
+  for index in "${!config_lines[@]}"; do
+    if [[ "${config_lines[index]}" =~ ${pattern} ]]; then
+      config_lines[index]="${setting}"
+      replaced=1
     fi
-    [[ -n "${replaced}" ]] || printf '%s\n' "${setting}"
-  } >"${temporary}" &&
-    mv -f -- "${temporary}" "${project_config}" || {
-    rm -f -- "${temporary}"
-    return 1
-  }
+  done
+  [[ -n "${replaced}" ]] || config_lines+=("${setting}")
+  write_project_config || return
 
   project_options[${key}]="${value}"
   warn "saved '${setting}' to ${project_config}"
+}
+
+# Save the mounts in mount_paths, given with --mount or --no-mounts,
+# as "mount = PATH[:rw]" lines with their absolute paths
+# if they differ from the saved ones,
+# replacing all mount lines where the first one was
+# (or else at the end) and keeping every other line, and say so.
+save_project_mounts() {
+  declare line mount_path inserted=''
+  declare pattern='^[[:space:]]*mount[[:space:]]*='
+  declare -a config_lines settings=() old_settings=() new_lines=()
+
+  for mount_path in "${mount_paths[@]}"; do
+    line="mount = ${mount_path}"
+    [[ "${mount_modes[${mount_path}]}" == ro ]] || line+=":rw"
+    settings+=("${line}")
+  done
+
+  read_project_config_lines || return
+  for line in "${config_lines[@]}"; do
+    if [[ ! "${line}" =~ ${pattern} ]]; then
+      new_lines+=("${line}")
+      continue
+    fi
+    old_settings+=("${line}")
+    [[ -z "${inserted}" ]] || continue
+    new_lines+=("${settings[@]}")
+    inserted=1
+  done
+  [[ -n "${inserted}" ]] || new_lines+=("${settings[@]}")
+
+  [[ "${old_settings[*]}" != "${settings[*]}" ]] || return 0
+  config_lines=("${new_lines[@]}")
+  write_project_config || return
+  if ((${#settings[@]} == 0)); then
+    warn "removed the mounts from ${project_config}"
+  else
+    for line in "${settings[@]}"; do
+      warn "saved '${line}' to ${project_config}"
+    done
+  fi
 }
 
 # Exclude .meta/ at root from git through info/exclude,
@@ -444,8 +674,10 @@ prepare_state_directory() {
 # persisted state directory, that would leave root-owned directories on the
 # host (e.g. ~/src for a workdir ~/src/project) that the user can neither
 # write to nor remove, so create the mount point and its parents as the user.
+# A file is mounted on a file, so for a source that is one,
+# the mount point is created as an empty file.
 prepare_home_mount_point() {
-  declare destination="$1"
+  declare destination="$1" source="${2:-}"
   [[ "${destination}" == /home/?* ]] || return 0
 
   declare directory="${state_dir}/home"
@@ -463,11 +695,20 @@ prepare_home_mount_point() {
     fi
   done
 
+  if [[ -n "${source}" && ! -d "${source}" ]]; then
+    mkdir -p -- "${state_dir}${destination%/*}" || return
+    [[ -e "${state_dir}${destination}" ]] || : >"${state_dir}${destination}"
+    return
+  fi
   mkdir -p -- "${state_dir}${destination}"
 }
 
 prepare_mount_points() {
   prepare_home_mount_point "${workdir}" || return
+  declare path
+  for path in "${mount_paths[@]}"; do
+    prepare_home_mount_point "${path}" "${path}" || return
+  done
   if [[ -d "${agents_dir}" ]]; then
     prepare_home_mount_point "${home}/.agents" || return
   fi
@@ -820,14 +1061,37 @@ run_container() {
     --workdir "${workdir}"
   )
 
-  # The launcher reads the project configuration on the host,
-  # so it must not be writable from the container.
-  declare project_config_dir="${project_config%/*}"
-  if [[ -d "${project_config_dir}" && "${project_config_dir}" == "${workdir}/"* ]]; then
-    docker_args+=(
-      --mount "type=bind,src=${project_config_dir},dst=${project_config_dir},readonly"
-    )
-  fi
+  declare path
+  declare -a writable_paths=("${workdir}")
+  for path in "${mount_paths[@]}"; do
+    if [[ "${mount_modes[${path}]}" == rw ]]; then
+      docker_args+=(--mount "type=bind,src=${path},dst=${path}")
+      writable_paths+=("${path}")
+    else
+      docker_args+=(--mount "type=bind,src=${path},dst=${path},readonly")
+    fi
+  done
+
+  # The launcher reads project configurations on the host,
+  # so they must not be writable from the container,
+  # whether through the working directory or a writable mount:
+  # this project's, and that of a project a writable mount is the root of.
+  # Configurations deeper inside a writable mount are not looked for.
+  declare config_dir_path
+  declare -A protected=()
+  for config_dir_path in "${project_config%/*}" \
+    "${writable_paths[@]/%//${project_config_path%/*}}"; do
+    [[ -d "${config_dir_path}" ]] || continue
+    [[ -z "${protected[${config_dir_path}]+defined}" ]] || continue
+    for path in "${writable_paths[@]}"; do
+      [[ "${config_dir_path}" == "${path%/}/"* ]] || continue
+      protected[${config_dir_path}]=1
+      docker_args+=(
+        --mount "type=bind,src=${config_dir_path},dst=${config_dir_path},readonly"
+      )
+      break
+    done
+  done
 
   declare variable
   for variable in ANTHROPIC_API_KEY CLAUDE_CODE_OAUTH_TOKEN \
@@ -858,12 +1122,13 @@ run_container() {
 
 # Run Claude Code with args,
 # or install the tool in kwargs[install_tool] with args as its install command,
-# as the other options in kwargs, tools and packages say.
+# as the other options in kwargs, tools, packages and mounts say.
 run() {
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
-  declare tools_dir project_config container_image
-  declare -A project_options=()
+  declare tools_dir project_config project_root container_image
+  declare -a project_mounts=() mount_paths=()
+  declare -A project_options=() mount_modes=()
 
   resolve_paths || return
   if [[ -n "${kwargs[list_tools]+defined}" ]]; then
@@ -881,9 +1146,11 @@ run() {
   fi
 
   find_project_config || return
+  project_root="${project_config%/"${project_config_path}"}"
   read_project_config || return
   select_tools || return
   select_packages || return
+  select_mounts || return
   prepare_mount_points || return
   prepare_user_identity || return
   link_agent_skills || return
@@ -907,6 +1174,7 @@ main() {
 
   declare -A kwargs=()
   declare -a args=() tools=() packages=()
+  declare -a mounts=()
 
   parse_arguments "$@" || return
   if [[ -n "${kwargs[help]+defined}" ]]; then
