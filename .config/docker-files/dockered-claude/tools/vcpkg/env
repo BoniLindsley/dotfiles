@@ -1,0 +1,8 @@
+VCPKG_ROOT=/opt/tools/vcpkg/root
+# The clone is owned by root in the volume,
+# and git refuses repositories owned by another user
+# unless they are marked safe in protected configuration,
+# which includes configuration from the environment.
+GIT_CONFIG_COUNT=1
+GIT_CONFIG_KEY_0=safe.directory
+GIT_CONFIG_VALUE_0=/opt/tools/vcpkg/root

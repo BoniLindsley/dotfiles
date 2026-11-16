@@ -6,7 +6,7 @@ Usage: ${script_name} [--help] [--build] [--tool NAME | --no-tools]...
                          [--package NAME | --no-packages]...
                          [--mount PATH[:rw] | --no-mounts]... [--no-save]
                          [--] [claude arguments...]
-       ${script_name} [--build] [--tool NAME]... --install-tool NAME [--] [command...]
+       ${script_name} [--build] --build-tool NAME
 
 Run Claude Code in an isolated Docker container.
 
@@ -23,8 +23,9 @@ Run Claude Code in an isolated Docker container.
                           with :rw (repeatable; saved for the project)
   --no-mounts             Mount no paths (saved for the project)
   --no-save               Use these options for this run only
-  --install-tool NAME     Run command in a container that can write to tool NAME
-  --list-tools            List the installed tools
+  --build-tool NAME       Build or update tool NAME from tools/NAME/Dockerfile,
+                          replacing its volume
+  --list-tools            List the tools and whether each is built
   --                      Pass remaining arguments directly to Claude Code
 
 Environment:
@@ -33,9 +34,6 @@ Environment:
                           or \$HOME/.local/state/dockered-claude)
   DOCKERED_CLAUDE_TOOLS   Space-separated tools to use when neither --tool nor
                           the project configuration gives any
-  DOCKERED_CLAUDE_TOOLS_DIR
-                          Host tools directory (default: \$XDG_DATA_HOME/dockered-claude/tools
-                          or \$HOME/.local/share/dockered-claude/tools)
 
   Passed through when set: ANTHROPIC_API_KEY, CLAUDE_CODE_OAUTH_TOKEN,
   ANTHROPIC_BASE_URL, ANTHROPIC_MODEL
@@ -64,7 +62,7 @@ Project configuration:
   yet, it is created in the main worktree, or else in the working
   directory. .meta/ is excluded from git through info/exclude unless it is
   ignored already. The directory is mounted read-only in the container,
-  since the launcher reads it on the host. Install runs (--install-tool)
+  since the launcher reads it on the host. Tool builds (--build-tool)
   neither read nor save it.
 
   tools = NAME...         Tools to use when no --tool is given
@@ -97,34 +95,33 @@ Mounts:
   packages share it. It is rebuilt with --build and whenever the base
   image has changed. Remove unused ones with:
   docker image prune --all --filter label=dockered-claude.packages
-  (they are rebuilt when next needed). Tools are installed (--install-tool)
-  on the base image, since they are shared between projects.
+  (they are rebuilt when next needed). Tools are built on the base image,
+  since they are shared between projects.
 
 Tools:
-  Each tool is a prefix directory in the tools directory, with its
-  executables in bin/. A selected tool is mounted read-only at
-  /opt/tools/NAME and /opt/tools/NAME/bin is put in front of PATH, so tools
-  may consist of many files (e.g. an npm package) and the first tool
-  selected wins on name collisions.
+  Each tool is a directory tools/NAME next to the launcher's bin/, holding
+  a Dockerfile and anything it needs, so tools for one machine are kept or
+  left out by adding, leaving untracked or ignoring their directory in git.
+
+  The Dockerfile builds on the base image (ARG BASE_IMAGE) and installs the
+  tool under /opt/tools/NAME, with its executables in bin/; its last stage
+  holds only that directory (FROM scratch, then COPY --from). The launcher
+  copies it into the volume dockered-claude-tool-NAME and removes the
+  image, so the volume is the only copy. A selected tool whose volume is
+  missing is built before Claude Code starts. --build-tool rebuilds it
+  without the build cache, which updates tools that download their latest
+  release; Docker refuses to replace a volume in use, so stop containers
+  using the tool first. Remove a tool's volume with:
+  docker volume rm dockered-claude-tool-NAME
+
+  A selected tool's volume is mounted read-only at /opt/tools/NAME and
+  /opt/tools/NAME/bin is put in front of PATH, in selection order, so the
+  first tool selected wins on name collisions.
 
   A tool may also have an env file in its directory, in docker's --env-file
   format, to set variables it needs (e.g. VCPKG_ROOT=/opt/tools/vcpkg/root).
   It must not set PATH. The first tool selected wins on name collisions here
   too.
-
-  Tools are installed from inside the image, at the path they are mounted
-  at, so that absolute paths and native code match the container. The
-  install container mounts the tool writable at /opt/tools/NAME, makes it
-  the working directory, and points installers at it:
-  NPM_CONFIG_PREFIX, UV_TOOL_DIR (NAME/venvs), UV_TOOL_BIN_DIR (NAME/bin)
-  and UV_PYTHON_INSTALL_DIR (NAME/python). HOME is a temporary directory.
-  Static binaries can instead be copied into the tool's bin/ on the host.
-
-  Known tools install with a built-in command when none is given:
-  ${known_tools[*]}. Run again to update. A selected tool that is not
-  installed yet is installed with its built-in command before Claude Code
-  starts; other tools must be installed with --install-tool first. A tool
-  counts as installed once its bin/ is not empty.
 
 Examples:
   ${script_name}
@@ -135,10 +132,7 @@ Examples:
   ${script_name} --mount ~/src/library --mount ~/notes:rw
   ${script_name} --no-save --mount ~/Downloads
   ${script_name} --no-mounts
-  ${script_name} --install-tool typescript
-  ${script_name} --install-tool vcpkg
-  ${script_name} --install-tool prettier -- npm install --global prettier
-  ${script_name} --install-tool ruff -- uv tool install ruff
+  ${script_name} --build-tool vcpkg
 HELP
 }
 
@@ -154,14 +148,14 @@ parse_arguments() {
     case "${argument}" in
     -h | --help) kwargs[help]=1 ;;
     -b | --build) kwargs[build]=1 ;;
-    -t | --tool | --install-tool)
+    -t | --tool | --build-tool)
       if (($# == 0)); then
         warn "${argument} requires a tool name"
         return 1
       fi
       validate_tool_name "$1" || return
-      if [[ "${argument}" == --install-tool ]]; then
-        kwargs[install_tool]="$1"
+      if [[ "${argument}" == --build-tool ]]; then
+        kwargs[build_tool]="$1"
       else
         tools+=("$1")
         kwargs[tools_given]=1
@@ -234,11 +228,10 @@ resolve_paths() {
   agents_dir="${HOME:?}/.agents"
   config_dir="${HOME:?}/.config/claude"
   git_config_dir="${HOME:?}/.config/git"
-  tools_dir="${DOCKERED_CLAUDE_TOOLS_DIR:-${XDG_DATA_HOME:-${HOME:?}/.local/share}/dockered-claude/tools}"
 }
 
 # Choose the tools from --tool and --no-tools,
-# else from the project configuration (empty for install runs),
+# else from the project configuration,
 # else from DOCKERED_CLAUDE_TOOLS.
 select_tools() {
   [[ -z "${kwargs[tools_given]+defined}" ]] || return 0
@@ -401,41 +394,35 @@ add_mount() {
   mount_modes[${mount_path}]="${mount_mode}"
 }
 
-# A tool is installed once its bin/ has an entry,
-# since an install that failed may have left an empty one.
-tool_installed() {
+# Succeed when tools/TOOL holds a Dockerfile to build the tool from.
+tool_defined() {
   declare tool="$1"
-  [[ -n "$(ls -A -- "${tools_dir}/${tool}/bin" 2>/dev/null)" ]]
+  [[ -f "${project_directory}/tools/${tool}/Dockerfile" ]]
 }
 
-check_tool_installed() {
+# A tool is built once its volume exists.
+tool_built() {
   declare tool="$1"
-  if ! tool_installed "${tool}"; then
-    warn "tool '${tool}' is not installed:" \
-      "${tools_dir}/${tool}/bin is missing or empty"
-    return 1
-  fi
+  docker volume inspect "dockered-claude-tool-${tool}" >/dev/null 2>&1
 }
 
-# Install each selected tool that is not installed yet
-# with its built-in install command,
-# in a container without the other selected tools.
-install_missing_tools() {
+check_tool_defined() {
+  declare tool="$1"
+  tool_defined "${tool}" && return 0
+  warn "no tool '${tool}': ${project_directory}/tools/${tool}/Dockerfile" \
+    "is missing"
+  return 1
+}
+
+# Build each selected tool whose volume is missing.
+# A volume left from a tool whose directory was removed is not used.
+build_missing_tools() {
   declare tool
   for tool in "${tools[@]}"; do
-    tool_installed "${tool}" && continue
-    if [[ " ${known_tools[*]} " != *" ${tool} "* ]]; then
-      warn "tool '${tool}' is not installed and has no built-in install" \
-        "command; install it with: ${script_name} --install-tool ${tool}" \
-        "-- COMMAND"
-      return 1
-    fi
-    warn "installing tool '${tool}'"
-    (
-      tools=()
-      install_tool "${tool}"
-    ) || return
-    check_tool_installed "${tool}" || return
+    check_tool_defined "${tool}" || return
+    tool_built "${tool}" && continue
+    warn "building tool '${tool}'"
+    build_tool_volume "${tool}" || return
   done
 }
 
@@ -518,7 +505,7 @@ save_project_options() {
   if [[ -n "${kwargs[tools_given]+defined}" ]]; then
     declare tool
     for tool in "${tools[@]}"; do
-      check_tool_installed "${tool}" || return
+      check_tool_defined "${tool}" || return
     done
     save_project_option tools "${tools[*]}" || return
   fi
@@ -652,12 +639,16 @@ exclude_meta_directory() {
 }
 
 list_tools() {
-  [[ -d "${tools_dir}" ]] || return 0
-  declare entry
-  for entry in "${tools_dir}"/*/; do
-    entry="${entry%/}"
-    tool_installed "${entry##*/}" || continue
-    printf '%s\n' "${entry##*/}"
+  declare entry tool
+  for entry in "${project_directory}"/tools/*/Dockerfile; do
+    [[ -f "${entry}" ]] || continue
+    entry="${entry%/Dockerfile}"
+    tool="${entry##*/}"
+    if tool_built "${tool}"; then
+      printf '%s\n' "${tool}"
+    else
+      printf '%s (not built)\n' "${tool}"
+    fi
   done
 }
 
@@ -866,7 +857,7 @@ ensure_packages_image() {
     "${project_directory}" || return
 }
 
-# The docker run arguments shared by Claude Code and tool install containers.
+# The docker run arguments of Claude Code's container.
 # SYS_PTRACE is only usable through the file capability on gdb in the image,
 # which no-new-privileges would ignore,
 # so that option is not set.
@@ -894,24 +885,22 @@ add_base_arguments() {
   fi
 }
 
-# Mount each selected tool read-only at /opt/tools/<name> and put its bin/
-# in front of the image's PATH, in selection order. The tool being installed
-# (if any) is mounted writable by the caller, but its bin/ is put on PATH
-# here so the install command sees a consistent PATH.
+# Mount each selected tool's volume read-only at /opt/tools/<name>
+# and put its bin/ in front of the image's PATH, in selection order.
 # A tool's env file, if any, is passed with --env-file.
 # Later files override earlier ones,
 # so they are passed in reverse order to let the first tool win.
 add_tool_arguments() {
-  declare writable_tool="${1:-}"
   declare env_file image_path tool tool_path=''
   declare -a env_args=()
   declare -A seen=()
 
-  for tool in "${tools[@]}" ${writable_tool:+"${writable_tool}"}; do
+  for tool in "${tools[@]}"; do
     [[ -z "${seen[${tool}]+defined}" ]] || continue
     seen[${tool}]=1
+    check_tool_defined "${tool}" || return
     tool_path+="/opt/tools/${tool}/bin:"
-    env_file="${tools_dir}/${tool}/env"
+    env_file="${project_directory}/tools/${tool}/env"
     if [[ -f "${env_file}" ]]; then
       if grep -Eq '^[[:space:]]*PATH([[:space:]]*=|[[:space:]]*$)' "${env_file}"; then
         warn "${env_file} must not set PATH"
@@ -919,10 +908,8 @@ add_tool_arguments() {
       fi
       env_args=(--env-file "${env_file}" "${env_args[@]}")
     fi
-    [[ "${tool}" == "${writable_tool}" ]] && continue
-    check_tool_installed "${tool}" || return
     docker_args+=(
-      --mount "type=bind,src=${tools_dir}/${tool},dst=/opt/tools/${tool},readonly"
+      --mount "type=volume,src=dockered-claude-tool-${tool},dst=/opt/tools/${tool},readonly"
     )
   done
 
@@ -938,116 +925,88 @@ add_tool_arguments() {
   docker_args+=(--env "PATH=${tool_path}${image_path}")
 }
 
-declare -a known_tools=(rclone typescript uv vcpkg)
+# Build tools/TOOL/Dockerfile on the base image
+# and copy the prefix it holds, /opt/tools/TOOL,
+# into the volume dockered-claude-tool-TOOL, replacing that volume.
+# The image is untagged and removed afterwards,
+# so the volume is the only copy of the tool.
+# With REFRESH, the build cache is not used,
+# so that downloads of the latest release are repeated;
+# otherwise a rebuild would reuse the cached layers and update nothing.
+# Docker copies an image's files into an empty volume
+# when a container that mounts it is created,
+# so the fill container is created but never started.
+# Its fixed name makes Docker refuse a second fill of the same tool
+# while one is in progress.
+build_tool_volume() {
+  declare tool="$1" refresh="${2:-}"
+  declare directory="${project_directory}/tools/${tool}"
+  declare volume="dockered-claude-tool-${tool}"
+  declare prefix="/opt/tools/${tool}"
+  declare temporary_directory tool_image
 
-# Set install_command to the built-in install command for a known tool.
-# It runs in the install container, with the tool's prefix as the working
-# directory; the downloads are the projects' official release archives.
-known_install_command() {
-  declare tool="$1"
-  case "${tool}" in
-  rclone)
-    install_command=(sh -c '
-      set -eu
-      case "$(uname -m)" in
-      x86_64) arch=amd64 ;;
-      aarch64) arch=arm64 ;;
-      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-      esac
-      tmp="$(mktemp -d)"
-      curl -fsSL -o "${tmp}/rclone.zip" \
-        "https://downloads.rclone.org/rclone-current-linux-${arch}.zip"
-      python3 -m zipfile -e "${tmp}/rclone.zip" "${tmp}"
-      install -D -m 755 "${tmp}"/rclone-*-linux-"${arch}"/rclone bin/rclone
-      rm -rf "${tmp}"
-      bin/rclone version
-    ')
-    ;;
-  typescript)
-    install_command=(sh -c '
-      set -eu
-      npm install --global typescript
-      bin/tsc --version
-    ')
-    ;;
-  uv)
-    install_command=(sh -c '
-      set -eu
-      case "$(uname -m)" in
-      x86_64 | aarch64) arch="$(uname -m)" ;;
-      *) echo "unsupported architecture: $(uname -m)" >&2; exit 1 ;;
-      esac
-      mkdir -p bin
-      curl -fsSL \
-        "https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-unknown-linux-gnu.tar.gz" |
-        tar -xz --strip-components=1 -C bin
-      bin/uv --version
-    ')
-    ;;
-  vcpkg)
-    install_command=(sh -c '
-      set -eu
-      # A full clone,
-      # since manifests pin port versions to commits in its history
-      # (builtin-baseline).
-      if [ -d root/.git ]; then
-        git -C root pull --ff-only
-      else
-        git clone https://github.com/microsoft/vcpkg root
-      fi
-      root/bootstrap-vcpkg.sh -disableMetrics
-      # The root is mounted read-only,
-      # so vcpkg must run in manifest mode,
-      # with build trees in vcpkg_installed/ of the project
-      # and downloads and binary caches in ~/.cache/vcpkg.
-      printf "%s\n" "{\"readonly\": true}" >root/vcpkg-bundle.json
-      ln -sfn ../root/vcpkg bin/vcpkg
-      printf "VCPKG_ROOT=%s\n" "${PWD}/root" >env
-      bin/vcpkg version
-    ')
-    ;;
-  *) return 1 ;;
-  esac
+  if [[ ! -f "${directory}/Dockerfile" ]]; then
+    warn "no tool '${tool}': ${directory}/Dockerfile is missing"
+    return 1
+  fi
+  # Checked before building, so that a refused rebuild
+  # neither spends the build nor leaves its image behind.
+  # fill_tool_volume still handles a container started meanwhile.
+  check_tool_not_in_use || return
+
+  temporary_directory="$(mktemp -d)" || return
+  if ! docker build \
+    --build-arg "BASE_IMAGE=${image}" \
+    --iidfile "${temporary_directory}/image-id" \
+    ${refresh:+--no-cache} \
+    "${directory}"; then
+    rm -rf -- "${temporary_directory}"
+    return 1
+  fi
+  tool_image="$(<"${temporary_directory}/image-id")" || return
+  rm -rf -- "${temporary_directory}" || return
+
+  fill_tool_volume || {
+    docker image rm "${tool_image}" >/dev/null
+    return 1
+  }
+  docker image rm "${tool_image}" >/dev/null || return
 }
 
-# Run an install command for TOOL, or else its built-in one,
-# in a container where the tool's prefix is writable
-# at the same path it is later mounted at read-only.
-# Tools are shared between projects, so they are installed on the base image.
-install_tool() {
-  declare tool="$1"
-  shift
-  declare prefix="/opt/tools/${tool}"
-  declare container_image="${image}"
-  declare -a docker_args=() install_command=()
+# Fail when a container, running or stopped, uses the volume,
+# since Docker refuses to remove it then.
+# Reads tool and volume from build_tool_volume.
+check_tool_not_in_use() {
+  declare containers
+  containers="$(docker ps --all --quiet --filter "volume=${volume}")" || return
+  [[ -n "${containers}" ]] || return 0
+  warn "cannot rebuild tool '${tool}' while a container uses it;" \
+    "stop or remove those containers and try again:" "${containers//$'\n'/ }"
+  return 1
+}
 
-  if (($# == 0)); then
-    if ! known_install_command "${tool}"; then
-      warn "no built-in install command for '${tool}'; give one after --" \
-        "(built-in: ${known_tools[*]})"
-      return 1
-    fi
-    set -- "${install_command[@]}"
+# Replace the volume with the files of tool_image at prefix.
+# Reads tool, volume, prefix and tool_image from build_tool_volume.
+fill_tool_volume() {
+  declare filler="${volume}-fill"
+  if docker volume inspect "${volume}" >/dev/null 2>&1 &&
+    ! docker volume rm "${volume}" >/dev/null; then
+    warn "cannot rebuild tool '${tool}' while a container uses it;" \
+      "stop those containers and try again"
+    return 1
   fi
-
-  # Created here so that Docker does not create it as root.
-  mkdir -p -- "${tools_dir}/${tool}/bin" || return
-
-  add_base_arguments || return
-  add_tool_arguments "${tool}" || return
-  docker_args+=(
-    --entrypoint "$1"
-    --env HOME=/tmp
-    --env "NPM_CONFIG_PREFIX=${prefix}"
-    --env "UV_PYTHON_INSTALL_DIR=${prefix}/python"
-    --env "UV_TOOL_BIN_DIR=${prefix}/bin"
-    --env "UV_TOOL_DIR=${prefix}/venvs"
-    --mount "type=bind,src=${tools_dir}/${tool},dst=${prefix}"
-    --workdir "${prefix}"
-  )
-  shift
-
-  docker "${docker_args[@]}" "${container_image}" "$@"
+  docker volume create --label "dockered-claude.tool=${tool}" "${volume}" \
+    >/dev/null || return
+  if ! docker create \
+    --mount "type=volume,src=${volume},dst=${prefix}" \
+    --name "${filler}" \
+    "${tool_image}" /none >/dev/null; then
+    warn "cannot fill the volume of tool '${tool}';" \
+      "if no other build of it is running, remove the leftover container:" \
+      "docker rm ${filler}"
+    return 1
+  fi
+  docker rm "${filler}" >/dev/null || return
 }
 
 run_container() {
@@ -1121,12 +1080,12 @@ run_container() {
 }
 
 # Run Claude Code with args,
-# or install the tool in kwargs[install_tool] with args as its install command,
+# or build the tool in kwargs[build_tool],
 # as the other options in kwargs, tools, packages and mounts say.
 run() {
   declare image workdir state_dir state_home uid_host gid_host username groupname
   declare home passwd_file group_file agents_dir config_dir git_config_dir
-  declare tools_dir project_config project_root container_image
+  declare project_config project_root container_image
   declare -a project_mounts=() mount_paths=()
   declare -A project_options=() mount_modes=()
 
@@ -1136,15 +1095,13 @@ run() {
     return
   fi
 
-  prepare_state_directory || return
-  if [[ -n "${kwargs[install_tool]+defined}" ]]; then
-    select_tools || return
-    prepare_user_identity || return
+  if [[ -n "${kwargs[build_tool]+defined}" ]]; then
     ensure_image || return
-    install_tool "${kwargs[install_tool]}" "${args[@]}" || return
+    build_tool_volume "${kwargs[build_tool]}" refresh || return
     return
   fi
 
+  prepare_state_directory || return
   find_project_config || return
   project_root="${project_config%/"${project_config_path}"}"
   read_project_config || return
@@ -1156,7 +1113,7 @@ run() {
   link_agent_skills || return
   link_config_files || return
   ensure_image || return
-  install_missing_tools || return
+  build_missing_tools || return
   ensure_packages_image || return
   save_project_options || return
   run_container "${args[@]}" || return
