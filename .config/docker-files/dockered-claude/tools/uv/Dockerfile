@@ -1,5 +1,5 @@
-# uv, from the project's official release archive,
-# for a newer uv than the base image's.
+# uv and uvx, Python package and project managers,
+# from the project's official release archive.
 # The last stage holds only the tool's prefix,
 # which the launcher copies into the tool's volume.
 ARG BASE_IMAGE=dockered-claude-default:latest

@@ -1,0 +1,4 @@
+# Print the version of Node.js that the Dockerfile would install,
+# so that the launcher can skip building a version built already.
+set -eu
+curl -fsSL https://nodejs.org/dist/index.json | jq -er '.[0].version | ltrimstr("v")'
