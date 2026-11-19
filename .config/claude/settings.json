@@ -1,4 +1,6 @@
 {
+  "idleCompaction": false,
+  "prefersReducedMotion": true,
   "theme": "auto",
   "statusLine": {
     "type": "command",
