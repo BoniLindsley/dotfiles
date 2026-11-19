@@ -6,3 +6,6 @@ VCPKG_ROOT=/opt/tools/vcpkg/root
 GIT_CONFIG_COUNT=1
 GIT_CONFIG_KEY_0=safe.directory
 GIT_CONFIG_VALUE_0=/opt/tools/vcpkg/root
+# Downloads go to a persisted home path,
+# since the root is read-only.
+VCPKG_DOWNLOADS=~/.cache/vcpkg/downloads

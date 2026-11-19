@@ -78,7 +78,9 @@ test_selecting_refuses_an_invalid_name_from_the_environment() {
 # run from a working directory in temporary_directory.
 reset_launcher() {
   reset_profiles
-  declare -gA mount_modes=() profile_mount_paths=()
+  declare -gA mount_modes=() unsaved_mount_paths=()
+  declare -gA mount_given_paths=() link_targets=() link_climbs=()
+  declare -ga link_paths=()
   declare -ga mount_paths=() profile_variables=() profile_path_entries=()
   set_profile default
   home=/home/claude
@@ -120,7 +122,7 @@ profile_path() {
   assert_array mount_paths "${workdir}/data" "${temporary_directory}/notes"
   assert_equal ro "${mount_modes["${workdir}/data"]}"
   assert_equal rw "${mount_modes["${temporary_directory}/notes"]}"
-  assert_equal 2 "${#profile_mount_paths[@]}"
+  assert_equal 2 "${#unsaved_mount_paths[@]}"
   assert_contains "${errors}" "skipping profile mount '${workdir}/missing'"
   assert_array profile_path_entries /opt/sdk/bin /usr/local/go/bin
 }
@@ -209,7 +211,7 @@ test_launcher_mount_given_already_keeps_its_mode_and_is_saved() {
   assert_status 0
   assert_array mount_paths "${workdir}/data"
   assert_equal ro "${mount_modes["${workdir}/data"]}"
-  assert_equal 0 "${#profile_mount_paths[@]}"
+  assert_equal 0 "${#unsaved_mount_paths[@]}"
 }
 
 test_saving_mounts_leaves_out_those_of_the_profile() {

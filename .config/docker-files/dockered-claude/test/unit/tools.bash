@@ -10,13 +10,14 @@ source -- "${launcher}" || return
 
 # Declare, as globals of the test's subshell,
 # the state that the tool functions read and set,
-# for the profile default, with the tools uv and rclone defined
+# for generation 1 of the profile default, with the image ID sha256:base,
+# with the tools uv and rclone defined
 # in a launcher directory in temporary_directory,
 # and the fake docker's volumes, containers and calls in it.
 reset_tools() {
   set_launcher_paths
   declare -ga mounted_tools=()
-  declare -gA tool_volume_names=()
+  declare -gA tool_volume_names=() tool_pins=()
   project_directory="${temporary_directory}/launcher"
   volumes="${temporary_directory}/volumes"
   containers="${temporary_directory}/containers"
@@ -27,15 +28,20 @@ reset_tools() {
   : >"${project_directory}/tools/rclone/Dockerfile"
   : >"${calls}"
   set_profile default
+  profile_image_id=sha256:base
+  profile_generation=1
 }
 
 # Add the volume NAME with the labels of TOOL, PROFILE and GENERATION,
+# built from the profile image volume_base, by default sha256:base,
 # used by the containers given after them.
 add_volume() {
   declare name="$1" tool="$2" profile="$3" generation="$4"
   shift 4
   printf '%s\n' "tool=${tool}" "profile=${profile}" \
-    "generation=${generation}" "build=earlier" >"${volumes}/${name}"
+    "generation=${generation}" "build=earlier" \
+    "base-image=${volume_base:-sha256:base}" "profile-generation=1" \
+    >"${volumes}/${name}"
   printf '%s\n' "$@" >"${volumes}/${name}.users"
 }
 
@@ -50,7 +56,8 @@ volume_label() {
 # The built tool image gives the version in image_version, if set,
 # and a tool's latest-version prints latest_output, failing when unset.
 docker() {
-  declare argument name tool='' profile='' version='' quiet='' spec labels
+  declare argument name tool='' profile='' version='' base='' quiet=''
+  declare generation='' format='' spec labels
   case "$1 $2" in
   'volume ls')
     for argument in "$@"; do
@@ -59,6 +66,9 @@ docker() {
       label=dockered-claude.tool=*) tool="${argument##*=}" ;;
       label=dockered-claude.profile=*) profile="${argument##*=}" ;;
       label=dockered-claude.version=*) version="${argument##*=}" ;;
+      label=dockered-claude.base-image=*) base="${argument##*=}" ;;
+      label=dockered-claude.generation=*) generation="${argument##*=}" ;;
+      '{{'*) format="${argument}" ;;
       esac
     done
     for name in "${volumes}"/*; do
@@ -67,10 +77,18 @@ docker() {
       [[ "$(volume_label "${name##*/}" profile)" == "${profile}" ]] || continue
       [[ -z "${version}" ||
         "$(volume_label "${name##*/}" version)" == "${version}" ]] || continue
-      if [[ -n "${quiet}" ]]; then
+      [[ -z "${base}" ||
+        "$(volume_label "${name##*/}" base-image)" == "${base}" ]] || continue
+      [[ -z "${generation}" ||
+        "$(volume_label "${name##*/}" generation)" == "${generation}" ]] ||
+        continue
+      if [[ "${format}" == *profile-generation* && "${format}" != */* ]]; then
+        volume_label "${name##*/}" profile-generation
+      elif [[ -n "${quiet}" ]]; then
         printf '%s\n' "${name##*/}"
       else
-        printf '%s %s\n' "$(volume_label "${name##*/}" generation)" "${name##*/}"
+        printf '%s/%s/%s\n' "$(volume_label "${name##*/}" generation)" \
+          "$(volume_label "${name##*/}" base-image)" "${name##*/}"
       fi
     done
     ;;
@@ -143,9 +161,13 @@ test_building_makes_the_first_generation_with_its_labels() {
   capture build_tool_volume uv refresh
   assert_status 0
   assert_file "${calls}" \
-    $'build BASE_IMAGE=dockered-claude-default:latest\ncreate dockered-claude-tool-default-uv-1\nimage rm sha256:tool'
+    $'build BASE_IMAGE=dockered-claude-default:latest\ncreate dockered-claude-tool-default-1-uv-1\nimage rm sha256:tool'
   assert_equal $'uv\ndefault\n1' "$(head -n 3 -- \
-    "${volumes}/dockered-claude-tool-default-uv-1" | cut -d = -f 2)"
+    "${volumes}/dockered-claude-tool-default-1-uv-1" | cut -d = -f 2)"
+  assert_equal sha256:base \
+    "$(volume_label dockered-claude-tool-default-1-uv-1 base-image)"
+  assert_equal 1 \
+    "$(volume_label dockered-claude-tool-default-1-uv-1 profile-generation)"
 }
 
 test_building_makes_the_next_generation_beside_one_in_use() {
@@ -154,7 +176,7 @@ test_building_makes_the_next_generation_beside_one_in_use() {
   add_volume dockered-claude-tool-default-uv-2 uv default 2 container
   capture build_tool_volume uv refresh
   assert_status 0
-  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-uv-3'
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-1-uv-3'
   [[ -e "${volumes}/dockered-claude-tool-default-uv-2" ]] ||
     fail 'expected the volume in use to stay'
 }
@@ -166,20 +188,21 @@ test_building_refuses_a_volume_made_by_another_build() {
   find_tool_volumes() {
     tool_volumes=()
     tool_generations=()
+    tool_newest_generation=0
   }
-  add_volume dockered-claude-tool-default-uv-1 uv default 1
+  add_volume dockered-claude-tool-default-1-uv-1 uv default 1
   capture build_tool_volume uv
   assert_status 1
-  assert_contains "${errors}" 'dockered-claude-tool-default-uv-1 existed already'
+  assert_contains "${errors}" 'dockered-claude-tool-default-1-uv-1 existed already'
   assert_contains "$(<"${calls}")" 'image rm sha256:tool'
 }
 
 test_building_refuses_a_fill_in_progress() {
   reset_tools
-  : >"${containers}/dockered-claude-tool-default-uv-1-fill"
+  : >"${containers}/dockered-claude-tool-default-1-uv-1-fill"
   capture build_tool_volume uv
   assert_status 1
-  assert_contains "${errors}" 'docker rm dockered-claude-tool-default-uv-1-fill'
+  assert_contains "${errors}" 'docker rm dockered-claude-tool-default-1-uv-1-fill'
   assert_contains "$(<"${calls}")" 'image rm sha256:tool'
 }
 
@@ -191,7 +214,7 @@ test_running_mounts_the_newest_and_builds_missing_tools() {
   capture find_tool_volume_names
   assert_status 0
   assert_equal dockered-claude-tool-default-uv-2 "${tool_volume_names[uv]}"
-  assert_equal dockered-claude-tool-default-rclone-1 \
+  assert_equal dockered-claude-tool-default-1-rclone-1 \
     "${tool_volume_names[rclone]}"
   assert_contains "${errors}" "building tool 'rclone' for profile 'default'"
 }
@@ -203,6 +226,8 @@ test_running_warns_only_about_older_volumes_no_container_uses() {
   add_volume dockered-claude-tool-default-uv-3 uv default 3
   add_volume dockered-claude-tool-default-rclone-1 rclone default 1
   mounted_tools=(uv rclone)
+  tool_volume_names=([uv]=dockered-claude-tool-default-uv-3
+    [rclone]=dockered-claude-tool-default-rclone-1)
   capture warn_unused_tool_volumes
   assert_status 0
   assert_contains "${errors}" \
@@ -215,6 +240,7 @@ test_running_without_older_volumes_warns_nothing() {
   reset_tools
   add_volume dockered-claude-tool-default-uv-1 uv default 1
   mounted_tools=(uv rclone)
+  tool_volume_names=([uv]=dockered-claude-tool-default-uv-1)
   capture warn_unused_tool_volumes
   assert_status 0
   assert_equal '' "${errors}"
@@ -226,9 +252,9 @@ test_building_names_a_volume_by_the_version_the_tool_gives() {
   image_version=2.1.328
   capture build_tool_volume uv refresh
   assert_status 0
-  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-uv-2.1.328'
-  assert_equal 2 "$(volume_label dockered-claude-tool-default-uv-2.1.328 generation)"
-  assert_equal 2.1.328 "$(volume_label dockered-claude-tool-default-uv-2.1.328 version)"
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-1-uv-2.1.328'
+  assert_equal 2 "$(volume_label dockered-claude-tool-default-1-uv-2.1.328 generation)"
+  assert_equal 2.1.328 "$(volume_label dockered-claude-tool-default-1-uv-2.1.328 version)"
 }
 
 test_building_keeps_a_version_built_already() {
@@ -276,7 +302,7 @@ test_building_goes_ahead_for_a_new_latest_version() {
   image_version=2.1.329
   capture build_tool_volume uv refresh
   assert_status 0
-  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-uv-2.1.329'
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-1-uv-2.1.329'
 }
 
 test_building_goes_ahead_when_latest_version_fails() {
@@ -285,7 +311,7 @@ test_building_goes_ahead_when_latest_version_fails() {
   capture build_tool_volume uv
   assert_status 0
   assert_contains "${errors}" "cannot tell the latest version of tool 'uv'; building it"
-  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-uv-1'
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-1-uv-1'
 }
 
 test_building_goes_ahead_when_latest_version_is_invalid() {
@@ -295,5 +321,91 @@ test_building_goes_ahead_when_latest_version_is_invalid() {
   capture build_tool_volume uv
   assert_status 0
   assert_contains "${errors}" "invalid latest version of tool 'uv': '<html>'"
-  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-uv-1'
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-1-uv-1'
+}
+
+test_finding_takes_only_volumes_of_the_profile_image() {
+  reset_tools
+  add_volume dockered-claude-tool-default-1-uv-1 uv default 1
+  volume_base=sha256:other add_volume dockered-claude-tool-default-2-uv-2 \
+    uv default 2
+  printf '%s\n' tool=uv profile=default generation=3 \
+    >"${volumes}/dockered-claude-tool-default-uv-3"
+  declare -a tool_volumes tool_generations
+  capture find_tool_volumes uv
+  assert_status 0
+  assert_array tool_volumes dockered-claude-tool-default-1-uv-1
+  assert_equal 3 "${tool_newest_generation}"
+}
+
+test_building_after_a_profile_build_continues_the_generations() {
+  reset_tools
+  volume_base=sha256:old add_volume dockered-claude-tool-default-1-uv-4 \
+    uv default 4
+  profile_image_id=sha256:new
+  profile_generation=2
+  capture build_tool_volume uv refresh
+  assert_status 0
+  assert_contains "$(<"${calls}")" 'create dockered-claude-tool-default-2-uv-5'
+  assert_equal sha256:new \
+    "$(volume_label dockered-claude-tool-default-2-uv-5 base-image)"
+}
+
+test_running_builds_a_tool_built_only_from_another_image() {
+  reset_tools
+  volume_base=sha256:old add_volume dockered-claude-tool-default-1-uv-1 \
+    uv default 1
+  mounted_tools=(uv)
+  capture find_tool_volume_names
+  assert_status 0
+  assert_equal dockered-claude-tool-default-1-uv-2 "${tool_volume_names[uv]}"
+}
+
+test_running_mounts_a_pinned_generation() {
+  reset_tools
+  add_volume dockered-claude-tool-default-1-uv-1 uv default 1
+  add_volume dockered-claude-tool-default-1-uv-2 uv default 2
+  mounted_tools=(uv)
+  tool_pins=([uv]=1)
+  capture find_tool_volume_names
+  assert_status 0
+  assert_equal dockered-claude-tool-default-1-uv-1 "${tool_volume_names[uv]}"
+}
+
+test_running_refuses_a_pin_built_from_another_profile_image() {
+  reset_tools
+  volume_base=sha256:old add_volume dockered-claude-tool-default-1-uv-1 \
+    uv default 1
+  add_volume dockered-claude-tool-default-2-uv-2 uv default 2
+  profile_generation=2
+  mounted_tools=(uv)
+  tool_pins=([uv]=1)
+  capture find_tool_volume_names
+  assert_status 1
+  assert_contains "${errors}" \
+    "was built from generation 1 of profile 'default', not from the one latest marks (2)"
+  assert_contains "${errors}" 'profile use default 1'
+}
+
+test_running_refuses_a_pin_that_is_gone() {
+  reset_tools
+  add_volume dockered-claude-tool-default-1-uv-2 uv default 2
+  mounted_tools=(uv)
+  tool_pins=([uv]=1)
+  capture find_tool_volume_names
+  assert_status 1
+  assert_contains "${errors}" 'no longer exists'
+  assert_file "${calls}" ''
+}
+
+test_running_warns_about_the_newest_when_an_older_one_is_pinned() {
+  reset_tools
+  add_volume dockered-claude-tool-default-1-uv-1 uv default 1
+  add_volume dockered-claude-tool-default-1-uv-2 uv default 2
+  mounted_tools=(uv)
+  tool_volume_names=([uv]=dockered-claude-tool-default-1-uv-1)
+  capture warn_unused_tool_volumes
+  assert_status 0
+  assert_contains "${errors}" 'docker volume rm dockered-claude-tool-default-1-uv-2'
+  [[ "${errors}" != *uv-1* ]] || fail "expected only uv-2: ${errors}"
 }

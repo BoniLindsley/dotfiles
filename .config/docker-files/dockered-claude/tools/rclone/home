@@ -1,0 +1,3 @@
+# Home paths that persist under tools/rclone of the state directory:
+# its configuration, with the remotes set up in the container.
+.config/rclone/

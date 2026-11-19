@@ -156,7 +156,7 @@ test_options_that_became_commands_are_refused() {
   done
 }
 
-test_build_takes_no_arguments() {
+test_build_takes_no_other_arguments() {
   reset_arguments
   capture parse_arguments build
   assert_status 0
@@ -268,6 +268,56 @@ test_profile_build_requires_a_valid_name() {
   assert_contains "${errors}" "invalid profile name '../escape'"
 }
 
+test_profile_use_takes_a_name_and_a_generation() {
+  reset_arguments
+  capture parse_arguments profile use default 3
+  assert_status 0
+  assert_equal profile-use "${kwargs[command]}"
+  assert_array args default 3
+
+  for arguments in 'default' 'default 3 4' 'default x'; do
+    reset_arguments
+    # shellcheck disable=SC2086 # Split into arguments.
+    capture parse_arguments profile use ${arguments}
+    assert_status 1
+  done
+  assert_contains "${errors}" "invalid generation 'x'"
+}
+
+test_profile_revert_takes_one_name() {
+  reset_arguments
+  capture parse_arguments profile revert default
+  assert_status 0
+  assert_equal profile-revert "${kwargs[command]}"
+  assert_array args default
+
+  reset_arguments
+  capture parse_arguments profile revert
+  assert_status 1
+  assert_contains "${errors}" 'profile revert requires one profile name'
+}
+
+test_tools_have_no_use_or_revert_yet() {
+  reset_arguments
+  capture parse_arguments tool revert uv
+  assert_status 1
+  assert_contains "${errors}" "unknown tool command 'revert'"
+}
+
+test_tools_may_pin_a_generation() {
+  reset_arguments
+  capture parse_arguments --tool uv:3 --tool rclone
+  assert_status 0
+  assert_array tools uv:3 rclone
+
+  for spec in uv: uv:0 uv:x; do
+    reset_arguments
+    capture parse_arguments --tool "${spec}"
+    assert_status 1
+    assert_contains "${errors}" 'invalid generation'
+  done
+}
+
 test_tool_commands_take_a_profile() {
   reset_arguments
   capture parse_arguments tool list --profile minimal
@@ -286,6 +336,31 @@ test_tool_list_takes_no_names() {
   capture parse_arguments tool list uv
   assert_status 1
   assert_contains "${errors}" "tool list: unexpected argument 'uv'"
+}
+
+test_build_commands_take_no_cache() {
+  reset_arguments
+  capture parse_arguments build --no-cache
+  assert_status 0
+  assert_equal 1 "${kwargs[no_cache]}"
+
+  reset_arguments
+  capture parse_arguments profile build --no-cache default
+  assert_status 0
+  assert_equal 1 "${kwargs[no_cache]}"
+  assert_array args default
+}
+
+test_only_build_commands_take_no_cache() {
+  reset_arguments
+  capture parse_arguments tool build --no-cache uv
+  assert_status 1
+  assert_contains "${errors}" "tool build: unexpected argument '--no-cache'"
+
+  reset_arguments
+  capture parse_arguments profile list --no-cache
+  assert_status 1
+  assert_contains "${errors}" "profile list: unexpected argument '--no-cache'"
 }
 
 test_profile_commands_take_no_profile() {

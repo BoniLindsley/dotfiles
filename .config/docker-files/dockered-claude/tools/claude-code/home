@@ -1,0 +1,4 @@
+# Home paths that persist under tools/claude-code of the state directory.
+# The launcher sets CLAUDE_CONFIG_DIR to ~/.claude,
+# so that Claude Code keeps its configuration file in it too.
+.claude/

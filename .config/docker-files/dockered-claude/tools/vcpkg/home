@@ -1,0 +1,3 @@
+# Home paths that persist under tools/vcpkg of the state directory:
+# its downloads and binary caches.
+.cache/vcpkg/

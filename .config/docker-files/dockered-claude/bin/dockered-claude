@@ -3,16 +3,19 @@
 __help() {
   cat <<HELP
 Usage: ${script_name} [run] [--profile NAME]
-                         [--tool NAME | --no-tools]...
+                         [--tool NAME[:GENERATION] | --no-tools]...
                          [--package NAME | --no-packages]...
                          [--mount PATH[:rw] | --no-mounts]... [--no-save]
                          [--] [claude arguments...]
-       ${script_name} build
+       ${script_name} build [--no-cache]
        ${script_name} profile list
-       ${script_name} profile build NAME...
+       ${script_name} profile build [--no-cache] NAME...
+       ${script_name} profile use NAME GENERATION
+       ${script_name} profile revert NAME
        ${script_name} tool list [--profile NAME]
        ${script_name} tool build [--profile NAME] NAME...
        ${script_name} clean [--dry-run] TARGET...
+       ${script_name} migrate
        ${script_name} --help
 
 Run Claude Code in an isolated Docker container.
@@ -25,30 +28,53 @@ Commands:
                           so a prompt is given as: run 'PROMPT'
   build                   Rebuild the image of the project's profile, and
                           the packages image of the project's packages
-  profile list            List the profiles and whether each is built
+  profile list            List the profiles and the generations of their
+                          images, marking the latest
   profile build NAME...   Build or update the image of each profile NAME
-                          from profiles/NAME/Dockerfile
-  tool list               List the tools and whether each is built for
-                          the profile of --profile, else that of
-                          DOCKERED_CLAUDE_PROFILE
+                          from profiles/NAME/Dockerfile, as a generation
+  profile use NAME GENERATION
+                          Mark generation GENERATION of profile NAME latest
+  profile revert NAME     Mark latest the generation of profile NAME before
+                          the one latest marks
+  tool list               List the tools and their generations for the
+                          profile of --profile, else that of
+                          DOCKERED_CLAUDE_PROFILE, marking those used
+                          unless pinned
   tool build NAME...      Build or update each tool NAME from
                           tools/NAME/Dockerfile for that profile, as a new
                           generation of its volume
+  migrate                 Move the state that earlier versions kept in
+                          STATE/home/USER: Claude Code's .claude and
+                          .claude.json to STATE/tools/claude-code/.claude,
+                          and the rest of that home to
+                          STATE/persists/home/USER; a run refuses to start
+                          until it is moved. Refused while a container of
+                          the launcher runs, and never overwriting
   clean TARGET...         Offer for removal, one item at a time, what the
                           launcher left unused; TARGET is one of:
-                          containers  stopped containers left behind
-                          tools       older generations of tool volumes,
-                                      and those of a tool or profile no
-                                      longer defined
+                          containers  stopped containers left behind,
+                                      and images of runs whose launcher
+                                      was killed
+                          tools       older generations of tool volumes
+                                      built from the same profile image,
+                                      those built from a profile image no
+                                      longer there, and those of a tool or
+                                      profile no longer defined
                           packages    packages images (rebuilt when next
                                       needed)
-                          profiles    profile images replaced by a later
-                                      build, or of a profile no longer
-                                      defined
+                          profiles    generations of profile images that
+                                      latest does not mark, images left
+                                      untagged, and those of a profile no
+                                      longer defined
                           all         all of the above
                           Nothing a container uses, running or not, is
                           offered; images and volumes of earlier versions
                           of the launcher are offered too
+
+Options of build and profile build:
+  --no-cache              Build without Docker's build cache, so that every
+                          step runs again, such as one installing updates;
+                          the result is always a new generation
 
 Options of clean:
   --dry-run, --list       Only list what would be offered
@@ -56,8 +82,11 @@ Options of clean:
 Options of run:
   -h, --help              Show this help (also after any command)
   --profile NAME          Use profile NAME (saved for the project)
-  -t, --tool NAME         Make tool NAME available (repeatable; saved for the
-                          project); claude-code is always available
+  -t, --tool NAME[:GENERATION]
+                          Make tool NAME available (repeatable; saved for the
+                          project); claude-code is always available. With
+                          GENERATION, use that generation of its volume
+                          rather than the newest
   --no-tools              Make no tools available but claude-code (saved for
                           the project)
   --package NAME          Add Debian package NAME to the image (repeatable;
@@ -74,8 +103,12 @@ Options of run:
 Environment:
   DOCKERED_CLAUDE_PROFILE Profile to use when neither --profile nor the
                           project configuration gives one (default: default)
-  DOCKERED_CLAUDE_HOME    Host state directory (default: \$XDG_STATE_HOME/dockered-claude
-                          or \$HOME/.local/state/dockered-claude)
+  DOCKERED_CLAUDE_HOME    Host state directory, STATE above (default:
+                          \$XDG_STATE_HOME/dockered-claude or
+                          \$HOME/.local/state/dockered-claude), holding the
+                          persisted home paths (see Home); Claude Code's
+                          ~/.claude is kept in STATE/tools/claude-code/.claude,
+                          its configuration file in it as .claude.json
   DOCKERED_CLAUDE_TOOLS   Space-separated tools to use when neither --tool nor
                           the project configuration gives any
 
@@ -92,6 +125,43 @@ Configuration:
   into the container's ~/.claude (e.g. settings.json), so the configuration
   is managed on the host while the rest of ~/.claude stays writable state.
   ~/.config/git is mounted read-only, so git uses the host's configuration.
+
+Home:
+  The container's home, /home/USER, comes from an image built for each
+  run on the profile's image, and removed after it, which adds the user
+  and the home directories. The container is read-only, so only these
+  paths of the home can be written, each mounted on its own:
+
+    ~/.cache              A tmpfs, emptied after each run.
+    Persisted paths       Kept in STATE across runs: those in the home file
+                          of each selected tool, tools/NAME/home, kept in
+                          STATE/tools/NAME; those that profile_home of the
+                          profile's launcher.bash prints, kept in
+                          STATE/profiles/PROFILE; and the user's persists =
+                          lines (see User configuration), kept in
+                          STATE/persists/home/USER, shared by all projects
+                          and profiles.
+
+  A persisted path is relative to ~, a file, or a directory with a
+  trailing / (e.g. .cache/uv/). One may be inside ~/.cache, mounted on top
+  of its tmpfs, but not ~/.cache itself. Persisted paths must not be at,
+  inside or above one another or the paths the launcher mounts, and the
+  working directory must not be at, inside or above one. What is missing
+  in STATE is created, empty, when a run starts.
+
+User configuration:
+  ~/.config/dockered-claude/config holds settings for all projects as
+  "KEY = VALUE" lines and # comments, each key given any number of times.
+  It is read as data and never run, and is mounted read-only in the
+  container when the working directory or a writable mount holds it.
+
+  mount = PATH[:rw]       A host path to mount in every project, as --mount
+                          takes it, relative to the host home. It is
+                          mounted even with --no-mounts and never saved; a
+                          path given or saved already keeps its mode, and
+                          a missing one is skipped with a warning.
+  persists = PATH         A home path to persist, shared by all projects
+                          and profiles (see Home); a leading ~/ is removed.
 
 Managed settings:
   A profile's managed-settings.json, and the user's
@@ -118,7 +188,9 @@ Project configuration:
   neither read nor save it.
 
   profile = NAME          Profile to use when no --profile is given
-  tools = NAME...         Tools to use when no --tool is given
+  tools = NAME[:GENERATION]...
+                          Tools to use when no --tool is given, each pinned
+                          to GENERATION when given
   packages = NAME...      Debian packages to add when no --package is given
   mount = PATH[:rw]       A path to mount when no --mount is given,
                           read-only, or writable with :rw (one line per
@@ -126,31 +198,39 @@ Project configuration:
                           directory holding .meta/)
 
 Mounts:
-  A mounted path appears at the same path in the container, after symbolic
-  links are resolved, so absolute paths keep working; --mount saves it
-  that way. Like --tool, --mount replaces the saved mounts rather than
+  A mounted path appears at its resolved path in the container, and each
+  symbolic link met resolving it, the last component included, is made in
+  the run's image, so the path also works as given; --mount saves it as
+  given, made absolute, so that each run resolves its links again. A link
+  at, inside or above a path below, or at or above ~, is not made, with a
+  warning, and its mount goes ahead at the resolved path. A relative link
+  target through a directory missing in the container is kept, with a
+  warning.
+  Like --tool, --mount replaces the saved mounts rather than
   adding to them, so give all of them, or use --no-save to mount paths for
   one run only. A saved mount whose path does not exist is skipped with a
   warning. Paths must not contain commas or double quotes.
 
-  A mount must not be at, inside or above Claude Code's state (~/.claude,
-  ~/.claude.json), /opt/tools or system directories such as /usr and
-  /etc; nor at or inside ~/.agents, ~/.config/claude or ~/.config/git,
-  which the launcher mounts on top of a mount above them; nor be the
+  A mount must not be at, inside or above a persisted home path (such as
+  ~/.claude), /opt/tools or system directories such as /usr and /etc; nor
+  at or inside ~/.agents, ~/.config/claude or ~/.config/git, which the
+  launcher mounts on top of a mount above them; nor be ~/.cache, the
   working directory or inside .meta/dockered-claude. A project
   configuration that a writable mount (or the working directory) would
   expose stays read-only: this project's, and one at the root of a
   writable mount. Others deeper inside a writable mount are not looked for.
 
   Packages are installed in an image derived from the profile's image,
-  tagged by a hash of the sorted package names (as in
-  dockered-claude-default:packages-3f9a1c2b4d5e), so projects with the
-  same profile and packages share it. It is built from the profile's own
-  Dockerfile.packages when it has one, else from the launcher's. It is
-  rebuilt with build and whenever the profile's image has changed. Remove
-  unused ones with: ${script_name} clean packages
-  (they are rebuilt when next needed). Tools are built on the profile's
-  image, without the packages, since they are shared between projects.
+  tagged by a hash of the sorted package names and the generation of the
+  profile's image (as in dockered-claude-default:packages-3f9a1c2b4d5e-2),
+  so projects with the same profile and packages share it, and marking an
+  earlier generation latest uses its packages image again if it was kept.
+  It is built from the profile's own Dockerfile.packages when it has one,
+  else from the launcher's. It is rebuilt with build and whenever the
+  profile's image has changed. Remove unused ones with:
+  ${script_name} clean packages (they are rebuilt when next needed).
+  Tools are built on the profile's image, without the packages, since
+  they are shared between projects.
 
 Profiles:
   Each profile is a directory profiles/NAME next to the launcher's bin/,
@@ -159,6 +239,15 @@ Profiles:
   The image must provide what Claude Code and the tools need, as
   profiles/default does. A selected profile whose image is missing is
   built before Claude Code starts.
+
+  Each build is also tagged with its generation, dockered-claude-NAME:1,
+  :2 and so on, and latest is moved to it; runs use the image that latest
+  marks. A build that gives the image of an existing generation, as one
+  taken wholly from the build cache does, adds none and marks that one
+  latest. profile use and profile revert mark another generation latest,
+  newer ones included, which stay until cleaned.
+  An image built by an earlier version of the launcher is tagged as a
+  generation when the launcher next uses or rebuilds it.
 
   A profile may also hold launcher.bash, which is sourced before each run
   in a child bash with set -euo pipefail, in the working directory and
@@ -176,6 +265,8 @@ Profiles:
                           saved already keeps its mode.
     profile_path          Absolute directories to put in front of the
                           image's PATH, in order, after the tools' bin/.
+    profile_home          Home paths to persist (see Home), kept for the
+                          profile, after those of the tools.
 
   An error in the script or in a function stops the launch. What the script
   prints on standard output is read as items too, so messages belong on
@@ -191,28 +282,43 @@ Tools:
   stage holds only that directory (FROM scratch, then COPY --from). The
   launcher copies it into a new volume and removes the image, so the
   volume is the only copy. Each build of a tool for a profile is a new
-  generation, in the volume dockered-claude-tool-PROFILE-NAME-GENERATION,
-  labelled dockered-claude.tool, .profile and .generation, so a rebuild
-  leaves running containers alone. A selected tool without a volume for
-  the profile is built before Claude Code starts. tool build rebuilds it
-  without the build cache, which updates tools that download their latest
-  release.
+  generation, in the volume
+  dockered-claude-tool-PROFILE-PGEN-NAME-GENERATION, PGEN being the
+  generation of the profile's image it was built from, labelled
+  dockered-claude.tool, .profile, .generation, .base-image and
+  .profile-generation, so a rebuild leaves running containers alone.
+
+  A run uses only tool volumes built from the image that the profile's
+  latest marks, and builds a selected tool without one before Claude Code
+  starts, as after each new generation of the profile. Marking an earlier
+  generation latest uses the tool volumes built from it again, if they
+  were kept. Volumes built before tool volumes were tied to profile images
+  are not used. tool build rebuilds a tool without the build cache, which
+  updates tools that download their latest release.
 
   A tool that writes its version to /opt/tools/NAME/version gets the
-  volume dockered-claude-tool-PROFILE-NAME-VERSION instead, labelled
-  dockered-claude.version too, and a version built already is kept rather
-  than built again. A tool may also hold latest-version, a sh script
-  printing the version a build would install, which tool build runs in a
-  container of the profile's image first, skipping the build when that
-  version is built already.
+  volume dockered-claude-tool-PROFILE-PGEN-NAME-VERSION instead, labelled
+  dockered-claude.version too, and a version built already from the same
+  profile image is kept rather than built again. A tool may also hold
+  latest-version, a sh script printing the version a build would install,
+  which tool build runs in a container of the profile's image first,
+  skipping the build when that version is built already.
 
   A run mounts the newest generation of each selected tool read-only at
   /opt/tools/NAME and puts /opt/tools/NAME/bin in front of PATH, in
-  selection order, so the first tool selected wins on name collisions. It
-  warns about older generations that no container uses, which can be
-  removed with: ${script_name} clean tools. Volumes named
+  selection order, so the first tool selected wins on name collisions. A
+  project may pin a generation instead, with --tool NAME:GENERATION;
+  generations count across the profile's images, so a pin always names
+  the same volume, and a run refuses one built from another image than
+  the one latest marks, or one removed, such as by clean, which does not
+  know about pins. A run warns about the other generations that no
+  container uses, which can be removed with: ${script_name} clean tools. Volumes named
   dockered-claude-tool-NAME, from earlier versions of the launcher, are no
   longer used.
+
+  A tool may have a home file in its directory, home, listing the home
+  paths it persists (see Home), one per line, with blank lines and #
+  comments; they are mounted only when the tool is selected.
 
   The tool claude-code, Claude Code itself, is always mounted, even with
   --no-tools, and its bin/ goes last on PATH, after the image's. Claude
@@ -222,8 +328,9 @@ Tools:
 
   A tool may also have an env file in its directory, in docker's --env-file
   format, to set variables it needs (e.g. VCPKG_ROOT=/opt/tools/vcpkg/root).
-  It must not set PATH. The first tool selected wins on name collisions here
-  too.
+  A value starting with ~/ is expanded to the container's home (e.g.
+  VCPKG_DOWNLOADS=~/.cache/vcpkg/downloads). It must not set PATH. The
+  first tool selected wins on name collisions here too.
 
 Examples:
   ${script_name}
@@ -262,7 +369,7 @@ parse_arguments() {
   build)
     kwargs[command]=build
     shift
-    parse_no_arguments build "$@" || return
+    parse_build_arguments "$@" || return
     ;;
   profile)
     shift
@@ -276,6 +383,11 @@ parse_arguments() {
     kwargs[command]=clean
     shift
     parse_clean_arguments "$@" || return
+    ;;
+  migrate)
+    kwargs[command]=migrate
+    shift
+    parse_migrate_arguments "$@" || return
     ;;
   -*)
     kwargs[command]=run
@@ -313,7 +425,7 @@ parse_run_arguments() {
         warn "${argument} requires a tool name"
         return 1
       fi
-      validate_tool_name "$1" || return
+      validate_tool_spec "$1" || return
       tools+=("$1")
       kwargs[tools_given]=1
       shift
@@ -377,15 +489,28 @@ parse_run_arguments() {
   done
 }
 
-# Parse the arguments of command, which takes only --help.
-parse_no_arguments() {
-  declare command="$1" argument
-  shift
+# Set kwargs[no_cache] for --no-cache, the only option of build.
+parse_migrate_arguments() {
+  declare argument
   for argument in "$@"; do
     case "${argument}" in
     -h | --help) kwargs[help]=1 ;;
     *)
-      warn "${command}: unexpected argument '${argument}'"
+      warn "migrate: unexpected argument '${argument}'"
+      return 1
+      ;;
+    esac
+  done
+}
+
+parse_build_arguments() {
+  declare argument
+  for argument in "$@"; do
+    case "${argument}" in
+    -h | --help) kwargs[help]=1 ;;
+    --no-cache) kwargs[no_cache]=1 ;;
+    *)
+      warn "build: unexpected argument '${argument}'"
       return 1
       ;;
     esac
@@ -395,8 +520,11 @@ parse_no_arguments() {
 # Set kwargs[command] to GROUP-list or GROUP-build,
 # and args to the names to build,
 # for the commands GROUP list and GROUP build NAME...,
-# where GROUP names its validate_GROUP_name function.
-# The tool commands also take --profile NAME.
+# where GROUP names its validate_GROUP_name function;
+# or, for profile use NAME GENERATION and profile revert NAME,
+# to profile-use or profile-revert, and args to those arguments.
+# The tool commands also take --profile NAME,
+# and profile build takes --no-cache, setting kwargs[no_cache].
 parse_group_arguments() {
   declare group="$1" command argument
   shift
@@ -406,6 +534,13 @@ parse_group_arguments() {
     return 0
     ;;
   list | build) command="$1" ;;
+  use | revert)
+    if [[ "${group}" != profile ]]; then
+      warn "unknown ${group} command '$1'"
+      return 1
+    fi
+    command="$1"
+    ;;
   '')
     warn "${group} requires list or build"
     return 1
@@ -436,20 +571,49 @@ parse_group_arguments() {
       kwargs[profile]="$1"
       shift
       ;;
+    --no-cache)
+      if [[ "${group} ${command}" != 'profile build' ]]; then
+        warn "${group} ${command}: unexpected argument '${argument}'"
+        return 1
+      fi
+      kwargs[no_cache]=1
+      ;;
     *)
       if [[ "${command}" == list ]]; then
         warn "${group} list: unexpected argument '${argument}'"
         return 1
       fi
-      "validate_${group}_name" "${argument}" || return
+      if [[ "${command}" == use ]] && ((${#args[@]} == 1)); then
+        validate_generation "${argument}" || return
+      else
+        "validate_${group}_name" "${argument}" || return
+      fi
       args+=("${argument}")
       ;;
     esac
   done
+  [[ -z "${kwargs[help]+defined}" ]] || return 0
+
+  if [[ "${command}" == use ]] && ((${#args[@]} != 2)); then
+    warn "profile use requires a profile name and a generation"
+    return 1
+  fi
+  if [[ "${command}" == revert ]] && ((${#args[@]} != 1)); then
+    warn "profile revert requires one profile name"
+    return 1
+  fi
 
   if [[ "${command}" == build ]] && ((${#args[@]} == 0)) &&
     [[ -z "${kwargs[help]+defined}" ]]; then
     warn "${group} build requires a ${group} name"
+    return 1
+  fi
+}
+
+validate_generation() {
+  declare generation="$1"
+  if [[ ! "${generation}" =~ ^[1-9][0-9]*$ ]]; then
+    warn "invalid generation '${generation}'"
     return 1
   fi
 }
@@ -506,17 +670,21 @@ resolve_paths() {
   username="$(id -un)" || return
   groupname="$(id -gn)" || return
 
-  # The container home lives under the mounted /home tree, so the
-  # username-specific directory does not need to exist in the read-only image.
+  # The run image makes the home, with only the persisted paths mounted in it.
   home="/home/${username}"
   state_dir="${DOCKERED_CLAUDE_HOME:-${XDG_STATE_HOME:-${HOME:?}/.local/state}/dockered-claude}"
   state_home="${state_dir}/home/${username}"
-  passwd_file="${state_dir}/etc/passwd"
-  group_file="${state_dir}/etc/group"
+  claude_state="${state_dir}/tools/claude-code/.claude"
+  # Persisted paths are stored at their paths in the container,
+  # those in the home at persists/home/<user>,
+  # leaving room for other absolute paths.
+  persists_home="${state_dir}/persists${home}"
   agents_dir="${HOME:?}/.agents"
   config_dir="${HOME:?}/.config/claude"
   git_config_dir="${HOME:?}/.config/git"
   # Resolved, to compare with the resolved paths of writable mounts.
+  user_config="$(realpath -m -- "${HOME:?}/.config/dockered-claude/config")" ||
+    return
   managed_settings_file="$(realpath -m -- \
     "${HOME:?}/.config/dockered-claude/managed-settings.json")" || return
 }
@@ -577,22 +745,33 @@ select_tools() {
   fi
   declare tool
   for tool in "${tools[@]}"; do
-    validate_tool_name "${tool}" || return
+    validate_tool_spec "${tool}" || return
   done
 }
 
-# Set mounted_tools to the selected tools, without claude-code,
-# and then claude-code, which is always mounted.
+# Set mounted_tools to the names of the selected tools, without claude-code,
+# and then claude-code, which is always mounted,
+# and tool_pins, by name, to the generations pinned.
 select_mounted_tools() {
-  declare tool
+  declare spec tool
   mounted_tools=()
-  for tool in "${tools[@]}"; do
+  for spec in "${tools[@]}"; do
+    tool="${spec%%:*}"
+    [[ "${spec}" != *:* ]] || tool_pins[${tool}]="${spec#*:}"
     [[ "${tool}" == claude-code ]] || mounted_tools+=("${tool}")
   done
   mounted_tools+=(claude-code)
 }
 
 # Tool names become path components on the host and in the container.
+# A tool is given as NAME, or as NAME:GENERATION
+# to pin that generation of its volume.
+validate_tool_spec() {
+  declare spec="$1"
+  validate_tool_name "${spec%%:*}" || return
+  [[ "${spec}" != *:* ]] || validate_generation "${spec#*:}"
+}
+
 validate_tool_name() {
   declare name="$1"
   if [[ ! "${name}" =~ ^[A-Za-z0-9_][A-Za-z0-9._-]*$ ]]; then
@@ -645,44 +824,213 @@ validate_mount_spec() {
   fi
 }
 
-# Set mount_path to the absolute path of a mount given as PATH[:ro|:rw],
-# relative PATHs resolved against base and symbolic links resolved,
+# Set mount_given to a mount given as PATH[:ro|:rw] as normalize_path makes it,
+# a relative PATH made absolute against BASE,
+# mount_path to it with symbolic links resolved,
 # and mount_mode to its mode.
 resolve_mount_spec() {
-  declare spec="$1" base="$2"
+  declare spec="$1" base="$2" normalized_path
   split_mount_spec "${spec}"
   [[ "${mount_path}" == /* ]] || mount_path="${base}/${mount_path}"
-  mount_path="$(realpath -m -- "${mount_path}")" || return
+  normalize_path "${mount_path}"
+  mount_given="${normalized_path}"
+  mount_path="$(realpath -m -- "${mount_given}")" || return
+}
+
+# Set normalized_path to the absolute PATH
+# without empty and . components,
+# and without each .. and the component before it
+# when that one is not a symbolic link,
+# since dropping both does not change where the path leads.
+normalize_path() {
+  declare path="$1" component
+  declare -a components
+  normalized_path=''
+  IFS=/ read -r -a components <<<"${path}"
+  for component in "${components[@]}"; do
+    case "${component}" in
+    '' | .) continue ;;
+    ..)
+      # At the root, .. leads to the root.
+      [[ -n "${normalized_path}" ]] || continue
+      if [[ "${normalized_path##*/}" != .. && ! -L "${normalized_path}" ]]; then
+        normalized_path="${normalized_path%/*}"
+        continue
+      fi
+      ;;
+    esac
+    normalized_path+="/${component}"
+  done
+  [[ -n "${normalized_path}" ]] || normalized_path=/
+}
+
+# Set traced_path to the absolute PATH with its symbolic links resolved,
+# as realpath -m resolves them,
+# adding each link met to link_paths, in order,
+# and its target, as written, to link_targets, by the link's path,
+# so that the container can have the same links;
+# links inside a target are met and added too.
+# Each directory that a .. leaves is added to link_climbs,
+# with PATH, for warn_missing_climbed_directories.
+# Fail after 40 links, as Linux does,
+# or at a target that is empty or holds a newline.
+trace_links() {
+  declare path="$1" resolved='' component link target
+  declare -a pending target_components
+  declare -i followed=0
+  IFS=/ read -r -a pending <<<"${path}"
+  while ((${#pending[@]} > 0)); do
+    component="${pending[0]}"
+    pending=("${pending[@]:1}")
+    case "${component}" in
+    '' | .) continue ;;
+    ..)
+      if [[ -n "${resolved}" ]]; then
+        link_climbs["${resolved}"]="${path}"
+        resolved="${resolved%/*}"
+      fi
+      continue
+      ;;
+    esac
+    link="${resolved}/${component}"
+    if [[ ! -L "${link}" ]]; then
+      resolved="${link}"
+      continue
+    fi
+    followed+=1
+    if ((followed > 40)); then
+      warn "cannot resolve '${path}': more than 40 symbolic links"
+      return 1
+    fi
+    target="$(readlink -- "${link}")" || return
+    if [[ -z "${target}" || "${target}" == *$'\n'* ]]; then
+      warn "cannot resolve '${path}': the symbolic link '${link}'" \
+        "has an empty target or one with a newline"
+      return 1
+    fi
+    if [[ -z "${link_targets["${link}"]+defined}" ]]; then
+      link_paths+=("${link}")
+      link_targets["${link}"]="${target}"
+    fi
+    # A relative target is relative to the link's directory, resolved.
+    [[ "${target}" != /* ]] || resolved=''
+    IFS=/ read -r -a target_components <<<"${target}"
+    pending=("${target_components[@]}" "${pending[@]}")
+  done
+  traced_path="${resolved:-/}"
+}
+
+# Trace the links of the working directory as the shell names it, in PWD,
+# when that leads to workdir;
+# otherwise PWD is stale or unset, and only workdir is known.
+trace_working_directory() {
+  declare resolved traced_path
+  [[ "${PWD:-}" == /* ]] || return 0
+  resolved="$(realpath -m -- "${PWD}")" || return
+  [[ "${resolved}" == "${workdir}" ]] || return 0
+  trace_links "${PWD}" || return
+}
+
+# Warn about each directory in link_climbs
+# that the container will not have, since it is neither
+# at, inside or above a mount, the working directory included,
+# nor above a link:
+# the path that leaves it with .. may then not lead there in the container.
+# Such a link target is kept as written all the same (D16 of the design).
+warn_missing_climbed_directories() {
+  declare directory path link
+  for directory in "${!link_climbs[@]}"; do
+    for path in "${workdir}" "${mount_paths[@]}"; do
+      if [[ "${directory}" == "${path}" || "${directory}" == "${path}/"* ||
+        "${path}" == "${directory}/"* ]]; then
+        continue 2
+      fi
+    done
+    for link in "${link_paths[@]}"; do
+      [[ "${link}" != "${directory}/"* ]] || continue 2
+    done
+    warn "'${link_climbs["${directory}"]}' leaves '${directory}' with '..'," \
+      "but the container will not have that directory," \
+      "so the path may not work there as it does on the host"
+  done
+}
+
+# Set run_links to the links of link_paths that the run image makes:
+# not those inside a mount, the working directory included,
+# where the host's own link is visible already,
+# nor, with a warning, those at, inside or above a reserved path
+# or ~/.cache, or at or above the home,
+# which would replace or hide what the image or the launcher puts there;
+# the mount still goes ahead at the resolved path.
+select_run_links() {
+  declare link path reserved
+  declare -a hidden_paths mounted_paths
+  set_reserved_paths
+  run_links=()
+  for link in "${link_paths[@]}"; do
+    for path in "${workdir}" "${mount_paths[@]}"; do
+      [[ "${link}" != "${path%/}/"* ]] || continue 2
+    done
+    for reserved in "${hidden_paths[@]}" "${mounted_paths[@]}" \
+      "${home}/.cache" "${home}"; do
+      if [[ "${link}" == "${reserved}" || "${link}" == "${reserved}/"* ||
+        "${reserved}" == "${link}/"* ]]; then
+        if [[ "${reserved}" == "${home}" && "${link}" == "${home}/"* ]]; then
+          continue
+        fi
+        warn "not making the symbolic link '${link}' in the container:" \
+          "it is at, inside or above ${reserved}"
+        continue 2
+      fi
+    done
+    run_links+=("${link}")
+  done
+}
+
+# Set hidden_paths to the paths that the image needs
+# and the persisted home paths, in the container,
+# and mounted_paths to those the launcher mounts itself.
+set_reserved_paths() {
+  declare path
+  hidden_paths=(
+    /bin /boot /dev /etc /lib /lib32 /lib64 /libx32 /opt/tools /proc /run
+    /sbin /sys /tmp /usr /var
+  )
+  for path in "${persisted_paths[@]}"; do
+    hidden_paths+=("${home}/${path}")
+  done
+  mounted_paths=(
+    "${home}/.agents"
+    "${home}/.config/claude"
+    "${home}/.config/git"
+  )
 }
 
 # Refuse a mount at, inside or above a path that the image needs
-# or that holds Claude Code's state in the persisted home,
+# or a persisted home path,
 # since it would hide or replace them;
 # at or inside a path the launcher mounts itself,
 # since that mount is on top
 # (a mount above one is fine, the launcher's mount is on top of it);
+# at ~/.cache, where the launcher mounts a tmpfs
+# (inside it is fine, the mount is on top of the tmpfs);
 # at the working directory, which is mounted already;
 # or at or inside the launcher's configuration,
 # which must stay read-only in the container.
 check_mount_path() {
   declare path="$1" reserved
-  declare -a hidden_paths=(
-    /bin /boot /dev /etc /lib /lib32 /lib64 /libx32 /opt/tools /proc /run
-    /sbin /sys /tmp /usr /var
-    "${home}/.claude"
-    "${home}/.claude.json"
-  )
-  declare -a mounted_paths=(
-    "${home}/.agents"
-    "${home}/.config/claude"
-    "${home}/.config/git"
-  )
+  declare -a hidden_paths mounted_paths
+  set_reserved_paths
   for reserved in "${hidden_paths[@]}" "${mounted_paths[@]}"; do
     if [[ "${path}" == "${reserved}" || "${path}" == "${reserved}/"* ]]; then
       warn "cannot mount '${path}': it would replace ${reserved}"
       return 1
     fi
   done
+  if [[ "${path}" == "${home}/.cache" ]]; then
+    warn "cannot mount '${path}': it would replace the run's own ~/.cache"
+    return 1
+  fi
   for reserved in "${hidden_paths[@]}"; do
     if [[ "${reserved}" == "${path%/}/"* ]]; then
       warn "cannot mount '${path}': it would hide ${reserved}"
@@ -707,7 +1055,7 @@ check_mount_path() {
 # those given with --mount and --no-mounts,
 # else those saved in project_mounts that still exist.
 select_mounts() {
-  declare spec mount_path mount_mode
+  declare spec mount_path mount_mode mount_given
 
   if [[ -z "${kwargs[mounts_given]+defined}" ]]; then
     for spec in "${project_mounts[@]}"; do
@@ -732,12 +1080,18 @@ select_mounts() {
 }
 
 # Add mount_path with mount_mode to mount_paths and mount_modes,
-# replacing the mode of an earlier mount of the same path.
+# and mount_given to mount_given_paths,
+# replacing the mode and given path of an earlier mount of the same path,
+# and add the links met resolving mount_given, as trace_links does.
 add_mount() {
+  # shellcheck disable=SC2034 # Set by trace_links; mount_path has it already.
+  declare traced_path
   check_mount_path "${mount_path}" || return
+  trace_links "${mount_given}" || return
   [[ -n "${mount_modes[${mount_path}]+defined}" ]] ||
     mount_paths+=("${mount_path}")
   mount_modes[${mount_path}]="${mount_mode}"
+  mount_given_paths[${mount_path}]="${mount_given}"
 }
 
 # Print what FUNCTION of the profile's launcher.bash prints,
@@ -776,11 +1130,11 @@ read_profile_function() {
 # Read what the functions of the profile's launcher.bash print:
 # set profile_variables to the host variables named that are set,
 # add the existing paths to mount that are not mounted already,
-# marking them in profile_mount_paths so that they are never saved,
+# marking them in unsaved_mount_paths so that they are never saved,
 # and set profile_path_entries to the directories for PATH.
 read_profile_launcher() {
   declare script="${project_directory}/profiles/${profile}/launcher.bash"
-  declare line mount_path mount_mode
+  declare line mount_path mount_mode mount_given
   declare -a lines
 
   read_profile_function profile_environment || return
@@ -809,7 +1163,7 @@ read_profile_launcher() {
       warn "${script}: profile_mounts: cannot mount '${mount_path}'"
       return 1
     fi
-    profile_mount_paths[${mount_path}]=1
+    unsaved_mount_paths[${mount_path}]=1
   done
 
   read_profile_function profile_path || return
@@ -823,39 +1177,199 @@ read_profile_launcher() {
   done
 }
 
+# Set home_path and home_kind from a persisted home path
+# given as PATH, a file, or PATH/, a directory,
+# relative to ~ and normalized, as docker's --mount option can take it.
+validate_home_path() {
+  declare spec="$1"
+  home_path="${spec%/}"
+  home_kind='file'
+  [[ "${spec}" != */ ]] || home_kind=directory
+  declare wrapped="/${home_path}/"
+  if [[ -z "${home_path}" || "${wrapped}" == *//* ||
+    "${wrapped}" == */./* || "${wrapped}" == */../* ||
+    "${home_path}" == *[,\"$'\n']* ]]; then
+    warn "invalid home path '${spec}': it must be relative to ~, normalized," \
+      "without '..', and contain no commas or double quotes"
+    return 1
+  fi
+}
+
+# Add the persisted home path SPEC, as validate_home_path takes it,
+# to persisted_paths, stored under BASE on the host,
+# with its kind, base and SOURCE, which names it in messages,
+# in persisted_kinds, persisted_bases and persisted_sources.
+# Refuse it at, inside or above another persisted path (D11 of the design),
+# or a path the launcher mounts itself, which would be on top of it,
+# or at ~/.cache, where the launcher mounts a tmpfs.
+add_persisted_path() {
+  declare spec="$1" base="$2" source="$3" home_path home_kind path other
+  declare -a hidden_paths mounted_paths
+  if ! validate_home_path "${spec}"; then
+    warn "${source}: invalid home path"
+    return 1
+  fi
+  path="${home}/${home_path}"
+  if [[ "${home_path}" == .cache ]]; then
+    warn "${source}: cannot persist ${path}: the launcher mounts a tmpfs there"
+    return 1
+  fi
+  for other in "${persisted_paths[@]}"; do
+    if [[ "${home_path}" == "${other}" || "${home_path}" == "${other}/"* ||
+      "${other}" == "${home_path}/"* ]]; then
+      warn "${source}: cannot persist ${path}: it is at, inside or above" \
+        "${home}/${other}, persisted by ${persisted_sources["${other}"]}"
+      return 1
+    fi
+  done
+  set_reserved_paths
+  for other in "${mounted_paths[@]}"; do
+    if [[ "${path}" == "${other}" || "${path}" == "${other}/"* ||
+      "${other}" == "${path}/"* ]]; then
+      warn "${source}: cannot persist ${path}: it is at, inside or above" \
+        "${other}, which the launcher mounts"
+      return 1
+    fi
+  done
+  persisted_paths+=("${home_path}")
+  persisted_kinds["${home_path}"]="${home_kind}"
+  persisted_bases["${home_path}"]="${base}"
+  persisted_sources["${home_path}"]="${source}"
+}
+
+# Set persisted_paths, in order, to the persisted home paths of this run,
+# as add_persisted_path does:
+# those in the home file of each tool in mounted_tools,
+# stored in tools/<tool> of the state directory;
+# then those that profile_home of the profile's launcher.bash prints,
+# stored in profiles/<profile>;
+# then those of the user configuration, in user_persists,
+# stored in persists_home, shared by all projects and profiles.
+# A home file has a path per line, and blank lines and # comments.
+select_persisted_paths() {
+  declare tool file line
+  declare skip='^[[:space:]]*(#|$)'
+  declare -a lines
+  declare -A seen=()
+  for tool in "${mounted_tools[@]}"; do
+    [[ -z "${seen[${tool}]+defined}" ]] || continue
+    seen[${tool}]=1
+    file="${project_directory}/tools/${tool}/home"
+    [[ -f "${file}" ]] || continue
+    mapfile -t lines <"${file}" || return
+    for line in "${lines[@]}"; do
+      [[ ! "${line}" =~ ${skip} ]] || continue
+      add_persisted_path "${line}" "${state_dir}/tools/${tool}" "${file}" ||
+        return
+    done
+  done
+
+  read_profile_function profile_home || return
+  for line in "${lines[@]}"; do
+    add_persisted_path "${line}" "${state_dir}/profiles/${profile}" \
+      "${project_directory}/profiles/${profile}/launcher.bash: profile_home" ||
+      return
+  done
+
+  for line in "${user_persists[@]}"; do
+    add_persisted_path "${line}" "${persists_home}" "${user_config}" || return
+  done
+}
+
+# Refuse a working directory at, inside or above a persisted home path,
+# since one of them would be mounted on top of the other.
+check_working_directory() {
+  declare path
+  for path in "${persisted_paths[@]}"; do
+    path="${home}/${path}"
+    if [[ "${workdir}" == "${path}" || "${workdir}" == "${path}/"* ||
+      "${path}" == "${workdir%/}/"* ]]; then
+      warn "cannot run in '${workdir}': it is at, inside or above" \
+        "${path}, which is persisted in the launcher's state"
+      return 1
+    fi
+  done
+}
+
+# Create each persisted home path under its base in the state directory,
+# a directory or an empty file, leaving what is there,
+# with the base and the directory above it readable only by the user.
+# Fail when what is there is of the other kind,
+# since docker cannot mount a directory on a file or a file on a directory.
+prepare_persisted_paths() {
+  declare path base source
+  for path in "${persisted_paths[@]}"; do
+    base="${persisted_bases["${path}"]}"
+    source="${base}/${path}"
+    mkdir -p -- "${base}" || return
+    chmod 700 -- "${base%/*}" "${base}" || return
+    if [[ "${persisted_kinds["${path}"]}" == directory ]]; then
+      [[ ! -d "${source}" ]] || continue
+      if [[ -e "${source}" || -L "${source}" ]]; then
+        warn "cannot persist ${home}/${path}: ${source} is not a directory"
+        return 1
+      fi
+      mkdir -p -- "${source}" || return
+    else
+      [[ ! -f "${source}" ]] || continue
+      if [[ -e "${source}" || -L "${source}" ]]; then
+        warn "cannot persist ${home}/${path}: ${source} is not a file"
+        return 1
+      fi
+      mkdir -p -- "${source%/*}" || return
+      : >"${source}" || return
+    fi
+  done
+}
+
 # Succeed when tools/TOOL holds a Dockerfile to build the tool from.
 tool_defined() {
   declare tool="$1"
   [[ -f "${project_directory}/tools/${tool}/Dockerfile" ]]
 }
 
-# Set tool_volumes to the volumes of TOOL for the profile,
+# Set tool_volumes to the volumes of TOOL for the profile
+# built from the profile image profile_image_id,
 # oldest generation first,
-# and tool_generations to their generations.
+# tool_generations to their generations,
+# and tool_newest_generation to the newest generation of TOOL
+# for the profile, from any image, or 0.
 # Volumes are found by their labels,
 # since tool and profile names may hold the dashes that separate them.
 find_tool_volumes() {
-  declare tool="$1" listing generation name
+  declare tool="$1" listing generation base name
   tool_volumes=()
   tool_generations=()
+  tool_newest_generation=0
   listing="$(docker volume ls \
     --filter "label=dockered-claude.tool=${tool}" \
     --filter "label=dockered-claude.profile=${profile}" \
-    --format '{{.Label "dockered-claude.generation"}} {{.Name}}')" || return
+    --format '{{.Label "dockered-claude.generation"}}/{{.Label "dockered-claude.base-image"}}/{{.Name}}')" ||
+    return
   listing="$(sort -n <<<"${listing}")" || return
-  while read -r generation name; do
+  while IFS=/ read -r generation base name; do
     [[ "${generation}" =~ ^[1-9][0-9]*$ ]] || continue
+    tool_newest_generation=${generation}
+    [[ -n "${base}" && "${base}" == "${profile_image_id}" ]] || continue
     tool_generations+=("${generation}")
     tool_volumes+=("${name}")
   done <<<"${listing}"
 }
 
-# A tool is built for the profile once it has a volume.
-tool_built() {
-  declare tool="$1"
-  declare -a tool_volumes tool_generations
-  find_tool_volumes "${tool}" || return
-  ((${#tool_volumes[@]} > 0))
+# Set profile_image_id to the ID of the image that latest marks,
+# and profile_generation to its generation,
+# both to nothing when the profile has no such image.
+read_profile_image() {
+  declare latest_id generation
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
+  profile_image_id=''
+  profile_generation=''
+  find_profile_generations || return
+  [[ -n "${latest_id}" ]] || return 0
+  find_generation_of "${latest_id}"
+  profile_image_id="${latest_id}"
+  profile_generation="${generation}"
 }
 
 check_tool_defined() {
@@ -866,17 +1380,24 @@ check_tool_defined() {
   return 1
 }
 
-# Set tool_volume_names, by tool, to the newest volume
-# of each tool in mounted_tools for the profile,
-# building those that have none.
+# Set tool_volume_names, by tool,
+# to the volume of each tool in mounted_tools
+# of the generation pinned in tool_pins,
+# else to the newest built from profile_image_id,
+# building those that have none,
+# as after a new build of the profile.
 # A volume left from a tool whose directory was removed is not used.
 find_tool_volume_names() {
-  declare tool
+  declare tool tool_newest_generation
   declare -a tool_volumes tool_generations
   for tool in "${mounted_tools[@]}"; do
     [[ -z "${tool_volume_names[${tool}]+defined}" ]] || continue
     check_tool_defined "${tool}" || return
     find_tool_volumes "${tool}" || return
+    if [[ -n "${tool_pins[${tool}]+defined}" ]]; then
+      find_pinned_tool_volume "${tool}" "${tool_pins[${tool}]}" || return
+      continue
+    fi
     if ((${#tool_volumes[@]} == 0)); then
       warn "building tool '${tool}' for profile '${profile}'"
       build_tool_volume "${tool}" || return
@@ -890,24 +1411,56 @@ find_tool_volume_names() {
   done
 }
 
-# Warn about older volumes of mounted_tools that no container uses.
+# Set the volume of TOOL in tool_volume_names
+# to that of generation GENERATION in tool_volumes,
+# or fail, saying whether that generation was built from another image
+# of the profile or is gone.
+# Reads tool_volumes and tool_generations as find_tool_volumes sets them.
+find_pinned_tool_volume() {
+  declare tool="$1" pinned="$2" index built_on
+  for index in "${!tool_generations[@]}"; do
+    [[ "${tool_generations[index]}" == "${pinned}" ]] || continue
+    tool_volume_names[${tool}]="${tool_volumes[index]}"
+    return 0
+  done
+  built_on="$(docker volume ls \
+    --filter "label=dockered-claude.tool=${tool}" \
+    --filter "label=dockered-claude.profile=${profile}" \
+    --filter "label=dockered-claude.generation=${pinned}" \
+    --format '{{.Label "dockered-claude.profile-generation"}}')" || return
+  if [[ -n "${built_on}" ]]; then
+    warn "the pinned generation ${pinned} of tool '${tool}'" \
+      "was built from generation ${built_on%%$'\n'*} of profile '${profile}'," \
+      "not from the one latest marks (${profile_generation:-none});" \
+      "pin another generation, or mark that one latest with:" \
+      "${script_name} profile use ${profile} ${built_on%%$'\n'*}"
+  else
+    warn "the pinned generation ${pinned} of tool '${tool}'" \
+      "for profile '${profile}' no longer exists;" \
+      "pin another, as listed by: ${script_name} tool list"
+  fi
+  return 1
+}
+
+# Warn about the volumes of mounted_tools built from profile_image_id
+# other than those in tool_volume_names that no container uses.
 warn_unused_tool_volumes() {
-  declare tool volume containers
+  declare tool volume containers tool_newest_generation
   declare -a tool_volumes tool_generations unused=()
   declare -A seen=()
   for tool in "${mounted_tools[@]}"; do
     [[ -z "${seen[${tool}]+defined}" ]] || continue
     seen[${tool}]=1
     find_tool_volumes "${tool}" || return
-    ((${#tool_volumes[@]} > 1)) || continue
-    for volume in "${tool_volumes[@]:0:${#tool_volumes[@]}-1}"; do
+    for volume in "${tool_volumes[@]}"; do
+      [[ "${volume}" != "${tool_volume_names[${tool}]:-}" ]] || continue
       containers="$(docker ps --all --quiet --filter "volume=${volume}")" ||
         return
       [[ -n "${containers}" ]] || unused+=("${volume}")
     done
   done
   ((${#unused[@]} > 0)) || return 0
-  warn "older tool volumes that no container uses:" "${unused[*]};" \
+  warn "tool volumes not in use that no container uses:" "${unused[*]};" \
     "remove them with: docker volume rm ${unused[*]}"
 }
 
@@ -937,6 +1490,74 @@ find_project_config() {
     main_worktree="${common_dir%/.git}"
   fi
   project_config="${main_worktree:-${workdir}}/${project_config_path}"
+}
+
+# Read user_config, if it exists, into user_mounts and user_persists,
+# from its "mount = PATH[:rw]" and "persists = PATH" lines,
+# each of which may be given any number of times,
+# with a leading ~/ of their paths removed:
+# a mount path is relative to the host home,
+# and a persisted path to the container's.
+# Other lines are blank or comments.
+read_user_config() {
+  [[ -f "${user_config}" ]] || return 0
+  declare line key value home_path home_kind
+  declare -i number=0
+  declare skip='^[[:space:]]*(#|$)'
+  declare setting='^[[:space:]]*([a-z]+)[[:space:]]*=[[:space:]]*(.*[^[:space:]])?[[:space:]]*$'
+
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    number+=1
+    [[ "${line}" =~ ${skip} ]] && continue
+    if [[ ! "${line}" =~ ${setting} ]]; then
+      warn "${user_config}:${number}: expected KEY = VALUE"
+      return 1
+    fi
+    key="${BASH_REMATCH[1]}"
+    value="${BASH_REMATCH[2]}"
+    value="${value#\~/}"
+    case "${key}" in
+    mount)
+      if ! validate_mount_spec "${value}"; then
+        warn "${user_config}:${number}: invalid mount"
+        return 1
+      fi
+      user_mounts+=("${value}")
+      ;;
+    persists)
+      if ! validate_home_path "${value}"; then
+        warn "${user_config}:${number}: invalid persisted path"
+        return 1
+      fi
+      user_persists+=("${value}")
+      ;;
+    *)
+      warn "${user_config}:${number}: unknown key '${key}'"
+      return 1
+      ;;
+    esac
+  done <"${user_config}"
+}
+
+# Add the existing paths of user_mounts that are not mounted already,
+# relative to the host home,
+# marking them in unsaved_mount_paths so that they are never saved.
+# They are added with --no-mounts too, like the profile's.
+add_user_mounts() {
+  declare spec mount_path mount_mode mount_given
+  for spec in "${user_mounts[@]}"; do
+    resolve_mount_spec "${spec}" "${HOME:?}" || return
+    if [[ ! -e "${mount_path}" ]]; then
+      warn "skipping user mount '${mount_path}': it does not exist"
+      continue
+    fi
+    [[ -z "${mount_modes[${mount_path}]+defined}" ]] || continue
+    if ! add_mount; then
+      warn "${user_config}: cannot mount '${mount_path}'"
+      return 1
+    fi
+    unsaved_mount_paths[${mount_path}]=1
+  done
 }
 
 # Read project_config into project_options, and its mounts into project_mounts.
@@ -993,7 +1614,7 @@ save_project_options() {
   if [[ -n "${kwargs[tools_given]+defined}" ]]; then
     declare tool
     for tool in "${tools[@]}"; do
-      check_tool_defined "${tool}" || return
+      check_tool_defined "${tool%%:*}" || return
     done
     save_project_option tools "${tools[*]}" || return
   fi
@@ -1071,8 +1692,9 @@ save_project_option() {
 }
 
 # Save the mounts in mount_paths, given with --mount or --no-mounts,
-# except those of the profile, in profile_mount_paths,
-# as "mount = PATH[:rw]" lines with their absolute paths
+# except those in unsaved_mount_paths, such as the profile's,
+# as "mount = PATH[:rw]" lines with their paths as given,
+# made absolute, from mount_given_paths,
 # if they differ from the saved ones,
 # replacing all mount lines where the first one was
 # (or else at the end) and keeping every other line, and say so.
@@ -1082,8 +1704,8 @@ save_project_mounts() {
   declare -a config_lines settings=() old_settings=() new_lines=()
 
   for mount_path in "${mount_paths[@]}"; do
-    [[ -z "${profile_mount_paths[${mount_path}]+defined}" ]] || continue
-    line="mount = ${mount_path}"
+    [[ -z "${unsaved_mount_paths[${mount_path}]+defined}" ]] || continue
+    line="mount = ${mount_given_paths[${mount_path}]:-${mount_path}}"
     [[ "${mount_modes[${mount_path}]}" == ro ]] || line+=":rw"
     settings+=("${line}")
   done
@@ -1128,100 +1750,198 @@ exclude_meta_directory() {
   warn "excluded /${prefix}.meta/ from git in ${exclude}"
 }
 
+# Print each tool, with its generations for the profile, newest first,
+# each with the generation of the profile image it was built from,
+# marking the one a run uses unless a project pins another,
+# or with "(not built)".
 list_tools() {
-  declare entry tool
+  declare entry tool listing generation base built_on name default
   for entry in "${project_directory}"/tools/*/Dockerfile; do
     [[ -f "${entry}" ]] || continue
     entry="${entry%/Dockerfile}"
     tool="${entry##*/}"
-    if tool_built "${tool}"; then
-      printf '%s\n' "${tool}"
-    else
+    listing="$(docker volume ls \
+      --filter "label=dockered-claude.tool=${tool}" \
+      --filter "label=dockered-claude.profile=${profile}" \
+      --format '{{.Label "dockered-claude.generation"}}/{{.Label "dockered-claude.base-image"}}/{{.Label "dockered-claude.profile-generation"}}/{{.Name}}')" ||
+      return
+    listing="$(sort -rn <<<"${listing}")" || return
+    if [[ -z "${listing}" ]]; then
       printf '%s (not built)\n' "${tool}"
+      continue
     fi
+    printf '%s\n' "${tool}"
+    default=''
+    while IFS=/ read -r generation base built_on name; do
+      [[ "${generation}" =~ ^[1-9][0-9]*$ ]] || continue
+      if [[ -z "${base}" ]]; then
+        printf '  %s, built before tool volumes were tied to profile images' \
+          "${generation}"
+      else
+        printf '  %s, built from generation %s of the profile' \
+          "${generation}" "${built_on}"
+      fi
+      if [[ -z "${default}" && -n "${base}" &&
+        "${base}" == "${profile_image_id}" ]]; then
+        default=1
+        printf ' (used unless pinned)'
+      fi
+      printf '\n'
+    done <<<"${listing}"
   done
 }
 
+# Print each profile, with its generations, newest first,
+# marking the one that latest marks,
+# or with "(not built)".
 list_profiles() {
-  declare entry profile image container_image
+  declare entry profile image container_image latest_id generation
+  declare -i index
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
   for entry in "${project_directory}"/profiles/*/Dockerfile; do
     [[ -f "${entry}" ]] || continue
     entry="${entry%/Dockerfile}"
     set_profile "${entry##*/}"
-    if image_exists; then
-      printf '%s\n' "${profile}"
-    else
+    find_profile_generations || return
+    if [[ -z "${latest_id}" ]] && ((${#profile_generations[@]} == 0)); then
       printf '%s (not built)\n' "${profile}"
+      continue
     fi
+    printf '%s\n' "${profile}"
+    find_generation_of "${latest_id}"
+    if [[ -n "${latest_id}" && -z "${generation}" ]]; then
+      printf '  latest, from an earlier version of the launcher\n'
+    fi
+    for ((index = ${#profile_generations[@]} - 1; index >= 0; index--)); do
+      generation="${profile_generations[index]}"
+      printf '  %s, built %s' "${generation}" "${generation_ages[${generation}]}"
+      [[ "${generation_ids[${generation}]}" != "${latest_id}" ]] ||
+        printf ' (latest)'
+      printf '\n'
+    done
   done
 }
 
+# Create the state directory, with Claude Code's state in claude_state,
+# readable only by the user.
 prepare_state_directory() {
-  # Claude Code keeps its state in ~/.claude/ and ~/.claude.json; both end
-  # up inside the persisted home directory.
-  # The passwd and group files live in etc/, mirroring their mount paths.
-  mkdir -p -- "${state_home}/.claude/skills" "${state_dir}/etc" || return
-  chmod 700 -- "${state_dir}" "${state_dir}/etc" "${state_dir}/home" \
-    "${state_home}" "${state_home}/.claude" || return
+  mkdir -p -- "${claude_state}/skills" || return
+  chmod 700 -- "${state_dir}" "${state_dir}/tools" "${claude_state%/*}" \
+    "${claude_state}" || return
 }
 
-# Docker creates missing mount points as root. Under /home, which is the
-# persisted state directory, that would leave root-owned directories on the
-# host (e.g. ~/src for a workdir ~/src/project) that the user can neither
-# write to nor remove, so create the mount point and its parents as the user.
-# A file is mounted on a file, so for a source that is one,
-# the mount point is created as an empty file.
-prepare_home_mount_point() {
-  declare destination="$1" source="${2:-}"
-  [[ "${destination}" == /home/?* ]] || return 0
-
-  declare directory="${state_dir}/home"
-  declare component
-  declare -a components
-  IFS=/ read -r -a components <<<"${destination#/home/}"
-  for component in "${components[@]}"; do
-    directory+="/${component}"
-    [[ -e "${directory}" ]] || break
-    if [[ ! -O "${directory}" ]]; then
-      warn "${directory} is not owned by ${username}" \
-        "(probably created by Docker in an earlier run);" \
-        "fix it with: sudo chown -R ${uid_host}:${gid_host} '${directory}'"
-      return 0
-    fi
-  done
-
-  if [[ -n "${source}" && ! -d "${source}" ]]; then
-    mkdir -p -- "${state_dir}${destination%/*}" || return
-    [[ -e "${state_dir}${destination}" ]] || : >"${state_dir}${destination}"
-    return
-  fi
-  mkdir -p -- "${state_dir}${destination}"
+# Succeed when PATH is a directory with nothing in it.
+empty_directory() {
+  declare path="$1" entry
+  [[ -d "${path}" && ! -L "${path}" ]] || return 1
+  entry="$(find "${path}" -mindepth 1 -maxdepth 1 -print -quit)" || return 1
+  [[ -z "${entry}" ]]
 }
 
-prepare_mount_points() {
-  prepare_home_mount_point "${workdir}" || return
+# Print, one per line, the paths in state_home where earlier versions
+# kept Claude Code's state that are still there:
+# .claude, unless it is an empty directory,
+# which a run of an earlier version of this one makes as a mount point,
+# and .claude.json.
+find_unmigrated_state() {
   declare path
-  for path in "${mount_paths[@]}"; do
-    prepare_home_mount_point "${path}" "${path}" || return
+  for path in "${state_home}/.claude" "${state_home}/.claude.json"; do
+    [[ -e "${path}" || -L "${path}" ]] || continue
+    ! empty_directory "${path}" || continue
+    printf '%s\n' "${path}"
   done
-  if [[ -d "${agents_dir}" ]]; then
-    prepare_home_mount_point "${home}/.agents" || return
+}
+
+# Fail when Claude Code's state is still where earlier versions kept it
+# and not yet in claude_state,
+# rather than start with empty state beside it,
+# or when the home of earlier versions, state_home, is still there,
+# rather than leave it apart from persists_home.
+check_migrated_state() {
+  declare paths=''
+  if [[ ! -e "${claude_state}" ]]; then
+    paths="$(find_unmigrated_state)" || return
   fi
-  if [[ -d "${config_dir}" ]]; then
-    prepare_home_mount_point "${home}/.config/claude" || return
+  if [[ -n "${paths}" ]]; then
+    warn "Claude Code's state from an earlier version is in" \
+      "${paths//$'\n'/ and }; move it with: ${script_name} migrate"
+    return 1
   fi
-  if [[ -d "${git_config_dir}" ]]; then
-    prepare_home_mount_point "${home}/.config/git" || return
+  if [[ -e "${state_home}" || -L "${state_home}" ]]; then
+    warn "the home of an earlier version is in ${state_home};" \
+      "move it with: ${script_name} migrate"
+    return 1
   fi
 }
 
-prepare_user_identity() {
+# Move Claude Code's state from where earlier versions kept it
+# to claude_state: the .claude directory, then .claude.json into it,
+# where CLAUDE_CONFIG_DIR makes Claude Code look for it;
+# then the rest of the home of earlier versions, state_home,
+# to persists_home, without the empty .claude that runs of them made,
+# where persists lines of the user configuration take paths from.
+# Refuse while a container of the launcher runs or is paused,
+# since it may write to the state being moved,
+# and refuse to move onto anything that exists.
+# Each move is a rename within the state directory.
+migrate_state() {
+  declare paths running path destination
+  paths="$(find_unmigrated_state)" || return
+  if [[ -z "${paths}" && ! -e "${state_home}" && ! -L "${state_home}" ]]; then
+    warn "nothing to migrate"
+    return 0
+  fi
+  running="$(docker ps --format '{{.Names}}' \
+    --filter label=dockered-claude.profile \
+    --filter status=running --filter status=paused)" || return
+  if [[ -n "${running}" ]]; then
+    warn "cannot migrate while containers of the launcher run:" \
+      "${running//$'\n'/, }; end them first"
+    return 1
+  fi
+
+  while read -r path; do
+    if [[ "${path}" == */.claude ]]; then
+      destination="${claude_state}"
+    else
+      destination="${claude_state}/.claude.json"
+    fi
+    if [[ -e "${destination}" || -L "${destination}" ]]; then
+      warn "cannot move ${path}: ${destination} exists"
+      return 1
+    fi
+    mkdir -p -- "${destination%/*}" || return
+    mv -- "${path}" "${destination}" || return
+    warn "moved ${path} to ${destination}"
+  done < <([[ -z "${paths}" ]] || printf '%s\n' "${paths}")
+
+  [[ -e "${state_home}" || -L "${state_home}" ]] || return 0
+  if [[ -e "${persists_home}" || -L "${persists_home}" ]]; then
+    warn "cannot move ${state_home}: ${persists_home} exists"
+    return 1
+  fi
+  if empty_directory "${state_home}/.claude"; then
+    rmdir -- "${state_home}/.claude" || return
+  fi
+  mkdir -p -- "${persists_home%/*}" || return
+  mv -- "${state_home}" "${persists_home}" || return
+  warn "moved ${state_home} to ${persists_home}"
+  # Other users' homes may be left in it.
+  rmdir -- "${state_home%/*}" 2>/dev/null || :
+}
+
+# Write the container's passwd and group files under DIRECTORY/etc,
+# naming only root and the host's user and group, readable by all.
+write_user_identity() {
+  declare directory="$1"
+  mkdir -p -- "${directory}/etc" || return
   printf 'root:x:0:0:root:/root:/bin/bash\n%s:x:%s:%s:%s:%s:/bin/bash\n' \
     "${username}" "${uid_host}" "${gid_host}" "${username}" "${home}" \
-    >"${passwd_file}" || return
+    >"${directory}/etc/passwd" || return
   printf 'root:x:0:\n%s:x:%s:\n' "${groupname}" "${gid_host}" \
-    >"${group_file}" || return
-  chmod 600 -- "${passwd_file}" "${group_file}" || return
+    >"${directory}/etc/group" || return
+  chmod 644 -- "${directory}/etc/passwd" "${directory}/etc/group" || return
 }
 
 # Symlink each skill in ~/.agents/skills
@@ -1229,7 +1949,7 @@ prepare_user_identity() {
 # using relative path ../../.agents/skills/<name>.
 link_agent_skills() {
   declare skills_source="${agents_dir}/skills"
-  declare skills_target="${state_home}/.claude/skills"
+  declare skills_target="${claude_state}/skills"
   declare link_prefix='../../.agents/skills/'
   declare entry name link target
 
@@ -1275,7 +1995,7 @@ link_agent_skills() {
 # into the persisted ~/.claude,
 # using relative path ../.config/claude/<name>.
 link_config_files() {
-  declare config_target="${state_home}/.claude"
+  declare config_target="${claude_state}"
   declare link_prefix='../.config/claude/'
   declare entry name link target
 
@@ -1311,42 +2031,206 @@ link_config_files() {
   done
 }
 
-image_exists() {
-  docker image inspect "${image}" >/dev/null 2>&1
+# Set profile_generations to the generations of the profile's image,
+# oldest first,
+# generation_ids and generation_ages to their image IDs and ages,
+# by generation,
+# and latest_id to the ID that the latest tag marks, or to nothing.
+# Generations are the tags of the profile's repository that are numbers.
+find_profile_generations() {
+  declare repository="${image%:*}" listing tag id age
+  profile_generations=()
+  generation_ids=()
+  generation_ages=()
+  latest_id=''
+  listing="$(docker image ls --no-trunc \
+    --format '{{.Tag}} {{.ID}} {{.CreatedSince}}' "${repository}")" || return
+  listing="$(sort -n <<<"${listing}")" || return
+  while read -r tag id age; do
+    if [[ "${tag}" == latest ]]; then
+      latest_id="${id}"
+    elif [[ "${tag}" =~ ^[1-9][0-9]*$ ]]; then
+      profile_generations+=("${tag}")
+      generation_ids[${tag}]="${id}"
+      generation_ages[${tag}]="${age}"
+    fi
+  done <<<"${listing}"
 }
 
-# Build the image of profile from its directory.
+# Set generation to the generation of the profile whose image ID is ID,
+# or to nothing.
+# Reads profile_generations and generation_ids.
+find_generation_of() {
+  declare id="$1" candidate
+  generation=''
+  for candidate in "${profile_generations[@]}"; do
+    [[ "${generation_ids[${candidate}]}" != "${id}" ]] || generation="${candidate}"
+  done
+}
+
+# Tag image ID as a generation of the profile,
+# reusing the generation that has that ID already,
+# else the newest generation plus one,
+# and set generation to it.
+# Reads and updates profile_generations and generation_ids.
+tag_generation() {
+  declare id="$1"
+  find_generation_of "${id}"
+  [[ -z "${generation}" ]] || return 0
+  generation=1
+  ((${#profile_generations[@]} == 0)) ||
+    generation=$((profile_generations[-1] + 1))
+  docker tag "${id}" "${image%:*}:${generation}" || return
+  profile_generations+=("${generation}")
+  generation_ids[${generation}]="${id}"
+}
+
+# Tag the image that latest_id marks as a generation of the profile
+# when it is none,
+# as an image built by an earlier version of the launcher,
+# so that a later build does not leave it untagged.
+adopt_latest_image() {
+  [[ -n "${latest_id}" ]] || return 0
+  declare generation
+  find_generation_of "${latest_id}"
+  [[ -z "${generation}" ]] || return 0
+  tag_generation "${latest_id}" || return
+  warn "tagged the image of profile '${profile}' as generation ${generation}"
+}
+
+# Build the image of profile from its directory
+# as a generation, as tag_generation chooses it, and mark it latest.
+# A build whose steps all come from the cache gives an image ID
+# that a generation has already, which is then marked latest again.
 build_image() {
-  docker build \
+  declare id_file id generation latest_id
+  declare -i known
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
+  find_profile_generations || return
+  adopt_latest_image || return
+  known=${#profile_generations[@]}
+
+  id_file="$(mktemp)" || return
+  if ! docker build \
+    --iidfile "${id_file}" \
     --label "dockered-claude.profile=${profile}" \
+    ${kwargs[no_cache]:+--no-cache} \
     --pull \
-    --tag "${image}" \
-    "${project_directory}/profiles/${profile}" || return
+    "${project_directory}/profiles/${profile}"; then
+    rm -f -- "${id_file}"
+    return 1
+  fi
+  id="$(<"${id_file}")"
+  rm -f -- "${id_file}" || return
+  if [[ -z "${id}" ]]; then
+    warn "the build of profile '${profile}' gave no image ID"
+    return 1
+  fi
+
+  tag_generation "${id}" || return
+  docker tag "${id}" "${image}" || return
+  if ((${#profile_generations[@]} > known)); then
+    warn "built generation ${generation} of profile '${profile}'"
+  else
+    warn "the build of profile '${profile}' is generation ${generation}," \
+      "built already; marked it latest"
+  fi
 }
 
+# Build the profile's image if it has none,
+# adopting one from an earlier version of the launcher as a generation.
+# Generations without a latest tag are not used:
+# which one to mark is the user's choice.
 ensure_image() {
-  image_exists || build_image || return
+  declare latest_id
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
+  find_profile_generations || return
+  if [[ -n "${latest_id}" ]]; then
+    adopt_latest_image
+    return
+  fi
+  if ((${#profile_generations[@]} > 0)); then
+    warn "no generation of profile '${profile}' is marked latest;" \
+      "mark one with: ${script_name} profile use ${profile} GENERATION"
+    return 1
+  fi
+  build_image
+}
+
+# Mark generation GENERATION of the profile latest.
+use_profile_generation() {
+  declare wanted="$1" latest_id
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
+  find_profile_generations || return
+  if [[ -z "${generation_ids[${wanted}]+defined}" ]]; then
+    warn "profile '${profile}' has no generation ${wanted}"
+    return 1
+  fi
+  docker tag "${generation_ids[${wanted}]}" "${image}" || return
+  warn "marked generation ${wanted} of profile '${profile}' latest"
+}
+
+# Mark latest the newest generation of the profile
+# below the one that latest marks,
+# adopting an image from an earlier version of the launcher first,
+# so that it can be marked again.
+revert_profile() {
+  declare latest_id generation candidate previous=''
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
+  find_profile_generations || return
+  adopt_latest_image || return
+  find_generation_of "${latest_id}"
+  if [[ -z "${generation}" ]]; then
+    warn "no generation of profile '${profile}' is marked latest"
+    return 1
+  fi
+  for candidate in "${profile_generations[@]}"; do
+    ((candidate >= generation)) || previous="${candidate}"
+  done
+  if [[ -z "${previous}" ]]; then
+    warn "profile '${profile}' has no generation before ${generation}"
+    return 1
+  fi
+  docker tag "${generation_ids[${previous}]}" "${image}" || return
+  warn "marked generation ${previous} of profile '${profile}' latest," \
+    "instead of ${generation}"
 }
 
 # Run containers from an image with the selected packages
 # on top of the base image,
 # tagged by a hash of their sorted names
-# so that projects with the same packages share it.
+# so that projects with the same packages share it,
+# and by the generation of the base image,
+# so that marking an earlier generation latest finds its packages image.
 # Build it with the build command, when it is missing,
 # or when it was built from another base image,
 # from the profile's own Dockerfile.packages if it has one.
 ensure_packages_image() {
   ((${#packages[@]} > 0)) || return 0
   declare repository="${image}" names hash base_id built_from
+  declare latest_id generation
+  declare -a profile_generations
+  declare -A generation_ids generation_ages
   declare file="${project_directory}/profiles/${profile}/Dockerfile.packages"
   [[ -f "${file}" ]] || file="${project_directory}/Dockerfile.packages"
   # Drop the tag, but not a registry port (e.g. host:5000/name).
   [[ "${repository##*/}" != *:* ]] || repository="${repository%:*}"
   names="$(printf '%s\n' "${packages[@]}" | sort -u | paste -s -d ' ')" || return
   hash="$(printf '%s\n' "${names}" | sha256sum)" || return
-  container_image="${repository}:packages-${hash:0:12}"
 
   base_id="$(docker image inspect --format '{{.Id}}' "${image}")" || return
+  find_profile_generations || return
+  find_generation_of "${base_id}"
+  if [[ -z "${generation}" ]]; then
+    warn "the latest image of profile '${profile}' is no generation;" \
+      "rebuild it with: ${script_name} profile build ${profile}"
+    return 1
+  fi
+  container_image="${repository}:packages-${hash:0:12}-${generation}"
   if [[ "${kwargs[command]}" != build ]] &&
     built_from="$(docker image inspect \
       --format '{{index .Config.Labels "dockered-claude.base-image"}}' \
@@ -1361,6 +2245,7 @@ ensure_packages_image() {
     --build-arg "PACKAGES=${names}" \
     --file "${file}" \
     --label "dockered-claude.profile=${profile}" \
+    ${kwargs[no_cache]:+--no-cache} \
     --tag "${container_image}" \
     "${file%/*}" || return
 }
@@ -1381,8 +2266,6 @@ add_base_arguments() {
     --env "TERM=${TERM:-xterm-256color}"
     --init
     --interactive
-    --mount "type=bind,src=${group_file},dst=/etc/group,readonly"
-    --mount "type=bind,src=${passwd_file},dst=/etc/passwd,readonly"
     --read-only
     --rm
     --security-opt seccomp=unconfined
@@ -1406,10 +2289,15 @@ add_base_arguments() {
 # A tool's env file, if any, is passed with --env-file.
 # Later files override earlier ones,
 # so they are passed in reverse order to let the first tool win.
+# Docker does not expand values,
+# so a value starting with ~/ is also passed with --env,
+# expanded to the container's home,
+# unless an earlier tool sets the variable;
+# --env overrides every --env-file.
 add_tool_arguments() {
-  declare env_file tool
-  declare -a env_args=()
-  declare -A seen=()
+  declare env_file tool name
+  declare -a env_args=() home_env_args=() file_names=()
+  declare -A seen=() env_names=() file_values=()
 
   for tool in "${mounted_tools[@]}"; do
     [[ -z "${seen[${tool}]+defined}" ]] || continue
@@ -1427,13 +2315,47 @@ add_tool_arguments() {
         return 1
       fi
       env_args=(--env-file "${env_file}" "${env_args[@]}")
+      read_env_file "${env_file}" || return
+      for name in "${file_names[@]}"; do
+        [[ -z "${env_names[${name}]+defined}" ]] || continue
+        env_names[${name}]=1
+        [[ -n "${file_values[${name}]}" ]] || continue
+        home_env_args+=(--env "${name}=${file_values[${name}]}")
+      done
     fi
     docker_args+=(
       --mount "type=volume,src=${tool_volume_names[${tool}]},dst=/opt/tools/${tool},readonly"
     )
   done
 
-  docker_args+=("${env_args[@]}")
+  docker_args+=("${env_args[@]}" "${home_env_args[@]}")
+}
+
+# Set file_names to the variables ENV_FILE sets, in order,
+# and file_values, for each, to its value expanded to the container's home
+# if the last line setting it starts its value with ~/, or else empty.
+# Lines are read as docker reads them:
+# blank lines and comments are skipped,
+# and a name without = passes the host's variable.
+read_env_file() {
+  declare env_file="$1" line name value
+  file_names=()
+  file_values=()
+  while IFS= read -r line || [[ -n "${line}" ]]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    [[ -n "${line}" && "${line}" != '#'* ]] || continue
+    name="${line%%=*}"
+    # Docker refuses a line without a name.
+    [[ -n "${name}" ]] || continue
+    value="${line#"${name}"}"
+    if [[ "${value}" == '=~/'* ]]; then
+      value="${home}/${value#'=~/'}"
+    else
+      value=
+    fi
+    [[ -n "${file_values[${name}]+defined}" ]] || file_names+=("${name}")
+    file_values[${name}]="${value}"
+  done <"${env_file}"
 }
 
 # Mount the profile's managed-settings.json, if it has one,
@@ -1489,18 +2411,21 @@ add_path_argument() {
 }
 
 # Print, one per line, the volumes of TOOL for the profile
-# that hold VERSION.
+# built from profile_image_id that hold VERSION.
 find_version_volumes() {
   declare tool="$1" version="$2"
   docker volume ls --quiet \
     --filter "label=dockered-claude.tool=${tool}" \
     --filter "label=dockered-claude.profile=${profile}" \
-    --filter "label=dockered-claude.version=${version}"
+    --filter "label=dockered-claude.version=${version}" \
+    --filter "label=dockered-claude.base-image=${profile_image_id}"
 }
 
 # Build tools/TOOL/Dockerfile on the profile's image
 # and copy the prefix it holds, /opt/tools/TOOL,
-# into a new volume, the next generation of the tool for the profile.
+# into a new volume, the next generation of the tool for the profile,
+# named and labelled by the generation of the profile image,
+# profile_generation, and its ID, profile_image_id.
 # The image is untagged and removed afterwards,
 # so the volume is the only copy of the tool.
 # With REFRESH, the build cache is not used,
@@ -1511,7 +2436,7 @@ build_tool_volume() {
   declare directory="${project_directory}/tools/${tool}"
   declare prefix="/opt/tools/${tool}"
   declare temporary_directory tool_image generation volume tool_version
-  declare latest_version existing
+  declare latest_version existing tool_newest_generation
   declare -a tool_volumes tool_generations
 
   if [[ ! -f "${directory}/Dockerfile" ]]; then
@@ -1545,10 +2470,9 @@ build_tool_volume() {
   # A tool that gives its version is named by it,
   # and a version built already is kept rather than built again.
   if read_tool_version && find_tool_volumes "${tool}"; then
-    generation=1
-    ((${#tool_generations[@]} == 0)) ||
-      generation=$((tool_generations[-1] + 1))
-    volume="dockered-claude-tool-${profile}-${tool}-${tool_version:-${generation}}"
+    generation=$((tool_newest_generation + 1))
+    volume="dockered-claude-tool-${profile}-${profile_generation}-${tool}"
+    volume+="-${tool_version:-${generation}}"
     if [[ -n "${tool_version}" ]] &&
       existing="$(find_version_volumes "${tool}" "${tool_version}")" &&
       [[ -n "${existing}" ]]; then
@@ -1635,13 +2559,16 @@ read_tool_version() {
 # shows whether this fill created the volume
 # or found one made by another build.
 # Reads tool, profile, generation, tool_version, volume, prefix
-# and tool_image from build_tool_volume.
+# and tool_image from build_tool_volume,
+# and profile_image_id and profile_generation.
 fill_tool_volume() {
   declare filler="${volume}-fill" build created_by label
   declare mount="type=volume,src=${volume},dst=${prefix}"
   build="$$-${RANDOM}-${RANDOM}"
   for label in "tool=${tool}" "profile=${profile}" \
     "generation=${generation}" "build=${build}" \
+    "base-image=${profile_image_id}" \
+    "profile-generation=${profile_generation}" \
     ${tool_version:+"version=${tool_version}"}; do
     mount+=",volume-label=dockered-claude.${label}"
   done
@@ -1664,6 +2591,117 @@ fill_tool_volume() {
   fi
 }
 
+# Write in DIRECTORY/root the files of the run image,
+# and DIRECTORY/context/run.tar with them:
+# /etc/passwd and /etc/group, owned by root;
+# the home, owned by the user, 0700,
+# and the directories between it and each link or mount point under it,
+# owned by the user, 0755, so that Docker does not make them as root;
+# and the links of run_links, with their targets from link_targets,
+# owned by root.
+# The tar has no entries for the directories above them,
+# so the base image's own keep their owner and mode,
+# and Docker creates missing ones as root, 0755.
+# The directories come before the links inside them.
+write_run_archive() {
+  declare directory="$1"
+  declare root="${directory}/root" archive="${directory}/context/run.tar"
+  declare link path
+  declare -a links=() home_directories=() mount_points hidden_paths mounted_paths
+  declare -A seen=()
+  write_user_identity "${root}" || return
+  mkdir -p -- "${root}${home}" "${archive%/*}" || return
+  chmod 700 -- "${root}${home}" || return
+  for link in "${run_links[@]}"; do
+    mkdir -p -- "${root}${link%/*}" || return
+    ln -s -- "${link_targets["${link}"]}" "${root}${link}" || return
+    links+=("${link#/}")
+  done
+  set_reserved_paths
+  mount_points=("${workdir}" "${mount_paths[@]}" "${mounted_paths[@]}" "${home}/.cache")
+  for path in "${persisted_paths[@]}"; do
+    mount_points+=("${home}/${path}")
+  done
+  for path in "${run_links[@]}" "${mount_points[@]}"; do
+    path="${path%/*}"
+    while [[ "${path}" == "${home}/"* && -z "${seen["${path}"]+defined}" ]]; do
+      seen["${path}"]=1
+      mkdir -p -- "${root}${path}" || return
+      chmod 755 -- "${root}${path}" || return
+      home_directories+=("${path#/}")
+      path="${path%/*}"
+    done
+  done
+  # Sorted bytewise, so that each directory comes before those inside it
+  # and the order does not depend on the locale.
+  if ((${#home_directories[@]} > 0)); then
+    mapfile -t home_directories < <(
+      printf '%s\n' "${home_directories[@]}" | LC_ALL=C sort
+    ) || return
+  fi
+
+  tar --create --file "${archive}" --directory "${root}" \
+    --owner=0 --group=0 --numeric-owner \
+    etc/passwd etc/group || return
+  tar --append --file "${archive}" --directory "${root}" \
+    --owner="${uid_host}" --group="${gid_host}" --numeric-owner \
+    --no-recursion "${home#/}" "${home_directories[@]}" || return
+  ((${#links[@]} > 0)) || return 0
+  tar --append --file "${archive}" --directory "${root}" \
+    --owner=0 --group=0 --numeric-owner \
+    --no-recursion "${links[@]}" || return
+}
+
+# Build the run image of this run from container_image,
+# with the files of write_run_archive added,
+# untagged, labelled dockered-claude.run,
+# in a temporary directory removed afterwards,
+# and set run_image to its ID.
+build_run_image() {
+  declare directory status=0
+  directory="$(mktemp -d)" || return
+  build_run_image_in "${directory}" || status=$?
+  rm -rf -- "${directory}" || return
+  return "${status}"
+}
+
+build_run_image_in() {
+  declare directory="$1" base_id
+  base_id="$(docker image inspect --format '{{.Id}}' "${container_image}")" ||
+    return
+  write_run_archive "${directory}" || return
+  cat >"${directory}/context/Dockerfile" <<'DOCKERFILE' || return
+ARG BASE_IMAGE_ID
+FROM ${BASE_IMAGE_ID}
+ADD run.tar /
+DOCKERFILE
+  docker build \
+    --build-arg "BASE_IMAGE_ID=${base_id}" \
+    --iidfile "${directory}/id" \
+    --label dockered-claude.run=1 \
+    --label "dockered-claude.profile=${profile}" \
+    --quiet \
+    "${directory}/context" >/dev/null || return
+  run_image="$(<"${directory}/id")" || return
+  if [[ -z "${run_image}" ]]; then
+    warn "the build of the run image gave no image ID"
+    return 1
+  fi
+}
+
+# Remove the run images that killed launchers left,
+# those no container uses, without asking.
+# Only those older than 10 minutes are removed,
+# so that the image of another run,
+# built but whose container has not started yet, is kept.
+# A failure only warns, since it does not keep this run from starting.
+prune_run_images() {
+  docker image prune --force \
+    --filter label=dockered-claude.run=1 \
+    --filter until=10m >/dev/null ||
+    warn "could not remove the images left by earlier runs"
+}
+
 run_container() {
   declare -a docker_args=() path_entries=() path_suffix=()
   add_base_arguments || return
@@ -1672,13 +2710,22 @@ run_container() {
   add_managed_settings_arguments || return
   add_path_argument || return
   docker_args+=(
+    --env "CLAUDE_CONFIG_DIR=${home}/.claude"
     --env "HOME=${home}"
-    --mount "type=bind,src=${state_dir}/home,dst=/home"
+    --tmpfs "${home}/.cache:rw,exec,nosuid,nodev,uid=${uid_host},gid=${gid_host},mode=0700"
     --mount "type=bind,src=${workdir},dst=${workdir}"
     --workdir "${workdir}"
   )
 
+  # Docker mounts each path after those above it,
+  # so the persisted paths in ~/.cache are mounted on top of its tmpfs.
   declare path
+  for path in "${persisted_paths[@]}"; do
+    docker_args+=(
+      --mount "type=bind,src=${persisted_bases["${path}"]}/${path},dst=${home}/${path}"
+    )
+  done
+
   declare -a writable_paths=("${workdir}")
   for path in "${mount_paths[@]}"; do
     if [[ "${mount_modes[${path}]}" == rw ]]; then
@@ -1694,13 +2741,14 @@ run_container() {
   # whether through the working directory or a writable mount:
   # this project's, and that of a project a writable mount is the root of.
   # Configurations deeper inside a writable mount are not looked for.
-  # Nor must the managed settings files,
+  # Nor must the user configuration and the managed settings files,
   # such as the profile's when the launcher's own repository is the
   # working directory.
   declare protected_path
   declare -A protected=()
   for protected_path in "${project_config%/*}" \
     "${writable_paths[@]/%//${project_config_path%/*}}" \
+    "${user_config%/*}" \
     "${project_directory}/profiles/${profile}/managed-settings.json" \
     "${managed_settings_file}"; do
     [[ -e "${protected_path}" ]] || continue
@@ -1739,7 +2787,30 @@ run_container() {
     )
   fi
 
-  exec docker "${docker_args[@]}" "${container_image}" "$@"
+  # Docker is not exec'd, so that the run image can be removed after it.
+  # Until then, a signal only sets the status to return:
+  # the container gets it from docker run, or from the terminal,
+  # and stops, and docker run returns.
+  # An image left by a launcher that is killed is pruned by a later run.
+  declare run_image='' interrupted=''
+  declare -i status=0
+  trap 'interrupted=129' HUP
+  trap 'interrupted=130' INT
+  trap 'interrupted=143' TERM
+  prune_run_images
+  if ! build_run_image; then
+    status=1
+  elif [[ -n "${interrupted}" ]]; then
+    status="${interrupted}"
+  else
+    docker "${docker_args[@]}" "${run_image}" "$@" || status=$?
+  fi
+  if [[ -n "${run_image}" ]]; then
+    docker image rm "${run_image}" >/dev/null ||
+      warn "could not remove the run image ${run_image}"
+  fi
+  trap - HUP INT TERM
+  return "${status}"
 }
 
 # Offer for removal, one item at a time,
@@ -1831,8 +2902,10 @@ remove_item() {
 # and those created to fill a tool volume,
 # which a build removes at once, unless it is interrupted.
 # A running or paused container is never offered.
+# Also add the run images that no container uses,
+# which a run removes when it ends, unless its launcher is killed.
 find_unused_containers() {
-  declare listing fill_listing id name image
+  declare listing fill_listing run_ids id name image users
   declare -A seen=()
   declare -a stopped=(
     --filter status=created
@@ -1856,32 +2929,52 @@ find_unused_containers() {
     [[ "${name}" == dockered-claude-tool-*-fill ]] || continue
     add_item container "${name}" "left from filling ${name%-fill}"
   done <<<"${fill_listing}"
+
+  find_run_images || return
+  while read -r id; do
+    [[ -n "${id}" ]] || continue
+    find_users "ancestor=${id}" || return
+    [[ -z "${users}" ]] || continue
+    add_item image "${id}" "run image that no container uses"
+  done <<<"${run_ids}"
+}
+
+# Set run_ids to the IDs of the run images, one per line.
+find_run_images() {
+  run_ids="$(docker image ls --quiet --no-trunc \
+    --filter label=dockered-claude.run=1)" || return
 }
 
 # Add the tool volumes that no container uses, running or not:
-# older generations of a tool for a profile;
+# older generations of a tool built from the same profile image;
+# volumes built from a profile image that no longer exists,
+# or before tool volumes were tied to profile images;
 # all generations of a tool or for a profile no longer defined;
 # and volumes named dockered-claude-tool-NAME, without labels,
 # from earlier versions of the launcher.
-# The newest generation of a defined tool for a defined profile is kept.
+# The newest generation of a defined tool
+# built from each existing image of a defined profile is kept,
+# so that marking that image latest again finds its tools.
 find_unused_tools() {
-  declare listing tool volume_profile generation name key reason users
+  declare listing image_ids tool volume_profile generation base
+  declare base_generation name key reason users
   declare -A newest=()
   listing="$(docker volume ls --filter name=dockered-claude-tool- \
-    --format '{{.Label "dockered-claude.tool"}}/{{.Label "dockered-claude.profile"}}/{{.Label "dockered-claude.generation"}}/{{.Name}}')" ||
+    --format '{{.Label "dockered-claude.tool"}}/{{.Label "dockered-claude.profile"}}/{{.Label "dockered-claude.generation"}}/{{.Label "dockered-claude.base-image"}}/{{.Label "dockered-claude.profile-generation"}}/{{.Name}}')" ||
     return
+  image_ids="$(docker image ls --all --no-trunc --quiet)" || return
 
-  while IFS=/ read -r tool volume_profile generation name; do
+  while IFS=/ read -r tool volume_profile generation base base_generation name; do
     [[ "${generation}" =~ ^[1-9][0-9]*$ ]] || continue
-    key="${tool}/${volume_profile}"
+    key="${tool}/${volume_profile}/${base}"
     if ((generation > ${newest[${key}]:-0})); then
       newest[${key}]="${generation}"
     fi
   done <<<"${listing}"
 
-  while IFS=/ read -r tool volume_profile generation name; do
+  while IFS=/ read -r tool volume_profile generation base base_generation name; do
     [[ "${name}" == dockered-claude-tool-* ]] || continue
-    key="${tool}/${volume_profile}"
+    key="${tool}/${volume_profile}/${base}"
     if [[ -z "${tool}" ]]; then
       reason='from an earlier version of the launcher'
     elif [[ ! "${generation}" =~ ^[1-9][0-9]*$ ]]; then
@@ -1890,8 +2983,14 @@ find_unused_tools() {
       reason="tool '${tool}' is no longer defined"
     elif ! profile_defined "${volume_profile}"; then
       reason="profile '${volume_profile}' is no longer defined"
+    elif [[ -z "${base}" ]]; then
+      reason="built before tool volumes were tied to profile images"
+    elif [[ $'\n'"${image_ids}"$'\n' != *$'\n'"${base}"$'\n'* ]]; then
+      reason="built from generation ${base_generation}"
+      reason+=" of profile '${volume_profile}', which no longer exists"
     elif ((generation < ${newest[${key}]})); then
-      reason="older generation of tool '${tool}' for profile '${volume_profile}'"
+      reason="older generation of tool '${tool}'"
+      reason+=" for generation ${base_generation} of profile '${volume_profile}'"
     else
       continue
     fi
@@ -1906,15 +3005,18 @@ find_unused_tools() {
 # its profile is no longer defined,
 # it was built from an older image of its profile,
 # or it is current; a run rebuilds one it needs.
+# Run images inherit the labels of a packages image, so they are left out.
 find_unused_packages() {
-  declare listing id reference repository name labels base_image
+  declare listing run_ids id reference repository name labels base_image
   declare package_names current reason users
   listing="$(docker image ls --no-trunc \
     --filter label=dockered-claude.packages \
     --format '{{.ID}} {{.Repository}}:{{.Tag}}')" || return
+  find_run_images || return
 
   while read -r id reference; do
     [[ -n "${id}" ]] || continue
+    [[ $'\n'"${run_ids}"$'\n' != *$'\n'"${id}"$'\n'* ]] || continue
     find_users "ancestor=${id}" || return
     [[ -z "${users}" ]] || continue
     labels="$(docker image inspect --format \
@@ -1932,6 +3034,9 @@ find_unused_packages() {
       "${repository}:latest" 2>/dev/null)" &&
       [[ "${current}" == "${base_image}" ]]; then
       reason="current for profile '${name}'"
+    elif [[ "${reference}" =~ :packages-[0-9a-f]+-([1-9][0-9]*)$ ]]; then
+      reason="built from generation ${BASH_REMATCH[1]} of profile '${name}'"
+      reason+=", not the latest"
     else
       reason="built from an older image of profile '${name}'"
     fi
@@ -1939,16 +3044,20 @@ find_unused_packages() {
   done <<<"${listing}"
 }
 
-# Add the images of profiles that no container uses, running or not,
-# which a later build replaced or whose profile is no longer defined,
+# Add the images of profiles that no container uses, running or not:
+# generations that latest does not mark,
+# images that a later build left untagged,
+# all images of a profile no longer defined,
 # and images named dockered-claude, from earlier versions of the launcher.
-# Packages images carry their profile's label too, so they are left out.
+# Packages images and run images carry their profile's label too,
+# so they are left out.
 find_unused_profiles() {
-  declare packages_ids listing old_listing id reference repository reason
-  declare users
-  declare -A seen=()
+  declare packages_ids run_ids listing old_listing id reference repository reason
+  declare users tag name
+  declare -A seen=() latest_ids=()
   packages_ids="$(docker image ls --quiet --no-trunc \
     --filter label=dockered-claude.packages)" || return
+  find_run_images || return
   listing="$(docker image ls --no-trunc \
     --filter label=dockered-claude.profile \
     --format '{{.ID}} {{.Repository}}:{{.Tag}}')" || return
@@ -1956,18 +3065,30 @@ find_unused_profiles() {
     --format '{{.ID}} {{.Repository}}:{{.Tag}}' dockered-claude)" || return
 
   while read -r id reference; do
+    [[ "${reference}" == *:latest ]] || continue
+    latest_ids[${reference%:*}]="${id}"
+  done <<<"${listing}"
+
+  while read -r id reference; do
     [[ -n "${id}" && -z "${seen[${reference}]+defined}" ]] || continue
     seen[${reference}]=1
     [[ $'\n'"${packages_ids}"$'\n' != *$'\n'"${id}"$'\n'* ]] || continue
+    [[ $'\n'"${run_ids}"$'\n' != *$'\n'"${id}"$'\n'* ]] || continue
     repository="${reference%:*}"
+    tag="${reference##*:}"
+    name="${repository#dockered-claude-}"
     if [[ "${reference}" == '<none>:<none>' ]]; then
       reference="${id}"
       reason='replaced by a later build'
     elif [[ "${repository}" == dockered-claude ]]; then
       reason='from an earlier version of the launcher'
     elif [[ "${repository}" == dockered-claude-?* ]] &&
-      ! profile_defined "${repository#dockered-claude-}"; then
-      reason="profile '${repository#dockered-claude-}' is no longer defined"
+      ! profile_defined "${name}"; then
+      reason="profile '${name}' is no longer defined"
+    elif [[ "${repository}" == dockered-claude-?* &&
+      "${tag}" =~ ^[1-9][0-9]*$ &&
+      "${id}" != "${latest_ids[${repository}]:-}" ]]; then
+      reason="generation ${tag} of profile '${name}', not the latest"
     else
       continue
     fi
@@ -1991,17 +3112,22 @@ build_images() {
 # Do the command in kwargs[command]:
 # run Claude Code with args, as the options in kwargs, tools, packages
 # and mounts say; rebuild the images; list or build profiles or tools;
-# or clean the targets in args.
+# clean the targets in args; or migrate Claude Code's state.
 run() {
-  declare image workdir state_dir state_home uid_host gid_host username groupname
-  declare home passwd_file group_file agents_dir config_dir git_config_dir
-  declare managed_settings_file
+  declare image workdir state_dir state_home claude_state
+  declare uid_host gid_host username groupname
+  declare home agents_dir config_dir git_config_dir
+  declare managed_settings_file user_config persists_home
+  declare profile_image_id profile_generation
   declare project_config project_root profile container_image
-  declare -a project_mounts=() mount_paths=()
+  declare -a project_mounts=() mount_paths=() persisted_paths=()
+  declare -a user_mounts=() user_persists=()
+  declare -A persisted_kinds=() persisted_bases=() persisted_sources=()
   declare -a profile_variables=() profile_path_entries=()
-  declare -A project_options=() mount_modes=() profile_mount_paths=()
-  declare -A tool_volume_names=()
-  declare -a mounted_tools=()
+  declare -A project_options=() mount_modes=() unsaved_mount_paths=()
+  declare -A tool_volume_names=() tool_pins=()
+  declare -a mounted_tools=() link_paths=() run_links=()
+  declare -A link_targets=() link_climbs=() mount_given_paths=()
 
   declare name
 
@@ -2015,6 +3141,16 @@ run() {
     list_profiles
     return
     ;;
+  profile-use | profile-revert)
+    check_profile_defined "${args[0]}" || return
+    set_profile "${args[0]}"
+    if [[ "${kwargs[command]}" == profile-use ]]; then
+      use_profile_generation "${args[1]}"
+    else
+      revert_profile
+    fi
+    return
+    ;;
   profile-build)
     for name in "${args[@]}"; do
       check_profile_defined "${name}" || return
@@ -2025,12 +3161,14 @@ run() {
     ;;
   tool-list)
     select_profile || return
+    read_profile_image || return
     list_tools
     return
     ;;
   tool-build)
     select_profile || return
     ensure_image || return
+    read_profile_image || return
     for name in "${args[@]}"; do
       build_tool_volume "${name}" refresh || return
     done
@@ -2040,23 +3178,35 @@ run() {
     clean_unused
     return
     ;;
+  migrate)
+    migrate_state
+    return
+    ;;
   esac
 
+  check_migrated_state || return
   prepare_state_directory || return
   find_project_config || return
   project_root="${project_config%/"${project_config_path}"}"
   read_project_config || return
+  read_user_config || return
   select_profile || return
   select_tools || return
   select_mounted_tools
   select_packages || return
+  select_persisted_paths || return
+  check_working_directory || return
+  trace_working_directory || return
   select_mounts || return
   read_profile_launcher || return
-  prepare_mount_points || return
-  prepare_user_identity || return
+  add_user_mounts || return
+  warn_missing_climbed_directories
+  select_run_links
+  prepare_persisted_paths || return
   link_agent_skills || return
   link_config_files || return
   ensure_image || return
+  read_profile_image || return
   find_tool_volume_names || return
   warn_unused_tool_volumes || return
   ensure_packages_image || return

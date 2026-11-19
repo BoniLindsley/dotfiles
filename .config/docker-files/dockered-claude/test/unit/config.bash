@@ -12,8 +12,9 @@ source -- "${launcher}" || return
 # with project_root a new directory and project_config in it.
 reset_configuration() {
   set_launcher_paths
-  declare -gA kwargs=() project_options=() mount_modes=() profile_mount_paths=()
-  declare -ga project_mounts=() mount_paths=()
+  declare -gA kwargs=() project_options=() mount_modes=() unsaved_mount_paths=()
+  declare -gA mount_given_paths=() link_targets=() link_climbs=()
+  declare -ga project_mounts=() mount_paths=() link_paths=()
   project_root="${temporary_directory}/project"
   project_config="${project_root}/${project_config_path}"
   mkdir -p -- "${project_root}"
@@ -121,6 +122,17 @@ test_saving_mounts_replaces_them_where_the_first_was() {
   assert_status 0
   assert_file "${project_config}" \
     $'# Mine\nmount = /c\nmount = /d:rw\ntools = uv'
+}
+
+test_saving_mounts_keeps_the_paths_as_given() {
+  reset_configuration
+  write_config 'tools = uv'
+  mount_paths=(/real/c)
+  mount_modes=(["/real/c"]=rw)
+  mount_given_paths=(["/real/c"]=/link/c)
+  capture save_project_mounts
+  assert_status 0
+  assert_file "${project_config}" $'tools = uv\nmount = /link/c:rw'
 }
 
 test_saving_no_mounts_removes_them() {

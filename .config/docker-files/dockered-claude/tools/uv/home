@@ -1,0 +1,4 @@
+# Home paths that persist under tools/uv of the state directory:
+# its cache, and its managed Pythons and tools.
+.cache/uv/
+.local/share/uv/
