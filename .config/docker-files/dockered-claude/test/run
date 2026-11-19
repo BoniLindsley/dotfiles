@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+
+__help() {
+  cat <<HELP
+Usage: ${script_name} [--help] [--e2e] [FILE...]
+
+Run the launcher's tests: each test_ function in each FILE,
+by default test/unit/*.bash, and with --e2e also test/e2e/*.bash,
+each file in a fresh bash and each test in its own subshell.
+
+  -h, --help              Show this help
+  --e2e                   Also run the tests that need Docker
+HELP
+}
+
+warn() {
+  printf '%s: %s\n' "${script_name}" "$*" >&2
+}
+
+parse_arguments() {
+  declare argument
+  while (($#)); do
+    argument="$1"
+    shift
+    case "${argument}" in
+    -h | --help) kwargs[help]=1 ;;
+    --e2e) kwargs[e2e]=1 ;;
+    --)
+      args+=("$@")
+      break
+      ;;
+    -?*)
+      warn "unknown option '${argument}'"
+      return 1
+      ;;
+    *) args+=("${argument}") ;;
+    esac
+  done
+}
+
+# Set files to the test files in args, or else to the default ones.
+select_files() {
+  declare file
+  files=()
+  if ((${#args[@]} > 0)); then
+    for file in "${args[@]}"; do
+      if [[ ! -f "${file}" ]]; then
+        warn "no test file '${file}'"
+        return 1
+      fi
+      files+=("$(realpath -- "${file}")") || return
+    done
+    return 0
+  fi
+
+  for file in "${script_directory}"/unit/*.bash; do
+    [[ -f "${file}" ]] && files+=("${file}")
+  done
+  [[ -n "${kwargs[e2e]+defined}" ]] || return 0
+  for file in "${script_directory}"/e2e/*.bash; do
+    [[ -f "${file}" ]] && files+=("${file}")
+  done
+  return 0
+}
+
+# Run the test files that args and kwargs[e2e] select,
+# each in a fresh bash, so that what one sources cannot affect another,
+# and fail if any test failed.
+run() {
+  declare file
+  declare -i failed=0
+  declare -a files
+
+  select_files || return
+  for file in "${files[@]}"; do
+    # shellcheck disable=SC2016 # Expanded by the child bash.
+    bash -c 'source -- "$1" || exit; run_tests "$2"' \
+      bash "${script_directory}/lib.bash" "${file}" || failed+=1
+  done
+  ((failed == 0))
+}
+
+main() {
+  declare script_path
+  script_path="$(realpath -- "${BASH_SOURCE[0]}")" || return
+  declare script_name
+  script_name="$(basename -- "${script_path}")" || return
+  declare script_directory
+  script_directory="$(dirname -- "${script_path}")" || return
+
+  declare -A kwargs=()
+  declare -a args=()
+
+  parse_arguments "$@" || return
+  if [[ -n "${kwargs[help]+defined}" ]]; then
+    __help
+    return
+  fi
+
+  run || return
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  main "$@"
+fi

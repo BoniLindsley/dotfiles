@@ -1,0 +1,94 @@
+#!/usr/bin/env bash
+
+__help() {
+  cat <<HELP
+Usage: ${script_name} [--help]
+
+Check the launcher's shell code with shellcheck,
+and its formatting with shfmt, printing what it would change.
+Both are tools: run this with --tool shellcheck --tool shfmt.
+
+  -h, --help              Show this help
+HELP
+}
+
+warn() {
+  printf '%s: %s\n' "${script_name}" "$*" >&2
+}
+
+parse_arguments() {
+  declare argument
+  while (($#)); do
+    argument="$1"
+    shift
+    case "${argument}" in
+    -h | --help) kwargs[help]=1 ;;
+    *)
+      warn "unexpected argument '${argument}'"
+      return 1
+      ;;
+    esac
+  done
+}
+
+# Set files to the shell code in the repository, by path.
+select_files() {
+  declare file
+  files=()
+  for file in \
+    "${repository}/bin/dockered-claude" \
+    "${repository}"/test/{run,lint,lib.bash} \
+    "${repository}"/test/{unit,e2e}/*.bash \
+    "${repository}"/profiles/*/launcher.bash; do
+    [[ -f "${file}" ]] && files+=("${file#"${repository}/"}")
+  done
+  return 0
+}
+
+# Run shellcheck and shfmt on the repository's shell code,
+# both to the end, and fail if either found a problem.
+run() {
+  declare command
+  declare -i failed=0
+  declare -a files
+
+  for command in shellcheck shfmt; do
+    if ! command -v "${command}" >/dev/null; then
+      warn "${command} is missing; run with --tool ${command}"
+      return 1
+    fi
+  done
+
+  select_files || return
+  cd -- "${repository}" || return
+  # Sourced files are found relative to the file that sources them.
+  shellcheck --external-sources --source-path=SCRIPTDIR --shell=bash \
+    -- "${files[@]}" || failed+=1
+  # Indented by 2 spaces, with case patterns at the level of case.
+  shfmt --indent 2 --diff -- "${files[@]}" || failed+=1
+  ((failed == 0))
+}
+
+main() {
+  declare script_path
+  script_path="$(realpath -- "${BASH_SOURCE[0]}")" || return
+  declare script_name
+  script_name="$(basename -- "${script_path}")" || return
+  declare repository
+  repository="$(dirname -- "$(dirname -- "${script_path}")")" || return
+
+  declare -A kwargs=()
+
+  parse_arguments "$@" || return
+  if [[ -n "${kwargs[help]+defined}" ]]; then
+    __help
+    return
+  fi
+
+  run || return
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  set -euo pipefail
+  main "$@"
+fi

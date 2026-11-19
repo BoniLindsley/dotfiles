@@ -1,0 +1,5 @@
+# Print the version of Claude Code that the Dockerfile would install,
+# from the same release channel (CHANNEL there, latest by default),
+# so that the launcher can skip building a version built already.
+set -eu
+curl -fsSL "https://downloads.claude.ai/claude-code-releases/${CHANNEL:-latest}"
