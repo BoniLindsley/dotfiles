@@ -27,6 +27,13 @@ A project's own `AGENTS.md` adds to these.
   offering the identities in the project's history
   and the account identity the tool reports,
   and pass the answer with `git -c user.name=... -c user.email=...`.
+- Before implementing a change with design choices
+  that have real trade-offs,
+  such as what a mount hides, where state is kept or what is saved,
+  propose the design with its trade-offs and failure cases,
+  saying what it hides, overwrites or leaves stale,
+  and wait for my agreement.
+  Commit it only after that.
 - Do not add package or library dependencies,
   runtime or development, without my approval.
   Recommend one when it is clearly worth it,
@@ -50,6 +57,17 @@ A project's own `AGENTS.md` adds to these.
   usually `.meta/objectives/<branch>/objectives/OBJECTIVES.md`;
   an older record may be checked out elsewhere,
   as the objectives-record skill describes.
+- When a task or objective is done
+  and the session's context has grown long,
+  bring the project record up to date for a fresh session
+  without being asked:
+  status, next action, handoff, and any design text that went stale.
+  Then propose starting a new session, saying why.
+  Propose it at most once per stopping point.
+  If I choose to continue,
+  do not propose it again until the next task or objective is done,
+  or I ask,
+  and keep the record current through its ordinary checkpoints.
 
 ## Improving instructions
 

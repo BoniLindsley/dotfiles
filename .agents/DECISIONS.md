@@ -38,3 +38,28 @@ Records start on 2026-10-27; earlier reasons were not kept.
     if not available. Provide choices from history,
     account identity is possible too."
     Rejected: one fixed address in the rule.
+- **D-4** `[accepted]` Propose designs with trade-offs before implementing.
+  - Change: a rule to propose such a design,
+    with its trade-offs and failure cases,
+    and wait for agreement before implementing and committing.
+  - Reason: user, 2026-11-19, after an agent implemented and committed
+    a design that hid files of the image without discussing it:
+    "Undo the unpushed changes.
+    I do not think this is well-designed enough."
+    The user had asked "Discuss first." before the next question.
+- **D-5** `[accepted]` Propose a new session at stopping points.
+  - Change: when a task or objective is done in a long session,
+    update the project record for a fresh session
+    and propose a new one, at most once per stopping point,
+    without tool configuration or hooks.
+  - Reason: user, 2026-11-19, after having to ask for it:
+    "What I meant was make proposing to start a new session automatic
+    when it would be better, instead of me prompting for it."
+    And, on a session-start hook: "No using Claude Code config for this."
+    Agreed ("Yes.") to proposing at most once.
+  - Amended, 2026-11-19: the sentence "Do not use tool configuration
+    or hooks for this." is removed.
+    "No using Claude Code config for this." was about how to make the
+    change, as an instruction rather than a hook, not about what agents
+    may use: "I did not mean that the agent cannot use agent tools.
+    That was for the instruction to be added."
