@@ -23,7 +23,10 @@ RUN : \
       echo "Node.js publishes no musl build" >&2; exit 1; \
     fi \
  && base=https://nodejs.org/dist \
- && version="$(curl -fsSL "${base}/index.json" | jq -er '.[0].version | ltrimstr("v")')" \
+ # index.json lists prereleases too, such as 27.0.0-alpha.0.1.1,
+ # and is not relied on to be sorted,
+ # so the highest version without a suffix is taken.
+ && version="$(curl -fsSL "${base}/index.json" | jq -er '[.[].version | select(test("^v[0-9]+[.][0-9]+[.][0-9]+$")) | ltrimstr("v") | split(".") | map(tonumber)] | max | map(tostring) | join(".")')" \
  && if ! printf '%s\n' "${version}" | grep -Eqx '[0-9]+\.[0-9]+\.[0-9]+'; then \
       echo "unexpected version from ${base}/index.json: ${version}" >&2; exit 1; \
     fi \

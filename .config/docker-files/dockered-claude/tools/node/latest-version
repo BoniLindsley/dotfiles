@@ -1,4 +1,5 @@
 # Print the version of Node.js that the Dockerfile would install,
+# the highest one without a prerelease suffix,
 # so that the launcher can skip building a version built already.
 set -eu
-curl -fsSL https://nodejs.org/dist/index.json | jq -er '.[0].version | ltrimstr("v")'
+curl -fsSL https://nodejs.org/dist/index.json | jq -er '[.[].version | select(test("^v[0-9]+[.][0-9]+[.][0-9]+$")) | ltrimstr("v") | split(".") | map(tonumber)] | max | map(tostring) | join(".")'
