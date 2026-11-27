@@ -12,14 +12,15 @@ The objectives directory is `objectives/` at its root, and only there.
   so each keeps its own record.
   The branch name says which code branch it follows,
   so the record does not repeat it.
-  An objectives branch merges in only its own code branch.
 - **Code branches never contain it.**
   Code commits never add or change anything under `objectives/`.
 - **The branch runs parallel to the code.**
-  `meta/<branch>/objectives` starts from its code branch
-  and merges it in as work completes.
-  It is never merged back into a code branch,
-  and nothing under `objectives/` is cherry-picked into one.
+  `meta/<branch>/objectives` starts from its code branch,
+  and the two are never merged into each other after that.
+  Nothing under `objectives/` is cherry-picked into a code branch.
+  The record follows the code by citing its commits
+  by stable ID (below), which survives rebases;
+  a merge would point at commits that a rebase replaces.
 - **The `meta/` prefix** marks the branch as about the project,
   not part of it.
   Other branches of this kind,
@@ -48,7 +49,7 @@ The index is then `.meta/objectives/<branch>/objectives/OBJECTIVES.md`.
 - The exclusion goes in `.git/info/exclude`, not `.gitignore`,
   so that no code commit mentions it.
   The command adds it only if it is missing.
-- Merges of the code branch still bring in all of its files;
+- The branch still holds the code files it started from;
   the sparse checkout only keeps them out of this worktree.
 - `git clean -fdx` in the code checkout skips the worktree,
   because it holds its own repository link;
@@ -74,65 +75,77 @@ The record itself keeps the history, in its entries and its log:
 git makes it easy to share and to see when things changed,
 but nothing should be recoverable only from git.
 
-### Merge code with the update it completes
+### Commit record updates
 
-When code on the code branch completes a task,
-completes an objective, or changes a decision,
-merge the code branch into its objectives branch
-**up to the commit that completes it**,
-and stage the record update into that merge commit:
+Every update is an ordinary commit on the objectives branch
+that changes only files under `objectives/`.
+The message describes only the change,
+for example `Record T-053 done for O-008.`
+or `Accept D-027: the first pancake goes to the cook.`
 
-```sh
-git -C .meta/objectives/<branch> merge --no-ff --no-commit <completing-commit>
-# Update the record under objectives/.
-git -C .meta/objectives/<branch> add objectives
-git -C .meta/objectives/<branch> commit -m "Record T-053 done for O-008."
-```
-
-- **Message:** only the description of the change,
-  for example `Record T-053 done for O-008.`
-  or `Accept D-027: the first pancake goes to the cook.`
-  Leave out the default "Merge branch ..." line.
-- **Granularity:** prefer several small merges to one large one.
-  Split at each task completion, objective completion or decision change.
-  When several tasks were finished before being recorded,
-  make one merge per task, each at the commit that completed it,
-  in order.
-  Then every merge's code side matches what its update claims.
-- **Merges are always clean.**
-  Code branches never touch `objectives/`,
-  and the objectives branch changes nothing else.
-  Each merge differs from the code commit it merges
-  only under `objectives/`.
-- **Nothing to merge:** if git reports "Already up to date",
-  the code is already recorded;
-  commit the update on its own (below).
-- **Rewritten code history:** if the code branch was rebased or amended
-  after being merged, the merge can conflict.
-  Resolve it by taking the code side for everything but the record,
-  then log the rewrite:
-
-  ```sh
-  git restore --source=<completing-commit> --staged --worktree -- . ':!objectives'
-  ```
-
-### Commit updates without code
-
-Use an ordinary commit on the objectives branch,
-changing only files under `objectives/`, for updates without new code:
-a new objective, a decision asked or answered,
-a checkpoint in the middle of a task,
-or a handoff at the end of a session.
+When code completes a task or an objective,
+cite the commit that completes it by stable ID
+in the entry's `## Evidence` or `## Delivered`,
+in the same update that marks it done.
+When several tasks were finished before being recorded,
+cite each one's own completing commit.
 
 ### Find what has not been recorded
 
 ```sh
-git log --oneline meta/<branch>/objectives..<branch>
+sh .meta/objectives/<branch>/objectives/record.sh unrecorded
 ```
 
-This lists code commits not yet merged into the objectives branch,
+This lists the code commits on `<branch>`
+newer than the newest commit the record cites,
 which is work the record may not describe yet.
 Check it at the start of every session.
+Commits that complete nothing,
+such as a refactor before a task's code,
+stay listed until a later commit is cited.
+If the newest cited commit loses its stable ID,
+the list starts from an older one:
+it shows more, never less.
+
+### Cite commits by stable ID
+
+Rebasing or amending the code branch gives its commits new hashes,
+so a hash in the record stops naming the commit.
+Cite a code commit by a stable ID instead,
+such as `commit_qurnxwovwwourvty`,
+followed by its subject for readers:
+
+```sh
+sh .meta/objectives/<branch>/objectives/record.sh cite <commit>
+```
+
+`cite` prints the commit's stable ID, creating it if needed:
+`commit_` and 16 random letters from `k` to `z`,
+which are never hex digits, so it cannot be taken for a hash.
+It keeps the ID as a note in `refs/notes/stable-id`,
+and adds that ref to `notes.rewriteRef`,
+so that `git rebase` and `git commit --amend`
+copy the note to the rewritten commit.
+Nothing is noted or configured until a commit is cited.
+
+`sh record.sh commit <ID>` lists the commits on code branches
+whose note holds the ID,
+and `sh record.sh check` reports IDs that no such commit holds.
+
+- **Squashing** keeps the notes of all the commits squashed,
+  so every ID still names the result.
+- **Lost IDs:** splitting a commit, `git cherry-pick`,
+  merges by a hosting service, `git filter-repo`,
+  and rewrites in a clone without the configuration
+  copy no notes.
+  Find the commit by the subject cited with it,
+  and cite it again.
+- **Not shared by default:** `git push` does not send notes.
+  Push `refs/notes/stable-id` with the objectives branch,
+  only when the user asks,
+  and set `notes.rewriteRef` in the other clone.
+- Cite a hash only for a commit
+  that has been published on a branch that is never rewritten.
 
 ### Publishing
 

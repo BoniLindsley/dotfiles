@@ -8,7 +8,7 @@ description: >
   or whenever OBJECTIVES.md, a .meta/objectives or .objectives directory
   or a meta/*/objectives branch is in the project or mentioned.
 metadata:
-  version: 6.3.0
+  version: 6.4.0
 ---
 
 The aim is that any later session,
@@ -50,7 +50,9 @@ objectives/
   are in [entries.md](entries.md).
 - **`record.sh`** is copied from this skill when the record starts,
   so the record does not need the skill to maintain itself:
-  `list`, `check`, `applies <path>`, `next <prefix>`.
+  `list`, `check`, `applies <path>`, `next <prefix>`,
+  `cite <commit>` and `commit <ID>` for stable commit IDs,
+  and `unrecorded` for code commits newer than any it cites.
   It relies on the fixed start of every entry:
   `---`, `id:`, `status:`, `summary:`, and for tasks `objective:`.
 - **`log/<YYYY-MM-DD>.md`**: events, one physical line each,
@@ -61,10 +63,10 @@ In git, the record is `objectives/` on branch `meta/<branch>/objectives`,
 checked out at `.meta/objectives/<branch>` inside the code checkout,
 sparse to `objectives/`, with `/.meta/` excluded through
 `.git/info/exclude`.
-Code branches never contain it, and it is never merged into them.
+Code branches never contain it, and it is never merged with them.
 Without git, it is `.meta/objectives/` in the working directory.
 Never keep it in a temporary directory.
-Setup, commits and merges are in [git-setup.md](git-setup.md).
+Setup, commits and citing code commits are in [git-setup.md](git-setup.md).
 
 ## Session loop
 
@@ -85,7 +87,7 @@ Setup, commits and merges are in [git-setup.md](git-setup.md).
    Where the index and the entries differ, the entries are right.
 4. Compare the record with the project:
    unrecorded code commits
-   (`git log --oneline meta/<branch>/objectives..<branch>`),
+   (`sh record.sh unrecorded`),
    the working tree, and current user instructions.
    Rerun tests only when something changed since `Last verified`,
    or the next action depends on them.
@@ -281,7 +283,8 @@ Read these only when the work needs them:
 - [entries.md](entries.md): header keys, statuses and body headings
   of each entry type, IDs, what goes where, data files, invariants.
 - [git-setup.md](git-setup.md): where the record lives in git and why,
-  the worktree commands, commits and merges, the record without git.
+  the worktree commands, commits, citing code commits,
+  the record without git.
 - [rules-block.md](rules-block.md): the rules block every index carries.
 - [record.sh](record.sh): the helper every record carries.
 - [lifecycle.md](lifecycle.md): starting a record, finishing an objective.

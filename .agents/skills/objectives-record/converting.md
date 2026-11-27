@@ -7,6 +7,26 @@ Until then, keep working with the record as it is,
 following its own rules block,
 and mention in the briefing that it can be converted.
 
+## From version 6.3
+
+1. Copy [record.sh](record.sh) and replace the rules block
+   with the one in [rules-block.md](rules-block.md).
+   From now on, do not merge the code branch into the objectives branch;
+   the merges already made stay in its history.
+2. Find the newest code commit the record describes,
+   usually the code side of the last merge into the objectives branch,
+   on the code branch, by its subject if it was rebased.
+   Cite it in a log line, for example
+   `- Recorded up to commit_qurnxwovwwourvty (add: flip on bubbles).`,
+   so that `sh record.sh unrecorded` starts there.
+3. Optionally, replace cited hashes with stable IDs,
+   from `sh record.sh cite <hash>` in the code checkout,
+   where the hash is still on the code branch,
+   or the commit can be found there by its subject.
+   Leave the others as they are.
+4. Commit, for example `Convert the record to objectives-record 6.4.0.`,
+   and log the conversion.
+
 ## From version 6.2
 
 1. Copy [record.sh](record.sh) and replace the rules block
@@ -20,6 +40,7 @@ and mention in the briefing that it can be converted.
    and `## Consequences` above its `## Question`.
 4. Commit, for example `Convert the record to objectives-record 6.3.0.`,
    and log the conversion.
+5. Follow "From version 6.3".
 
 ## From version 5
 

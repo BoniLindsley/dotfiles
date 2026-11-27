@@ -11,7 +11,7 @@ The version in the block is the last one that changed it.
 ```markdown
 This record tracks objectives, tasks and decisions
 so that work can resume in a later session.
-It follows the objectives-record skill, version 6.3.0.
+It follows the objectives-record skill, version 6.4.0.
 
 - Read this whole file before working, and again after compaction.
   Start from `Status` and `Next action`.
@@ -49,17 +49,20 @@ It follows the objectives-record skill, version 6.3.0.
   on branch `meta/<branch>/objectives`,
   and tracks the code branch `<branch>`.
   Code branches never contain it,
-  and this branch is never merged into them.
+  and it is never merged with them in either direction.
   It is checked out at `.meta/objectives/<branch>`
   in the code checkout, sparse to `objectives/`.
-- Run `git log --oneline meta/<branch>/objectives..<branch>`
-  to find code commits this record does not describe yet.
-- When code completes a task or objective, or changes a decision,
-  merge the code branch up to the completing commit,
-  and stage the record update into that merge.
-  The message describes only the update,
+- Every update is an ordinary commit that changes only `objectives/`,
+  its message describing only the update,
   such as "Record T-053 done for O-008."
-  Other updates are ordinary commits that change only `objectives/`.
+- Cite a code commit by the stable ID
+  that `sh record.sh cite <commit>` prints,
+  run in the code checkout, followed by its subject;
+  `sh record.sh commit <ID>` finds the commit after rebases.
+  When code completes a task or objective,
+  cite the completing commit in the update that marks it done.
+- Run `sh record.sh unrecorded`
+  to find code commits newer than any this record cites.
 - A task is done only with evidence.
   An objective is completed only when its acceptance criteria pass.
 - Record user decisions in their words, with the date.

@@ -243,3 +243,69 @@ Records start at 5.1.0; earlier reasons were not kept.
   - Reason: a session finishing an objective read every older
     version's conversion steps with it.
     User, 2026-11-14: "Consider moving migration steps to a different file."
+- **D-17** `[accepted]` 6.4.0: Commits are cited by stable ID.
+  - Change: `record.sh cite <commit>` gives a code commit
+    a stable ID, `commit_` and 16 random letters from `k` to `z`,
+    kept as a note in `refs/notes/stable-id`,
+    and adds that ref to `notes.rewriteRef`,
+    only when a commit is first cited;
+    `record.sh commit <ID>` finds the commit on code branches;
+    `check` reports IDs no such commit holds
+    and a missing `notes.rewriteRef`;
+    entries cite the ID followed by the subject;
+    the rules block changes; conversion from 6.3.
+  - Reason: in a record citing 76 short hashes,
+    most no longer resolved after rebases of the code branch.
+    User, 2026-11-26: "Consider making references to commits
+    in `objectives-record` stable between rebase."
+    and "Consider adding Git notes."
+    Notes are copied by `git rebase` and `git commit --amend`
+    only for refs in `notes.rewriteRef`; tested with git 2.47,
+    including reword and squash, which joins the notes.
+    User, 2026-11-26: "Consider only adding a note
+    and adding the Git config when a reference to a commit is needed."
+    "The note is for identifying the commit itself,
+    not the tasks or objectives it may be for,
+    in a way that is stable across rebase."
+    "Consider using reference of the form `commit_jklmnopqr[...]`
+    using randonmess for the hash part."
+    and "Consider storing in `refs/notes/stable-id`."
+    The letters `k` to `z`, as in Jujutsu change IDs,
+    keep an ID from being read as a hash.
+    `od`, `tr` and `/dev/urandom` are in Git for Windows' Git Bash,
+    which `record.sh` already needs for `sh`.
+  - Rejected: citing the subject with the hash as a hint,
+    which breaks when a commit is reworded;
+    trailers naming entries in code commit messages,
+    which put the record's private IDs into published history;
+    notes naming the entries a commit serves,
+    since the note identifies the commit, not its purpose;
+    the commit's first hash as its ID,
+    since a dead hash can still resolve to the commit before a rebase;
+    `git patch-id`, which changes when a conflict is resolved;
+    setting the configuration when a record starts.
+- **D-18** `[accepted]` 6.4.0: The objectives branch no longer merges code.
+  - Change: every record update is an ordinary commit;
+    the update that marks a task or objective done
+    cites its completing commit by stable ID (D-17);
+    `record.sh unrecorded` lists code commits
+    newer than the newest one the record cites,
+    replacing `git log meta/<branch>/objectives..<branch>`;
+    the merge procedure and its rebase workaround go;
+    existing merge history stays; conversion from 6.3
+    cites the newest recorded commit in a log line.
+  - Reason: a rebase of the code branch leaves every merge
+    pointing at commits no longer on it,
+    so the unrecorded list showed all rebased commits,
+    merges conflicted and needed a workaround,
+    and the merged commits stayed reachable,
+    so lookups had to skip `meta/*` branches.
+    Stable IDs keep the link from record to code through rebases.
+    User, 2026-11-26, asked: "With this change, how useful is
+    the merging commits into objectives / record branch?",
+    and agreed to drop them.
+  - Lost: code and record are no longer updated in one git operation.
+    Code committed but not yet cited shows as unrecorded,
+    which is what it is.
+  - Deferred: starting new objectives branches as orphan branches
+    holding only `objectives/`, without a sparse checkout.

@@ -5,10 +5,19 @@
 #   sh record.sh applies PATH   entries whose applies: covers PATH
 #   sh record.sh next PREFIX    next free ID, such as T or AC
 #   sh record.sh check          entries, logs or index not in the record's format
+#   sh record.sh cite COMMIT    stable ID of a code commit, created if needed
+#   sh record.sh commit ID      code commits a stable ID names
+#   sh record.sh unrecorded     code commits newer than any the record cites
 #
 # Entries start with lines `---`, `id:`, `status:`, `summary:`,
 # and for tasks `objective:` on line 5.
+# Stable IDs are notes in refs/notes/stable-id, kept through rebases
+# by notes.rewriteRef.
 set -eu
+if [ "${1:-}" = cite ]; then
+    # Resolve before leaving the caller's directory, where HEAD is the code.
+    target=$(git rev-parse --verify "${2:?commit}^{commit}")
+fi
 cd "$(dirname "$0")"
 open='proposed|active|paused|long-term|todo|in_progress|blocked|awaiting_user|accepted|deferred|holds|unverified'
 done='completed|cancelled|done|rejected|superseded|retired|failed'
@@ -40,6 +49,38 @@ next_id() {
     last=$(grep -rohwE "$1-[0-9]+" entries log | sort -t- -k2 -n | tail -1)
     last=$(echo "${last:-0}" | sed 's/.*-0*//')
     printf '%s-%03d\n' "$1" $((${last:-0} + 1))
+}
+
+cite() {
+    git config --get-all notes.rewriteRef | grep -qxF refs/notes/stable-id ||
+        git config --add notes.rewriteRef refs/notes/stable-id
+    id=$(git notes --ref=stable-id show "$1" 2>/dev/null |
+        sed -n '/^commit_[k-z]\{16\}$/{p;q;}')
+    if [ -z "$id" ]; then
+        id=commit_$(od -An -N8 -tx1 /dev/urandom | tr -d ' \n' | tr 0-9a-f k-z)
+        git notes --ref=stable-id append -m "$id" "$1"
+    fi
+    echo "$id"
+}
+
+commit() {
+    git log --exclude='meta/*' --branches --notes=stable-id -F --grep="$1" \
+        --format='%h %s'
+}
+
+unrecorded() {
+    branch=$(git symbolic-ref --short HEAD)
+    branch=${branch#meta/}
+    branch=${branch%/objectives}
+    CITED=$(grep -rhoE 'commit_[k-z]{16}' entries log OBJECTIVES.md) || :
+    export CITED
+    notes=--no-notes
+    git show-ref -q --verify refs/notes/stable-id && notes=--notes=stable-id
+    git log "$notes" --format='C %h %s%n%N' "$branch" | awk '
+    BEGIN { n = split(ENVIRON["CITED"], c, "\n"); for (i = 1; i <= n; i++) cited[c[i]] }
+    /^C / { if (line != "") print line; line = substr($0, 3); next }
+    $0 in cited { found = 1; exit }
+    END { if (!found && line != "") print line }'
 }
 
 check() {
@@ -84,6 +125,20 @@ check() {
         on && /^  / { item = item " " $0 }
         END { if (item != "") flush() }
         ' entries/*.md OBJECTIVES.md
+        cited=$(grep -rnoE 'commit_[k-z]{16}' entries log OBJECTIVES.md) || :
+        if [ -n "$cited" ] || git show-ref -q --verify refs/notes/stable-id; then
+            git config --get-all notes.rewriteRef | grep -qxF refs/notes/stable-id ||
+                echo "git: notes.rewriteRef lacks refs/notes/stable-id" \
+                    "(sh record.sh cite sets it)"
+            known=$(git log --exclude='meta/*' --branches --notes=stable-id \
+                --format=%N 2>/dev/null) || :
+            printf '%s\n' "$cited" | while IFS= read -r hit; do
+                [ -n "$hit" ] || continue
+                case "$known" in *"${hit##*:}"*) ;; *)
+                    echo "$hit  (no commit on a code branch has this ID)" ;;
+                esac
+            done
+        fi
     } || true
 }
 
@@ -91,6 +146,9 @@ case "${1:-}" in
 list) list ;;
 applies) applies "${2:?path}" ;;
 next) next_id "${2:?prefix}" ;;
+cite) cite "$target" ;;
+commit) commit "${2:?stable ID}" ;;
+unrecorded) unrecorded ;;
 check)
     problems=$(check)
     [ -z "$problems" ] && echo "No problems found." && exit 0
@@ -98,7 +156,7 @@ check)
     exit 1
     ;;
 *)
-    sed -n '2,10s/^# \{0,1\}//p' "$0" >&2
+    sed -n '2,13s/^# \{0,1\}//p' "${0##*/}" >&2
     exit 2
     ;;
 esac

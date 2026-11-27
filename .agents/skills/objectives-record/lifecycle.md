@@ -43,8 +43,8 @@ Before marking an objective complete:
 5. Set `Current task: none`,
    replace `Next action` with follow-up or maintenance guidance,
    if any, and run `sh record.sh check`.
-6. Record it in a merge of the code branch up to the final commit,
-   and log it.
+6. Cite the final commit by stable ID in `## Delivered`,
+   commit the update, and log it.
 
 Nothing moves: the entry stays where it is,
 and leaves `sh record.sh list` because of its status.

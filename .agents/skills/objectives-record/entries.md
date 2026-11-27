@@ -77,6 +77,9 @@ whose `applies` names that path or a directory above it.
 - IDs do not name their parent.
   Tasks and criteria keep their IDs if they move to another objective:
   code comments, commit messages and logs refer to them.
+- Code commits are cited by stable ID, such as `commit_qurnxwovwwourvty`,
+  followed by the commit's subject,
+  as [git-setup.md](git-setup.md) describes.
 - One session writes the record at a time.
   Sequential IDs depend on it.
   If parallel writers become normal,
@@ -142,7 +145,7 @@ such as "From T-052: the pan needs two minutes to heat."
 ## Evidence
 2026-10-16, sandbox without the camera:
 `pytest tests/test_flip` 31 passed on recorded videos.
-Code: `ae1950b`.
+Code: `commit_qurnxwovwwourvty` (add: flip when the bubbles stop).
 ```
 
 A task stays `in_progress` while one of its decisions awaits the user,
